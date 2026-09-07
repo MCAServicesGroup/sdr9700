@@ -51,6 +51,7 @@ class Commander : public RadioCommander
 {
     Q_OBJECT
     friend class CommanderCodecTest;
+    friend class MemoryManagerSmokeTest;
 
   public:
     explicit Commander(RadioCommander* parent = nullptr);

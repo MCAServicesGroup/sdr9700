@@ -18,6 +18,9 @@
 #include "UtilityWindow.h"
 #include "VfoSelectionController.h"
 #include "backend/IRadioBackend.h"
+#include "backend/RadioBackend.h"
+#include "radio/Commander.h"
+#include <QScopeGuard>
 #include "models/RadioModel.h"
 #include "models/VfoModel.h"
 
@@ -52,6 +55,8 @@ class MemoryManagerSmokeTest : public QObject
 
   private slots:
     void initTestCase();
+    void memoryActivationRoutesByBand_data();
+    void memoryActivationRoutesByBand();
     void newInstallationCanAddRadioProfile();
     void constructsMemoryManagerUi();
     void memoryManagerShowsCachedVerificationAndLiveSyncProgress();
@@ -73,6 +78,140 @@ void MemoryManagerSmokeTest::initTestCase()
     QStandardPaths::setTestModeEnabled(true);
     QVERIFY(QDir(sdr9700::configDirectory()).removeRecursively() || !QDir(sdr9700::configDirectory()).exists());
     QVERIFY(QDir(sdr9700::dataDirectory()).removeRecursively() || !QDir(sdr9700::dataDirectory()).exists());
+}
+
+void MemoryManagerSmokeTest::memoryActivationRoutesByBand_data()
+{
+    QTest::addColumn<quint64>("mainHz");
+    QTest::addColumn<quint64>("subHz");
+    QTest::addColumn<bool>("dualWatch");
+    QTest::addColumn<quint16>("group");
+    QTest::addColumn<quint64>("memoryHz");
+    QTest::addColumn<bool>("expectSub");
+    struct Band
+    {
+        const char* name;
+        quint16 group;
+        quint64 frequencyHz;
+    };
+    constexpr Band bands[] = {{"2m", 1, 145000000}, {"70cm", 2, 435000000}, {"23cm", 3, 1295000000}};
+    // Every ordered receiver pair includes both arrangements of each band
+    // combination. Select every memory band with SUB both active and inactive.
+    for (const Band& main : bands)
+    {
+        for (const Band& sub : bands)
+        {
+            if (main.group == sub.group)
+            {
+                continue;
+            }
+            for (const Band& memory : bands)
+            {
+                for (const bool dualWatch : {true, false})
+                {
+                    const QByteArray name = QByteArray(main.name) + "-main-" + sub.name + "-sub-" + memory.name +
+                                            "-memory-" + (dualWatch ? "dual" : "single");
+                    QTest::newRow(name.constData())
+                        << main.frequencyHz << sub.frequencyHz << dualWatch << memory.group
+                        << quint64(memory.frequencyHz + 500000) << (dualWatch && sub.group == memory.group);
+                }
+            }
+        }
+    }
+}
+
+void MemoryManagerSmokeTest::memoryActivationRoutesByBand()
+{
+    QFETCH(quint64, mainHz);
+    QFETCH(quint64, subHz);
+    QFETCH(bool, dualWatch);
+    QFETCH(quint16, group);
+    QFETCH(quint64, memoryHz);
+    QFETCH(bool, expectSub);
+
+    RadioModel model;
+    MainWindow window(&model);
+    QCoreApplication::removePostedEvents(&window, QEvent::MetaCall);
+    auto* controller = window.findChild<MemoryController*>();
+    auto* table = window.findChild<QTableWidget*>(QStringLiteral("memoryManagerTable"));
+    QVERIFY(controller != nullptr);
+    QVERIFY(table != nullptr);
+    controller->setRadioProfileId(QUuid::createUuid());
+    MemoryType memory;
+    memory.group = group;
+    memory.channel = 25;
+    memory.frequency.Hz = memoryHz;
+    std::copy_n("ROUTING TEST", 12, memory.name);
+    model.radioMemoryReceived(memory);
+    QCoreApplication::sendPostedEvents(controller, QEvent::MetaCall);
+    QCOMPARE(table->rowCount(), 1);
+    QVERIFY(QMetaObject::invokeMethod(&model, "onBackendReadyChanged", Q_ARG(bool, true)));
+
+    auto* backend = static_cast<RadioBackend*>(model.backend());
+    backend->radioValueConfirmed(funcVFODualWatch, QVariant::fromValue(true), 0);
+    Frequency frequency;
+    frequency.Hz = mainHz;
+    backend->radioValueConfirmed(funcFreqGet, QVariant::fromValue(frequency), 0);
+    frequency.Hz = subHz;
+    backend->radioValueConfirmed(funcFreqGet, QVariant::fromValue(frequency), 1);
+    backend->radioValueConfirmed(funcVFODualWatch, QVariant::fromValue(dualWatch), 0);
+    QCoreApplication::processEvents();
+
+    // Capture actual CI-V output without opening a radio connection. Seed the
+    // backend's confirmed frequency cache as a live session would, then start
+    // in the opposite physical context to expose reliance on polling state.
+    Commander commander;
+    sdr9700::populateRadioCapabilities(commander.radioCaps);
+    commander.haveRadioCaps = true;
+    commander.setCIVAddr(0xA2);
+    backend->m_currentMainFrequencyHz = mainHz;
+    backend->m_currentSubFrequencyHz = subHz;
+    backend->m_commander = &commander;
+    backend->m_sessionActive = std::make_shared<std::atomic_bool>(true);
+    const auto detachCommander = qScopeGuard(
+        [backend]()
+        {
+            backend->m_sessionActive->store(false);
+            backend->m_commander = nullptr;
+            backend->m_sessionActive.reset();
+        });
+    commander.receiveCommand(funcSelectVFO, QVariant::fromValue(expectSub ? vfoMain : vfoSub), 0);
+    QSignalSpy wireSpy(&commander, &Commander::dataForComm);
+    QVERIFY(QMetaObject::invokeMethod(table, "cellDoubleClicked", Q_ARG(int, 0), Q_ARG(int, 0)));
+    const auto hasChannelCommand = [&wireSpy]()
+    {
+        return std::any_of(wireSpy.cbegin(), wireSpy.cend(), [](const QList<QVariant>& emission)
+                           { return emission.at(0).toByteArray().mid(4) == QByteArray::fromHex("080025"); });
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(hasChannelCommand(), 1500);
+    bool selectedSub = !expectSub;
+    bool sawSelection = false;
+    bool sawTune = false;
+    for (const auto& emission : wireSpy)
+    {
+        const QByteArray command = emission.at(0).toByteArray().mid(4);
+        if (command == QByteArray::fromHex("07d0") || command == QByteArray::fromHex("07d1"))
+        {
+            selectedSub = command == QByteArray::fromHex("07d1");
+            sawSelection = true;
+        }
+        if (!command.isEmpty() && (command.front() == '\x05' || command.front() == '\x25'))
+        {
+            sawTune = true;
+        }
+        if (command == QByteArray::fromHex("080025"))
+        {
+            QVERIFY(sawSelection);
+            QCOMPARE(selectedSub, expectSub);
+            break;
+        }
+    }
+    const quint64 targetHz = expectSub ? subHz : mainHz;
+    QCOMPARE(sawTune, sdr9700::radioBandForFrequency(targetHz) != sdr9700::radioBandForFrequency(memoryHz));
+    auto* status = window.findChild<QLabel*>(QStringLiteral("statusMessageLabel"));
+    QVERIFY(status != nullptr);
+    QCOMPARE(status->text(), QStringLiteral("Selected memory on %1: ROUTING TEST")
+                                 .arg(expectSub ? QStringLiteral("SUB") : QStringLiteral("MAIN")));
 }
 
 void MemoryManagerSmokeTest::memoryManagerShowsCachedVerificationAndLiveSyncProgress()
@@ -227,20 +366,13 @@ void MemoryManagerSmokeTest::memoryManagerShowsCachedVerificationAndLiveSyncProg
     QCOMPARE(partialState.receivedSlotCount, 419);
     QVERIFY(!partialState.complete);
 
-    // A row double-click must activate the memory on the VFO that the radio
-    // currently reports as selected. MAIN is the initial confirmed selection.
-    // Invoke the table signal so this test covers the complete UI connection
-    // rather than calling the memory controller directly.
+    // Unknown receiver bands fall back to MAIN. Exercise the table connection.
     QVERIFY(QMetaObject::invokeMethod(memoryTable, "cellDoubleClicked", Q_ARG(int, 0), Q_ARG(int, 0)));
     auto* statusMessageLabel = window.findChild<QLabel*>(QStringLiteral("statusMessageLabel"));
     QVERIFY(statusMessageLabel != nullptr);
     QCOMPARE(statusMessageLabel->text(), QStringLiteral("Selected memory on MAIN: DATABASE TEST"));
 
-    // Physical CI-V receiver routing is deliberately independent of the
-    // operator's selected UI side. Drive the selection controller used by the
-    // main form and prove that the identical row action follows it to SUB,
-    // even though background polling may temporarily route through either
-    // physical receiver.
+    // Highlighting SUB must not override the MAIN fallback.
     auto* vfoSelection = window.findChild<VfoSelectionController*>();
     QVERIFY(vfoSelection != nullptr);
     model.backend()->radioValueConfirmed(funcVFODualWatch, QVariant::fromValue<bool>(true), 0);
@@ -252,7 +384,7 @@ void MemoryManagerSmokeTest::memoryManagerShowsCachedVerificationAndLiveSyncProg
     model.backend()->radioValueConfirmed(funcVFOBandMS, QVariant::fromValue<bool>(true), 0);
     QCoreApplication::processEvents();
     QVERIFY(QMetaObject::invokeMethod(memoryTable, "cellDoubleClicked", Q_ARG(int, 0), Q_ARG(int, 0)));
-    QCOMPARE(statusMessageLabel->text(), QStringLiteral("Selected memory on SUB: DATABASE TEST"));
+    QCOMPARE(statusMessageLabel->text(), QStringLiteral("Selected memory on MAIN: DATABASE TEST"));
 }
 
 void MemoryManagerSmokeTest::unnamedRadioMemoryIsPersistedWithFrequencyName()
