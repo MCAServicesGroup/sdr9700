@@ -6,8 +6,8 @@
 #include "MemoryConstants.h"
 #include "MemoryRecordHelpers.h"
 #include "models/RadioModel.h"
+#include "models/RadioState.h"
 #include "models/VfoModel.h"
-#include "VfoSelectionController.h"
 
 #include <QComboBox>
 #include <QMessageBox>
@@ -95,8 +95,15 @@ void MemorySelectionController::selectMemoryById(const QString& id, bool showDia
         return;
     }
 
-    const Vfo targetVfo = m_owner->m_window->m_vfoSelectionController
-                              ? m_owner->m_window->m_vfoSelectionController->selectedVfo()
+    const auto* state = m_owner->m_window->m_model->radioState();
+    const availableBands memoryBand = sdr9700::radioBandForFrequency(memory.receiveHz);
+    // Use confirmed band ownership, independent of the highlighted VFO or the
+    // temporary CI-V context used by background polling. An inactive SUB must
+    // not capture a memory selection through its last-known band.
+    const Vfo targetVfo = memoryBand != bandUnknown && state->receiver(Vfo::Main).band != memoryBand &&
+                                  state->shared().dualWatchEnabled.value_or(false) &&
+                                  state->receiver(Vfo::Sub).band == memoryBand
+                              ? Vfo::Sub
                               : Vfo::Main;
     const bool trackAsMainMemory = targetVfo == Vfo::Main;
     int generation = 0;

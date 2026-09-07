@@ -68,9 +68,11 @@ systems, and optional USB controllers is welcome.
   available across disconnects and restarts; live radio replies remain
   authoritative for slot availability and write verification. The active
   channel remains highlighted until its frequency, mode, duplex, offset, or
-  tone settings change. Memory Manager selection is reserved for managing
-  memory records and does not tune the radio; Add and Edit open a modal form
-  over Memory Manager.
+  tone settings change. Selecting a Memory Manager row does not tune the
+  radio. Double-clicking loads the memory on the active receiver already on
+  its band (2M, 70CM, or 23CM), or on MAIN if that band is not shown. This is
+  independent of the highlighted VFO and does not swap MAIN/SUB. Add and Edit
+  open a modal form over Memory Manager.
 - Main-window lock mode that prevents accidental radio-control changes while
   leaving PTT, mute, and AF gain usable.
 - Icom RC-28 rotary controller support for step tuning and button mapping,

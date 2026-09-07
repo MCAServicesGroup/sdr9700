@@ -2557,10 +2557,13 @@ void RadioBackend::selectRadioMemory(quint16 group, quint16 channel, Vfo targetV
     {
         prepareBand = definition->memGroup != group;
     }
-    const uchar receiver = sdr9700::backend::receiverForVfo(targetVfo);
-    invokeOnCurrentCommander(
-        [group, channel, memoryAddress, prepareBand, targetVfo, receiver](Commander* commandSession)
+    routeVfoReceiverCommand(
+        targetVfo, funcMemoryMode,
+        [group, channel, memoryAddress, prepareBand, targetVfo](Commander* commandSession, uchar receiver)
         {
+            // Command 08h acts on the physical receiver context. Route the
+            // entire activation through the same scoped transaction as other
+            // receiver controls, even when no band preparation is needed.
             // Memory channel numbers are band-scoped on the IC-9700. Only use
             // the intermediate band-routing tune when changing bands; within
             // the current band, selecting command 08h directly avoids an
