@@ -213,10 +213,14 @@ void GuiSmokeTest::codecNoticeKeepsLayoutStable()
     }
     QVERIFY(codecLabel != nullptr);
     QCOMPARE(codecLabelCount, 1);
+    // This test measures codec-driven layout changes, so finish placement
+    // before showing and use UtilityWindow's prepositioned path. A fixed wait
+    // cannot guarantee that its deferred centering passes have drained on a
+    // busy CI runner; those passes can move the window during our assertions.
+    dialog.setProperty("prepositionedBeforeShow", true);
+    dialog.centerOnHost();
     dialog.show();
-    // UtilityWindow schedules initial placement passes through 150 ms. Measure
-    // codec changes only after those startup timers have finished.
-    QTest::qWait(200);
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
     const auto geometryInDialog = [&dialog](QWidget* widget)
     { return QRect(widget->mapTo(&dialog, QPoint()), widget->size()); };
     const QRect comboGeometry = geometryInDialog(channels);
