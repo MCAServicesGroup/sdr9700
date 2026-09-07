@@ -62,6 +62,7 @@ set(SDR9700_CORE_SOURCES
     core/ApplicationLog.cpp
     core/Ax25Decoder.h
     core/Ax25Decoder.cpp
+    core/AudioDeviceSelection.h
     core/AppPaths.cpp
     core/MemoryDatabase.h
     core/MemoryDatabase.cpp

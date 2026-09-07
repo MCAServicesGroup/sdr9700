@@ -26,6 +26,7 @@
 #include "AppBuildConfig.h"
 #include "AppInfo.h"
 #include "AppSettings.h"
+#include "AudioDeviceSelection.h"
 #include "LogCategories.h"
 #include "RadioCapabilities.h"
 #include "SMeterScale.h"
@@ -519,6 +520,7 @@ void MainWindow::showSettingsDialog()
     auto* dlg = new SettingsDialog(this);
 #endif
     m_settingsDialog = dlg;
+    dlg->setAudioConnectionState(m_model && m_model->isConnected(), m_connectedAudioOutputChannels);
     connect(dlg, &QObject::destroyed, this,
             [this, dlg]()
             {
@@ -1271,6 +1273,11 @@ void MainWindow::updateConnectionTooltip()
 
 void MainWindow::onConnectionChanged(bool connected)
 {
+    if (m_settingsDialog)
+    {
+        m_settingsDialog->setAudioConnectionState(connected, m_connectedAudioOutputChannels);
+    }
+
     if (m_radioConnectionAction)
     {
         m_radioConnectionAction->setText(connected ? QStringLiteral("Disconnect from Radio")
@@ -1780,26 +1787,12 @@ void MainWindow::applyAudioSettings()
     const QList<QAudioDevice> inputs = QMediaDevices::audioInputs();
     const QList<QAudioDevice> outputs = QMediaDevices::audioOutputs();
 
-    auto findDevice = [](const QList<QAudioDevice>& devices, const QByteArray& id)
-    {
-        const auto match = std::find_if(devices.cbegin(), devices.cend(),
-                                        [&id](const QAudioDevice& device) { return device.id() == id; });
-        return match == devices.cend() ? QAudioDevice{} : *match;
-    };
+    m_model->setTxAudioDevice(sdr9700::selectAudioDevice(inputs, inputID, QMediaDevices::defaultAudioInput()));
+    m_model->setRxAudioDevice(sdr9700::selectAudioDevice(outputs, outputID, QMediaDevices::defaultAudioOutput()));
 
-    m_model->setTxAudioDevice(findDevice(inputs, inputID));
-    m_model->setRxAudioDevice(findDevice(outputs, outputID));
-
-    const int outputChannels = qBound(1, settings.value("audioOutputChannels", 2).toInt(), 2);
-    if (m_model->isConnected() && outputChannels != m_connectedAudioOutputChannels)
+    if (!m_model->isConnected())
     {
-        showStatusMessage(QStringLiteral("Audio devices updated; codec applies on next connection"), 5000,
-                          StatusMessageKind::Info);
-    }
-    else
-    {
-        m_connectedAudioOutputChannels = outputChannels;
-        showStatusMessage(QStringLiteral("Audio settings updated"), 3000, StatusMessageKind::Info);
+        m_connectedAudioOutputChannels = qBound(1, settings.value("audioOutputChannels", 2).toInt(), 2);
     }
 }
 

@@ -10,6 +10,7 @@
 #include <functional>
 
 class QWidget;
+class AudioDevicesSettingsPanel;
 class QLabel;
 class QVBoxLayout;
 class QShowEvent;
@@ -44,6 +45,8 @@ class SettingsDialog : public sdr9700::ui::UtilityWindow
     explicit SettingsDialog(Page page, QWidget* parent = nullptr);
 #endif
 
+    void setAudioConnectionState(bool connected, int activeOutputChannels);
+
   signals:
     void spectrumScopeCenterLineColorChanged(const QColor& color);
     void spectrumScopeBackgroundColorChanged(const QColor& color);
@@ -71,6 +74,9 @@ class SettingsDialog : public sdr9700::ui::UtilityWindow
 #ifdef HAVE_HIDAPI
     IcomRC28Manager* m_icomRC28Manager{nullptr};
 #endif
+    AudioDevicesSettingsPanel* m_audioDevicesPanel{nullptr};
+    bool m_audioConnected{false};
+    int m_activeOutputChannels{2};
     QTreeWidget* m_navigation{nullptr};
     QScrollArea* m_pageScroll{nullptr};
     QVBoxLayout* m_pageLayout{nullptr};
