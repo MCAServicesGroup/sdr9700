@@ -1,5 +1,6 @@
 // QtTest invokes private slots through the generated meta-object.
 #include "ConfirmationDialog.h"
+#include "AudioDevicesSettingsPanel.h"
 #include "SettingsDialog.h"
 #include "AppSettings.h"
 #include "MainWindowHelpers.h"
@@ -29,6 +30,12 @@ class GuiSmokeTest : public QObject
     void settingsDialogOpensSearchesAndCloses();
     void settingsFindShortcutFocusesSearch();
     void audioSettingsChangesAreForwarded();
+    void codecPendingReconnectTracksConnectionAndSelection();
+    void codecNoticeKeepsLayoutStable_data();
+    void codecNoticeKeepsLayoutStable();
+    void deferredAudioPageShowsPendingCodec();
+    void audioDeviceChoicesPreserveDefaultAndUnavailablePreferences();
+    void receiveAndTransmitDeviceSelectionsAreIndependent();
 #ifdef HAVE_HIDAPI
     void rc28ButtonActionsAreOrderedAndSupported();
 #endif
@@ -204,6 +211,204 @@ void GuiSmokeTest::audioSettingsChangesAreForwarded()
     QCOMPARE(channels->count(), 2);
     channels->setCurrentIndex(channels->currentIndex() == 0 ? 1 : 0);
     QCOMPARE(changedSpy.count(), 1);
+}
+
+void GuiSmokeTest::codecPendingReconnectTracksConnectionAndSelection()
+{
+    AppSettings::instance().setValue("audioOutputChannels", 2);
+    SettingsDialog dialog(SettingsDialog::Page::AudioDevices);
+    auto* channels = dialog.findChild<QComboBox*>(QStringLiteral("audioOutputChannels"));
+    auto* pending = dialog.findChild<QLabel*>(QStringLiteral("audioCodecPendingReconnect"));
+    auto* hint = dialog.findChild<QLabel*>(QStringLiteral("audioCodecPendingHint"));
+    QVERIFY(channels != nullptr);
+    QVERIFY(pending != nullptr);
+    QVERIFY(hint != nullptr);
+    QVERIFY(pending->isHidden());
+    QVERIFY(hint->isHidden());
+    QCOMPARE(pending->text(), QStringLiteral("Requires Radio Reconnect"));
+    QCOMPARE(hint->text(), QStringLiteral("Disconnect and reconnect to the radio to apply."));
+
+    dialog.setAudioConnectionState(true, 2);
+    QVERIFY(pending->isHidden());
+    channels->setCurrentIndex(channels->findData(1));
+    QVERIFY(!pending->isHidden());
+    QVERIFY(!hint->isHidden());
+    channels->setCurrentIndex(channels->findData(2));
+    QVERIFY(pending->isHidden());
+    channels->setCurrentIndex(channels->findData(1));
+    QVERIFY(!pending->isHidden());
+    dialog.setAudioConnectionState(false, 2);
+    QVERIFY(pending->isHidden());
+    QVERIFY(hint->isHidden());
+    dialog.setAudioConnectionState(true, 1);
+    QVERIFY(pending->isHidden());
+    channels->setCurrentIndex(channels->findData(2));
+    QVERIFY(!pending->isHidden());
+    dialog.setAudioConnectionState(false, 1);
+    QVERIFY(pending->isHidden());
+    channels->setCurrentIndex(channels->findData(1));
+    QVERIFY(pending->isHidden());
+    AppSettings::instance().setValue("audioOutputChannels", 2);
+}
+
+void GuiSmokeTest::codecNoticeKeepsLayoutStable_data()
+{
+    QTest::addColumn<int>("fontPixelSize");
+    QTest::newRow("normal-font") << 13;
+    QTest::newRow("larger-font") << 18;
+}
+
+void GuiSmokeTest::codecNoticeKeepsLayoutStable()
+{
+    QFETCH(int, fontPixelSize);
+    AppSettings::instance().setValue("audioOutputChannels", 2);
+    SettingsDialog dialog(SettingsDialog::Page::AudioDevices);
+    QFont font = dialog.font();
+    font.setPixelSize(fontPixelSize);
+    dialog.setFont(font);
+    dialog.setAudioConnectionState(true, 2);
+    auto* channels = dialog.findChild<QComboBox*>(QStringLiteral("audioOutputChannels"));
+    QVERIFY(channels != nullptr);
+    QLabel* codecLabel = nullptr;
+    int codecLabelCount = 0;
+    for (QLabel* label : dialog.findChildren<QLabel*>())
+    {
+        if (label->text() == QStringLiteral("Codec:"))
+        {
+            codecLabel = label;
+            ++codecLabelCount;
+        }
+    }
+    QVERIFY(codecLabel != nullptr);
+    QCOMPARE(codecLabelCount, 1);
+    // This test measures codec-driven layout changes, so finish placement
+    // before showing and use UtilityWindow's prepositioned path. A fixed wait
+    // cannot guarantee that its deferred centering passes have drained on a
+    // busy CI runner; those passes can move the window during our assertions.
+    dialog.setProperty("prepositionedBeforeShow", true);
+    dialog.centerOnHost();
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+    const auto geometryInDialog = [&dialog](QWidget* widget)
+    { return QRect(widget->mapTo(&dialog, QPoint()), widget->size()); };
+    const QRect comboGeometry = geometryInDialog(channels);
+    auto* outputDevice = dialog.findChild<QComboBox*>(QStringLiteral("audioOutputDevice"));
+    auto* notice = dialog.findChild<QLabel*>(QStringLiteral("audioCodecPendingReconnect"));
+    auto* hint = dialog.findChild<QLabel*>(QStringLiteral("audioCodecPendingHint"));
+    QVERIFY(outputDevice != nullptr);
+    QVERIFY(notice != nullptr);
+    QVERIFY(hint != nullptr);
+    QCOMPARE(comboGeometry.top() - geometryInDialog(outputDevice).bottom() - 1, 13);
+    const QRect labelGeometry = geometryInDialog(codecLabel);
+    QVERIFY2(qAbs(labelGeometry.center().y() - comboGeometry.center().y()) <= 1,
+             "Codec label must be vertically centered on its combo box, not on the notice area");
+    const QRect fieldGeometry = geometryInDialog(channels->parentWidget());
+    const QRect windowGeometry = dialog.geometry();
+    QVERIFY(notice->parentWidget()->isHidden());
+
+    // Test both showing and hiding the notice after layout events settle.
+    // Width-only checks miss QLabel height changes that move its text baseline.
+    for (int selectedChannels : {1, 2, 1, 2})
+    {
+        channels->setCurrentIndex(channels->findData(selectedChannels));
+        QTest::qWait(20);
+        QCOMPARE(geometryInDialog(channels), comboGeometry);
+        QCOMPARE(geometryInDialog(codecLabel), labelGeometry);
+        QCOMPARE(dialog.geometry(), windowGeometry);
+        if (selectedChannels == 1)
+        {
+            QVERIFY(!notice->parentWidget()->isHidden());
+            QCOMPARE(geometryInDialog(notice).top() - comboGeometry.bottom() - 1, 10);
+            QCOMPARE(geometryInDialog(hint).top() - geometryInDialog(notice).bottom() - 1, 2);
+            QVERIFY(geometryInDialog(channels->parentWidget()).height() > fieldGeometry.height());
+        }
+        else
+        {
+            QVERIFY(notice->parentWidget()->isHidden());
+            QCOMPARE(geometryInDialog(channels->parentWidget()), fieldGeometry);
+        }
+    }
+}
+
+void GuiSmokeTest::deferredAudioPageShowsPendingCodec()
+{
+    AppSettings::instance().setValue("audioOutputChannels", 1);
+    SettingsDialog dialog(SettingsDialog::Page::MemoryManager);
+    dialog.setAudioConnectionState(true, 2);
+    auto* navigation = dialog.findChild<QTreeWidget*>(QStringLiteral("settingsNavigation"));
+    QVERIFY(navigation != nullptr);
+    const auto pages = navigation->findItems(QStringLiteral("Audio Devices"), Qt::MatchExactly | Qt::MatchRecursive);
+    QCOMPARE(pages.size(), 1);
+    navigation->setCurrentItem(pages.front());
+    auto* pending = dialog.findChild<QLabel*>(QStringLiteral("audioCodecPendingReconnect"));
+    QVERIFY(pending != nullptr);
+    QVERIFY(!pending->isHidden());
+    dialog.setAudioConnectionState(true, 1);
+    QVERIFY(pending->isHidden());
+    AppSettings::instance().setValue("audioOutputChannels", 2);
+}
+
+void GuiSmokeTest::receiveAndTransmitDeviceSelectionsAreIndependent()
+{
+    AppSettings& settings = AppSettings::instance();
+    const QByteArray microphoneID("sdr9700-test-microphone");
+    const QByteArray speakerID("sdr9700-test-speaker");
+    settings.setValue("audioInputDeviceID", QString::fromLatin1(microphoneID.toBase64()));
+    settings.setValue("audioOutputDeviceID", QString::fromLatin1(speakerID.toBase64()));
+    AudioDevicesSettingsPanel panel;
+    auto* input = panel.findChild<QComboBox*>(QStringLiteral("audioInputDevice"));
+    auto* output = panel.findChild<QComboBox*>(QStringLiteral("audioOutputDevice"));
+    QVERIFY(input != nullptr);
+    QVERIFY(output != nullptr);
+    QSignalSpy changes(&panel, &AudioDevicesSettingsPanel::audioSettingsChanged);
+
+    output->setCurrentIndex(0);
+    QCOMPARE(changes.count(), 1);
+    QCOMPARE(input->currentData().toByteArray(), microphoneID);
+    QCOMPARE(settings.value("audioInputDeviceID").toString(), QString::fromLatin1(microphoneID.toBase64()));
+    QVERIFY(settings.value("audioOutputDeviceID").toString().isEmpty());
+
+    output->setCurrentIndex(output->findData(speakerID));
+    input->setCurrentIndex(0);
+    QCOMPARE(changes.count(), 3);
+    QCOMPARE(output->currentData().toByteArray(), speakerID);
+    QCOMPARE(settings.value("audioOutputDeviceID").toString(), QString::fromLatin1(speakerID.toBase64()));
+    QVERIFY(settings.value("audioInputDeviceID").toString().isEmpty());
+    settings.remove("audioInputDeviceID");
+    settings.remove("audioOutputDeviceID");
+}
+
+void GuiSmokeTest::audioDeviceChoicesPreserveDefaultAndUnavailablePreferences()
+{
+    AppSettings& settings = AppSettings::instance();
+    settings.remove("audioInputDeviceID");
+    settings.remove("audioOutputDeviceID");
+    {
+        AudioDevicesSettingsPanel panel;
+        for (const QString& name : {QStringLiteral("audioInputDevice"), QStringLiteral("audioOutputDevice")})
+        {
+            auto* combo = panel.findChild<QComboBox*>(name);
+            QVERIFY(combo != nullptr);
+            QVERIFY(combo->currentData().toByteArray().isEmpty());
+            QVERIFY(combo->currentText().startsWith(QStringLiteral("System default (")));
+        }
+        // Opening the panel must not pin an arbitrary device from enumeration.
+        QVERIFY(settings.value("audioInputDeviceID").toString().isEmpty());
+        QVERIFY(settings.value("audioOutputDeviceID").toString().isEmpty());
+    }
+
+    const QByteArray unavailableID("sdr9700-test-unavailable-output");
+    settings.setValue("audioOutputDeviceID", QString::fromLatin1(unavailableID.toBase64()));
+    AudioDevicesSettingsPanel panel;
+    auto* output = panel.findChild<QComboBox*>(QStringLiteral("audioOutputDevice"));
+    QVERIFY(output != nullptr);
+    QCOMPARE(output->currentData().toByteArray(), unavailableID);
+    QVERIFY(output->currentText().startsWith(QStringLiteral("Saved device unavailable")));
+    QCOMPARE(settings.value("audioOutputDeviceID").toString(), QString::fromLatin1(unavailableID.toBase64()));
+    QSignalSpy changes(&panel, &AudioDevicesSettingsPanel::audioSettingsChanged);
+    output->setCurrentIndex(0);
+    QCOMPARE(changes.count(), 1);
+    QVERIFY(settings.value("audioOutputDeviceID").toString().isEmpty());
 }
 
 #ifdef HAVE_HIDAPI

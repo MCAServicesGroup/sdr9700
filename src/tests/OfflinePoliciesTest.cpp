@@ -1,4 +1,5 @@
 #include "ConnectionRetryPolicy.h"
+#include "AudioDeviceSelection.h"
 #include "DualWatchTransitionPolicy.h"
 #include "MemorySyncPolicy.h"
 #include "MainSubExchangePolicy.h"
@@ -23,6 +24,7 @@ class OfflinePoliciesTest : public QObject
     Q_OBJECT
 
   private slots:
+    void selectsAudioDevicesAcrossDefaultChangesAndHotplug();
     void clampsMemoryPollingInterval();
     void tracksMemorySynchronization();
     void retriesIncompleteOperationSynchronization();
@@ -47,6 +49,31 @@ class OfflinePoliciesTest : public QObject
     void refusesRecoveryWhileJournalOwnerIsAlive();
     void expiresMeterPollDeadlinesConservatively();
 };
+
+void OfflinePoliciesTest::selectsAudioDevicesAcrossDefaultChangesAndHotplug()
+{
+    struct Device
+    {
+        QByteArray deviceID;
+        const QByteArray& id() const { return deviceID; }
+    };
+    const Device speakers{"speakers"};
+    const Device headphones{"headphones"};
+    const Device none{};
+    const QList<Device> both{headphones, speakers};
+    using sdr9700::selectAudioDevice;
+
+    // Enumeration order must not become a preference. Default changes should
+    // move an unpinned route, but never override an available saved device.
+    QCOMPARE(selectAudioDevice(both, {}, speakers).id(), speakers.id());
+    QCOMPARE(selectAudioDevice(both, {}, headphones).id(), headphones.id());
+    QCOMPARE(selectAudioDevice(both, speakers.id(), headphones).id(), speakers.id());
+    QCOMPARE(selectAudioDevice(both, headphones.id(), speakers).id(), headphones.id());
+    QCOMPARE(selectAudioDevice(QList<Device>{speakers}, headphones.id(), speakers).id(), speakers.id());
+    QCOMPARE(selectAudioDevice(both, headphones.id(), speakers).id(), headphones.id());
+    QVERIFY(selectAudioDevice(QList<Device>{}, headphones.id(), none).id().isEmpty());
+    QCOMPARE(selectAudioDevice(both, headphones.id(), speakers).id(), headphones.id());
+}
 
 void OfflinePoliciesTest::expiresMeterPollDeadlinesConservatively()
 {

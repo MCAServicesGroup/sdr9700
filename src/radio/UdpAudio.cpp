@@ -410,7 +410,7 @@ void UdpAudio::enableAudio()
 
 void UdpAudio::setRxAudioDevice(const QAudioDevice& device)
 {
-    if (device.isNull() || rxSetup.port == device)
+    if (rxSetup.port == device)
     {
         return;
     }
@@ -425,7 +425,7 @@ void UdpAudio::setRxAudioDevice(const QAudioDevice& device)
 
 void UdpAudio::setTxAudioDevice(const QAudioDevice& device)
 {
-    if (device.isNull() || txSetup.port == device)
+    if (txSetup.port == device)
     {
         return;
     }
@@ -448,6 +448,10 @@ void UdpAudio::stopLocalAudio()
 
 void UdpAudio::startAudio()
 {
+    if (rxSetup.port.isNull())
+    {
+        return;
+    }
 
     if (rxSetup.type == qtAudio)
     {
@@ -491,7 +495,7 @@ void UdpAudio::startAudio()
 
 void UdpAudio::startTxAudio()
 {
-    if (!enableTx || txAudioThread != nullptr)
+    if (!enableTx || txAudioThread != nullptr || txSetup.port.isNull())
     {
         return;
     }

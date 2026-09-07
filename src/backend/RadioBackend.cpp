@@ -9,6 +9,7 @@
 #include "ScopeController.h"
 #include "Types.h"
 #include "AppSettings.h"
+#include "AudioDeviceSelection.h"
 #include "DtmfGenerator.h"
 #include "LogCategories.h"
 #include "RadioCapabilities.h"
@@ -209,6 +210,10 @@ RadioBackend::RadioBackend(QObject* parent)
     : IRadioBackend(parent), m_workerThread(new QThread(this)), m_radioDataThread(new QThread(this))
 {
     qRegisterMetaType<MemoryType>("MemoryType");
+
+    auto* mediaDevices = new QMediaDevices(this);
+    connect(mediaDevices, &QMediaDevices::audioOutputsChanged, this, &RadioBackend::refreshRxAudioDevice);
+    connect(mediaDevices, &QMediaDevices::audioInputsChanged, this, &RadioBackend::refreshTxAudioDevice);
 
     m_workerThread->setObjectName("radio-worker");
     m_workerThread->start();
@@ -965,39 +970,10 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
     passcode(pass, udpSettings.passwordEncoded);
     udpSettings.halfDuplex = false;
     udpSettings.adminLogin = false;
-    // Load the saved audio device if no device was explicitly set via setRxAudioDevice().
-    if (m_rxDevice.isNull())
-    {
-        const QByteArray savedId =
-            QByteArray::fromBase64(AppSettings::instance().value("audioOutputDeviceID").toString().toLatin1());
-        if (!savedId.isEmpty())
-        {
-            const QList<QAudioDevice> outputs = QMediaDevices::audioOutputs();
-            const auto it = std::find_if(outputs.cbegin(), outputs.cend(),
-                                         [&savedId](const QAudioDevice& dev) { return dev.id() == savedId; });
-            if (it != outputs.cend())
-            {
-                m_rxDevice = *it;
-            }
-        }
-    }
-    if (m_txDevice.isNull())
-    {
-        const QByteArray savedId =
-            QByteArray::fromBase64(AppSettings::instance().value("audioInputDeviceID").toString().toLatin1());
-        if (!savedId.isEmpty())
-        {
-            const QList<QAudioDevice> inputs = QMediaDevices::audioInputs();
-            const auto it = std::find_if(inputs.cbegin(), inputs.cend(),
-                                         [&savedId](const QAudioDevice& dev) { return dev.id() == savedId; });
-            if (it != inputs.cend())
-            {
-                m_txDevice = *it;
-            }
-        }
-    }
-
-    QAudioDevice rxDev = m_rxDevice.isNull() ? QMediaDevices::defaultAudioOutput() : m_rxDevice;
+    // Resolve fresh device snapshots for each connection. A cached QAudioDevice
+    // can refer to a device that disconnected or ceased to be the system default.
+    refreshRxAudioDevice();
+    refreshTxAudioDevice();
 
     // IC-9700 LAN wire values for LPCM 16-bit signed audio.
     static constexpr quint8 kLpcmMono16 = 0x04;
@@ -1015,7 +991,7 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
     rxSetup.codec = outputChannels == 2 ? kLpcmStereo16 : kLpcmMono16;
     rxSetup.resampleQuality = 4;
     rxSetup.localAFgain = static_cast<quint8>(outputVolume);
-    rxSetup.port = rxDev;
+    rxSetup.port = m_rxDevice;
 
     audioSetup txSetup;
     txSetup.type = qtAudio;
@@ -1025,7 +1001,7 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
     txSetup.codec = kLpcmMono16;
     txSetup.resampleQuality = 4;
     txSetup.localAFgain = 255;
-    txSetup.port = m_txDevice.isNull() ? QMediaDevices::defaultAudioInput() : m_txDevice;
+    txSetup.port = m_txDevice;
 
     // commSetup must be invoked on the worker thread
     QMetaObject::invokeMethod(
@@ -1060,9 +1036,25 @@ void RadioBackend::disconnectFromRadio()
     m_connectionPass.clear();
 }
 
+void RadioBackend::refreshRxAudioDevice()
+{
+    const QByteArray savedID =
+        QByteArray::fromBase64(AppSettings::instance().value("audioOutputDeviceID").toString().toLatin1());
+    setRxAudioDevice(
+        sdr9700::selectAudioDevice(QMediaDevices::audioOutputs(), savedID, QMediaDevices::defaultAudioOutput()));
+}
+
+void RadioBackend::refreshTxAudioDevice()
+{
+    const QByteArray savedID =
+        QByteArray::fromBase64(AppSettings::instance().value("audioInputDeviceID").toString().toLatin1());
+    setTxAudioDevice(
+        sdr9700::selectAudioDevice(QMediaDevices::audioInputs(), savedID, QMediaDevices::defaultAudioInput()));
+}
+
 void RadioBackend::setRxAudioDevice(const QAudioDevice& dev)
 {
-    if (dev.isNull() || m_rxDevice == dev)
+    if (m_rxDevice == dev)
     {
         return;
     }
@@ -1072,7 +1064,7 @@ void RadioBackend::setRxAudioDevice(const QAudioDevice& dev)
 
 void RadioBackend::setTxAudioDevice(const QAudioDevice& dev)
 {
-    if (dev.isNull() || m_txDevice == dev)
+    if (m_txDevice == dev)
     {
         return;
     }

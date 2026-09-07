@@ -358,6 +358,8 @@ SettingsDialog::SettingsDialog(Page page, QWidget* parent)
             [this]()
             {
                 auto* panel = new AudioDevicesSettingsPanel;
+                m_audioDevicesPanel = panel;
+                panel->setAudioConnectionState(m_audioConnected, m_activeOutputChannels);
                 connect(panel, &AudioDevicesSettingsPanel::audioSettingsChanged, this,
                         &SettingsDialog::audioSettingsChanged);
                 return panel;
@@ -546,4 +548,14 @@ void SettingsDialog::updatePageScrollGutter()
 QString SettingsDialog::itemSearchText(QTreeWidgetItem* item)
 {
     return item ? item->text(0) + QLatin1Char(' ') + item->data(0, Qt::UserRole + 1).toString() : QString();
+}
+
+void SettingsDialog::setAudioConnectionState(bool connected, int activeOutputChannels)
+{
+    m_audioConnected = connected;
+    m_activeOutputChannels = activeOutputChannels;
+    if (m_audioDevicesPanel)
+    {
+        m_audioDevicesPanel->setAudioConnectionState(connected, activeOutputChannels);
+    }
 }

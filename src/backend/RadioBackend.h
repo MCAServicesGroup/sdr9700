@@ -153,6 +153,8 @@ class RadioBackend : public IRadioBackend
     void restartAfterSyncTimeout();
     void handleCommandPlaneUnavailable();
     void reconnectBootstrapSession();
+    void refreshRxAudioDevice();
+    void refreshTxAudioDevice();
 
     QThread* m_workerThread{nullptr};
     QThread* m_radioDataThread{nullptr};
