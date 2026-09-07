@@ -186,8 +186,10 @@ SettingsDialog::SettingsDialog(Page page, QWidget* parent)
 #endif
 {
     const QString title = QStringLiteral("Settings");
-    setMinimumSize(700, 480);
-    resize(780, 520);
+    // Keep every page at the same size. The popup placement helper calls
+    // adjustSize() before showing, so an initial resize alone can shrink to
+    // the first page's hint and clip wider pages selected later.
+    setFixedSize(780, 520);
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);

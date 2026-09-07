@@ -11,6 +11,8 @@
 #include <QComboBox>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QStackedWidget>
 #include <QShortcut>
 #include <QStandardPaths>
 #include <QTreeWidget>
@@ -23,6 +25,8 @@ class GuiSmokeTest : public QObject
 
   private slots:
     void initTestCase();
+    void settingsPagesKeepUniformSizeWithoutClipping_data();
+    void settingsPagesKeepUniformSizeWithoutClipping();
     void settingsDialogOpensSearchesAndCloses();
     void settingsFindShortcutFocusesSearch();
     void audioSettingsChangesAreForwarded();
@@ -43,6 +47,71 @@ void GuiSmokeTest::initTestCase()
     QStandardPaths::setTestModeEnabled(true);
 }
 
+void GuiSmokeTest::settingsPagesKeepUniformSizeWithoutClipping_data()
+{
+    QTest::addColumn<bool>("startWithSpectrum");
+    QTest::newRow("audio-first") << false;
+    QTest::newRow("spectrum-first") << true;
+}
+
+void GuiSmokeTest::settingsPagesKeepUniformSizeWithoutClipping()
+{
+    QFETCH(bool, startWithSpectrum);
+    QWidget host;
+    host.resize(1100, 800);
+    SettingsDialog dialog(startWithSpectrum ? SettingsDialog::Page::SpectrumScope : SettingsDialog::Page::AudioDevices,
+                          &host);
+    // Reproduce MainWindow's pre-show placement, including adjustSize().
+    sdr9700::ui::centerWindowOn(&dialog, &host);
+    dialog.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+    const QSize expectedSize(780, 520);
+    QCOMPARE(dialog.size(), expectedSize);
+    QCOMPARE(dialog.minimumSize(), expectedSize);
+    QCOMPARE(dialog.maximumSize(), expectedSize);
+    auto* navigation = dialog.findChild<QTreeWidget*>(QStringLiteral("settingsNavigation"));
+    auto* pages = dialog.findChild<QStackedWidget*>(QStringLiteral("settingsPages"));
+    auto* scroll = dialog.findChild<QScrollArea*>();
+    QVERIFY(navigation != nullptr);
+    QVERIFY(pages != nullptr);
+    QVERIFY(scroll != nullptr);
+    // Reserve a real scrollbar's width even on platforms with overlay bars.
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        for (int categoryIndex = 0; categoryIndex < navigation->topLevelItemCount(); ++categoryIndex)
+        {
+            auto* category = navigation->topLevelItem(categoryIndex);
+            for (int pageIndex = 0; pageIndex < category->childCount(); ++pageIndex)
+            {
+                auto* item = category->child(pageIndex);
+                navigation->setCurrentItem(item);
+                QTest::qWait(20);
+                QCOMPARE(dialog.size(), expectedSize);
+                if (item->text(0) != QStringLiteral("Spectrum Scope"))
+                {
+                    continue;
+                }
+                const QWidget* viewport = scroll->viewport();
+                int resetButtons = 0;
+                for (auto* button : pages->currentWidget()->findChildren<QPushButton*>())
+                {
+                    const QRect bounds(button->mapTo(viewport, QPoint()), button->size());
+                    QVERIFY2(bounds.left() >= 0 && bounds.right() < viewport->width(),
+                             qPrintable(QStringLiteral("Clipped spectrum button: %1").arg(button->text())));
+                    resetButtons += button->text() == QStringLiteral("Reset") ? 1 : 0;
+                }
+                QCOMPARE(resetButtons, 3);
+                for (auto* combo : pages->currentWidget()->findChildren<QComboBox*>())
+                {
+                    const QRect bounds(combo->mapTo(viewport, QPoint()), combo->size());
+                    QVERIFY(bounds.left() >= 0 && bounds.right() < viewport->width());
+                }
+            }
+        }
+    }
+}
+
 void GuiSmokeTest::settingsDialogOpensSearchesAndCloses()
 {
     AppSettings::instance().remove(
@@ -51,8 +120,7 @@ void GuiSmokeTest::settingsDialogOpensSearchesAndCloses()
         QString::fromLatin1(sdr9700::ui::main_window::kMemoryShowSatelliteMemoriesSettingsKey));
     SettingsDialog dialog(SettingsDialog::Page::MemoryManager);
     QVERIFY(dialog.windowFlags().testFlag(Qt::FramelessWindowHint));
-    QVERIFY(dialog.maximumWidth() > dialog.minimumWidth());
-    QVERIFY(dialog.maximumHeight() > dialog.minimumHeight());
+    QCOMPARE(dialog.maximumSize(), dialog.minimumSize());
     dialog.show();
 
     QTRY_VERIFY(dialog.isVisible());
