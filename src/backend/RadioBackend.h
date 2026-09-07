@@ -34,6 +34,7 @@ struct RadioBackendMeterDiagnostics
 class RadioBackend : public IRadioBackend
 {
     Q_OBJECT
+    friend class MemoryManagerSmokeTest;
 
   public:
     explicit RadioBackend(QObject* parent = nullptr);
