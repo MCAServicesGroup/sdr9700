@@ -1,5 +1,6 @@
 // QtTest invokes private slots through the generated meta-object.
 #include "AudioConverter.h"
+#include "TxAudioPacing.h"
 
 #include <QtTest>
 
@@ -23,6 +24,7 @@ class AudioConverterTest : public QObject
     void clipsFloatToIntegerOutput();
     void resamplesBetweenSupportedRates();
     void rejectsPartialStereoFrame();
+    void catchesUpTxAudioPacingWithoutBursting();
 };
 
 namespace
@@ -245,6 +247,24 @@ void AudioConverterTest::rejectsPartialStereoFrame()
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral(
                                            "Dropping malformed audio packet with .* samples for .* input channels")));
     QVERIFY(!converter.convert(packet));
+}
+
+void AudioConverterTest::catchesUpTxAudioPacingWithoutBursting()
+{
+    using sdr9700::audio::kMaximumTxAudioFramesPerTick;
+    using sdr9700::audio::txAudioPumpDecision;
+
+    const auto onTime = txAudioPumpDecision(20, 1);
+    QCOMPARE(onTime.framesDue, qint64(1));
+    QCOMPARE(onTime.framesAccountedFor, qint64(2));
+
+    const auto late = txAudioPumpDecision(100, 1);
+    QCOMPARE(late.framesDue, kMaximumTxAudioFramesPerTick);
+    QCOMPARE(late.framesAccountedFor, qint64(6));
+
+    const auto recovered = txAudioPumpDecision(120, 4);
+    QCOMPARE(recovered.framesDue, qint64(3));
+    QCOMPARE(recovered.framesAccountedFor, qint64(7));
 }
 
 QTEST_GUILESS_MAIN(AudioConverterTest)

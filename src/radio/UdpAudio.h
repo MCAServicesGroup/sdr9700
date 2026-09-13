@@ -72,6 +72,7 @@ class UdpAudio : public UdpBase
 
   private:
     void sendAudioBuffer(const QByteArray& data);
+    qint64 nextTxAudioFramesDue(QElapsedTimer& clock, qint64& framesSent);
     void dataReceived();
     void startAudio();
     void startTxAudio();
@@ -99,6 +100,10 @@ class UdpAudio : public UdpBase
     qsizetype m_dtmfPcmOffset{0};
     QTimer* m_dtmfTimer{nullptr};
     bool m_dtmfTimerActive{false};
+    QElapsedTimer m_txPumpClock;
+    qint64 m_txFramesSent{0};
+    QElapsedTimer m_dtmfPumpClock;
+    qint64 m_dtmfFramesSent{0};
     int m_txSilencePacketBytes = 640; // 20 ms, 16 kHz, mono 16-bit PCM.
 
     bool m_audioReady = false;

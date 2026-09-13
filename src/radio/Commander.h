@@ -59,6 +59,7 @@ class Commander : public RadioCommander
     ~Commander();
     CommanderCorrelationDiagnostics correlationDiagnostics() const;
     CommanderSchedulerDiagnostics schedulerDiagnostics() const;
+    void setOperatorSelectedVfo(vfo_t vfo);
     void scheduleInteractiveAction(Funcs func, uchar receiver, std::function<void()> action);
     void scheduleConfirmatoryAction(Funcs func, uchar receiver, std::function<void()> action);
     void executeReceiverScopedAction(uchar receiver, std::function<void()> action);
@@ -77,7 +78,7 @@ class Commander : public RadioCommander
     void receiveCommand(Funcs func, QVariant value, uchar receiver) override;
     void receiveCommandNoReadback(Funcs func, QVariant value, uchar receiver);
     void scheduleMeterRead(Funcs func, uchar receiver);
-    void scheduleSMeterRead(uchar receiver, bool restoreScopeSub);
+    void scheduleSMeterRead(uchar receiver);
     void abortSMeterRead(uchar receiver);
     void scheduleStartupRead(Funcs func, uchar receiver);
     void requestMainSubExchange();
@@ -128,6 +129,7 @@ class Commander : public RadioCommander
         Funcs func{funcNone};
         uchar receiver{0};
         std::function<void()> action;
+        qint64 enqueuedAtMs{0};
     };
 
     void enqueueScheduledRead(ScheduledCommandClass commandClass, Funcs func, uchar receiver);
@@ -240,9 +242,11 @@ class Commander : public RadioCommander
     bool m_receiverScopedReadActive{false};
     bool m_smeterScopedReadActive{false};
     uchar m_smeterScopedReceiver{0xff};
-    bool m_smeterRestoreScopeSub{false};
+    vfo_t m_operatorSelectedVfo{vfoMain};
     bool m_mainSubExchangeQueued{false};
     bool m_mainSubExchangeConfirmationPending{false};
+    bool m_backgroundSinceMeter{false};
+    qint64 m_lastBackgroundDispatchMs{-1};
     QVector<ReplyFamilyDrain> m_replyFamilyDrains;
     QTimer* m_replyDrainTimer{nullptr};
     CivRttEstimator m_rttEstimator;

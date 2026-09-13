@@ -36,6 +36,7 @@ class OfflinePoliciesTest : public QObject
     void requiresConsecutiveHighSwrReadings();
     void resetsTransmitSafetyWhenNotTransmitting();
     void keepsPttActiveUntilRadioConfirmsUnkey();
+    void republishesContradictoryKeyedReadbackAfterUnkey();
     void validatesDuplexTransmitFrequency();
     void blocksPttUntilTransmitConfigurationIsConfirmed();
     void serializesRepeatedMainSubExchanges();
@@ -410,6 +411,22 @@ void OfflinePoliciesTest::keepsPttActiveUntilRadioConfirmsUnkey()
     QVERIFY(!policy.confirmedActive());
     QVERIFY(!policy.offPending());
     QVERIFY(!policy.safetyActive());
+}
+
+void OfflinePoliciesTest::republishesContradictoryKeyedReadbackAfterUnkey()
+{
+    sdr9700::PttConfirmationPolicy policy;
+    QVERIFY(policy.requestOn());
+    policy.confirm(true);
+    QVERIFY(!policy.shouldPublishReadback(true));
+
+    policy.requestOff();
+    QVERIFY(policy.shouldPublishReadback(true));
+    policy.confirm(true);
+    QVERIFY(policy.offPending());
+
+    policy.confirm(false);
+    QVERIFY(policy.shouldPublishReadback(true));
 }
 
 void OfflinePoliciesTest::validatesDuplexTransmitFrequency()

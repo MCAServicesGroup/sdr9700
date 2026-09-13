@@ -85,6 +85,7 @@ set(SDR9700_CORE_SOURCES
     # Audio - Qt Multimedia handlers only
     audio/AudioConverter.cpp
     audio/DtmfGenerator.cpp
+    audio/TxAudioPacing.h
     audio/AudioHandlerBase.cpp
     audio/AudioHandlerQtInput.cpp
     audio/AudioHandlerQtOutput.cpp

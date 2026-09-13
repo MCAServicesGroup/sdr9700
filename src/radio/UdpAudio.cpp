@@ -1,12 +1,12 @@
 #include "UdpAudio.h"
 #include "LogCategories.h"
+#include "TxAudioPacing.h"
 #include <algorithm>
 #include <cstring>
 
 namespace
 {
 constexpr int kAudioThreadShutdownWaitMs = 500;
-constexpr int kTxAudioFrameMs = 20;
 constexpr int kMaxQueuedTxAudioFrames = 8;
 constexpr quint8 kLpcmMono16Codec = 0x04;
 } // namespace
@@ -51,12 +51,13 @@ UdpAudio::UdpAudio(QHostAddress local, QHostAddress ip, quint16 audioPort, quint
     areYouThereTimer->start(AREYOUTHERE_PERIOD);
 
     m_dtmfTimer = new QTimer(this);
-    m_dtmfTimer->setInterval(kTxAudioFrameMs);
+    m_dtmfTimer->setInterval(sdr9700::audio::kTxAudioFrameIntervalMs);
+    m_dtmfTimer->setTimerType(Qt::PreciseTimer);
     m_dtmfTimer->setSingleShot(false);
     connect(m_dtmfTimer, &QTimer::timeout, this, &UdpAudio::sendNextDtmfFrame);
 
     txAudioTimer = new QTimer(this);
-    txAudioTimer->setInterval(kTxAudioFrameMs);
+    txAudioTimer->setInterval(sdr9700::audio::kTxAudioFrameIntervalMs);
     txAudioTimer->setTimerType(Qt::PreciseTimer);
     txAudioTimer->setSingleShot(false);
     connect(txAudioTimer, &QTimer::timeout, this, &UdpAudio::sendNextTxAudioFrame);
@@ -178,6 +179,10 @@ void UdpAudio::queueDtmfPcm(const QByteArray& pcm)
     m_txAudioQueue.clear();
     m_dtmfPcm = pcm;
     m_dtmfPcmOffset = 0;
+    m_txPumpClock.invalidate();
+    m_txFramesSent = 0;
+    m_dtmfPumpClock.invalidate();
+    m_dtmfFramesSent = 0;
     if (!pcm.isEmpty())
     {
         m_dtmfTimerActive = true;
@@ -202,20 +207,24 @@ void UdpAudio::sendNextTxAudioFrame()
         return;
     }
 
-    QByteArray frame;
-    if (!m_txAudioQueue.isEmpty())
+    const qint64 framesDue = nextTxAudioFramesDue(m_txPumpClock, m_txFramesSent);
+    for (qint64 frameIndex = 0; frameIndex < framesDue; ++frameIndex)
     {
-        frame = m_txAudioQueue.dequeue();
-    }
-    else
-    {
-        if (m_txSilenceFrame.size() != m_txSilencePacketBytes)
+        QByteArray frame;
+        if (!m_txAudioQueue.isEmpty())
         {
-            m_txSilenceFrame = QByteArray(m_txSilencePacketBytes, '\0');
+            frame = m_txAudioQueue.dequeue();
         }
-        frame = m_txSilenceFrame;
+        else
+        {
+            if (m_txSilenceFrame.size() != m_txSilencePacketBytes)
+            {
+                m_txSilenceFrame = QByteArray(m_txSilencePacketBytes, '\0');
+            }
+            frame = m_txSilenceFrame;
+        }
+        sendAudioBuffer(frame);
     }
-    sendAudioBuffer(frame);
 }
 
 void UdpAudio::sendNextDtmfFrame()
@@ -234,24 +243,44 @@ void UdpAudio::sendNextDtmfFrame()
         return;
     }
 
-    const qsizetype take = qMin(qsizetype(m_txSilencePacketBytes), m_dtmfPcm.size() - m_dtmfPcmOffset);
-    // DTMF is not the normal voice path, but it still runs on the same 20 ms
-    // transmit cadence. Reuse this scratch frame so repeated tone chunks do not
-    // create allocator noise while the radio is keyed.
-    if (m_dtmfFrame.size() != m_txSilencePacketBytes)
+    const qint64 framesDue = nextTxAudioFramesDue(m_dtmfPumpClock, m_dtmfFramesSent);
+    for (qint64 frameIndex = 0; frameIndex < framesDue && m_dtmfPcmOffset < m_dtmfPcm.size(); ++frameIndex)
     {
-        m_dtmfFrame.resize(m_txSilencePacketBytes);
+        const qsizetype take = qMin(qsizetype(m_txSilencePacketBytes), m_dtmfPcm.size() - m_dtmfPcmOffset);
+        // DTMF is not the normal voice path, but it still runs on the same 20 ms
+        // transmit cadence. Reuse this scratch frame so repeated tone chunks do not
+        // create allocator noise while the radio is keyed.
+        if (m_dtmfFrame.size() != m_txSilencePacketBytes)
+        {
+            m_dtmfFrame.resize(m_txSilencePacketBytes);
+        }
+        std::memset(m_dtmfFrame.data(), 0, size_t(m_dtmfFrame.size()));
+        memcpy(m_dtmfFrame.data(), m_dtmfPcm.constData() + m_dtmfPcmOffset, size_t(take));
+        m_dtmfPcmOffset += take;
+        sendAudioBuffer(m_dtmfFrame);
     }
-    std::memset(m_dtmfFrame.data(), 0, size_t(m_dtmfFrame.size()));
-    memcpy(m_dtmfFrame.data(), m_dtmfPcm.constData() + m_dtmfPcmOffset, size_t(take));
-    m_dtmfPcmOffset += take;
-    sendAudioBuffer(m_dtmfFrame);
 
     if (m_dtmfPcmOffset >= m_dtmfPcm.size())
     {
         m_dtmfTimerActive = false;
         m_dtmfTimer->stop();
+        m_txPumpClock.invalidate();
+        m_txFramesSent = 0;
     }
+}
+
+qint64 UdpAudio::nextTxAudioFramesDue(QElapsedTimer& clock, qint64& framesSent)
+{
+    if (!clock.isValid())
+    {
+        clock.start();
+        framesSent = 0;
+    }
+
+    const sdr9700::audio::TxAudioPumpDecision decision =
+        sdr9700::audio::txAudioPumpDecision(clock.elapsed(), framesSent);
+    framesSent += decision.framesDue;
+    return decision.framesDue;
 }
 
 void UdpAudio::changeLatency(quint16 value)
@@ -537,6 +566,10 @@ void UdpAudio::setTxActive(bool active)
         startTxAudio();
     }
     m_txActive.store(active);
+    m_txPumpClock.invalidate();
+    m_txFramesSent = 0;
+    m_dtmfPumpClock.invalidate();
+    m_dtmfFramesSent = 0;
     m_txAudioQueue.clear();
     if (!active)
     {

@@ -53,12 +53,16 @@ class CommanderCodecTest : public QObject
     void parserToleratesDeterministicArbitraryInput();
     void schedulerCoalescesAndBoundsReads();
     void schedulerMakesStartupProgressUnderMeterPressure();
+    void schedulerInterleavesBackgroundAndMeters();
+    void schedulerEscapesPermanentMeterOverdueState();
     void schedulerCoalescesInteractiveActionsAndPreservesReadProgress();
     void pacesInteractiveConfirmationAfterSet();
     void reportsMeterTransmissionAtWireDispatch();
     void sMeterMainReadAvoidsContextCommands();
     void sMeterSubReadWaitsForReplyFamilyDrainBeforeSelectingContext();
     void sMeterSubReadRestoresContextAfterReply();
+    void sMeterSubReadPreservesOperatorSelectedSub();
+    void receiverScopedReadPreservesOperatorSelectedSub();
     void survivesCombinedTransportAndSchedulerFaultSoak();
     void sessionResetCancelsTransactionalAndScopeState();
 
@@ -74,7 +78,6 @@ void CommanderCodecTest::init()
     m_commander.m_replyDrainTimer->stop();
     m_commander.m_receiverScopedReadActive = false;
     m_commander.m_smeterScopedReadActive = false;
-    m_commander.m_smeterRestoreScopeSub = false;
     m_commander.m_rttEstimator.reset();
     m_commander.m_correlationDiagnostics = {};
     m_commander.resetScheduledCommands();
@@ -308,6 +311,70 @@ void CommanderCodecTest::schedulerMakesStartupProgressUnderMeterPressure()
     QCOMPARE(m_commander.m_consecutiveMeterDispatches, 0);
 }
 
+void CommanderCodecTest::schedulerInterleavesBackgroundAndMeters()
+{
+    const QVector<Funcs> backgroundFunctions = {funcRfGain, funcSquelch, funcNRLevel};
+    const QVector<Funcs> meterFunctions = {funcSMeter, funcPowerMeter, funcSWRMeter};
+    for (const Funcs func : backgroundFunctions)
+    {
+        m_commander.scheduleStartupRead(func, 0);
+    }
+    for (const Funcs func : meterFunctions)
+    {
+        m_commander.scheduleMeterRead(func, 0);
+    }
+
+    for (Commander::ScheduledCommand& command : m_commander.m_scheduledCommands)
+    {
+        if (command.commandClass != Commander::ScheduledCommandClass::Meter)
+        {
+            command.enqueuedAtMs -= 2000;
+        }
+    }
+
+    QSignalSpy transmittedSpy(&m_commander, &Commander::commandTransmitted);
+    int meterCount = 0;
+    int backgroundCount = 0;
+    bool previousWasBackground = false;
+    while (!m_commander.m_scheduledCommands.isEmpty())
+    {
+        m_commander.dispatchNextScheduledCommand();
+        QVERIFY(!transmittedSpy.isEmpty());
+        const Funcs dispatched = static_cast<Funcs>(transmittedSpy.constLast().at(0).toInt());
+        const bool isMeter = dispatched == funcSMeter || dispatched == funcPowerMeter || dispatched == funcSWRMeter;
+        if (isMeter)
+        {
+            ++meterCount;
+            previousWasBackground = false;
+        }
+        else
+        {
+            ++backgroundCount;
+            QVERIFY(!previousWasBackground);
+            previousWasBackground = true;
+        }
+    }
+    QCOMPARE(meterCount, meterFunctions.size());
+    QCOMPARE(backgroundCount, backgroundFunctions.size());
+}
+
+void CommanderCodecTest::schedulerEscapesPermanentMeterOverdueState()
+{
+    m_commander.scheduleStartupRead(funcRfGain, 0);
+    m_commander.scheduleMeterRead(funcSMeter, 0);
+    for (Commander::ScheduledCommand& command : m_commander.m_scheduledCommands)
+    {
+        command.enqueuedAtMs -= 2000;
+    }
+    m_commander.m_lastBackgroundDispatchMs = -2000;
+
+    QSignalSpy transmittedSpy(&m_commander, &Commander::commandTransmitted);
+    m_commander.dispatchNextScheduledCommand();
+
+    QCOMPARE(transmittedSpy.size(), 1);
+    QCOMPARE(static_cast<Funcs>(transmittedSpy.constFirst().at(0).toInt()), funcRfGain);
+}
+
 void CommanderCodecTest::schedulerCoalescesInteractiveActionsAndPreservesReadProgress()
 {
     int deliveredValue = -1;
@@ -386,7 +453,7 @@ void CommanderCodecTest::sMeterMainReadAvoidsContextCommands()
 {
     QSignalSpy wireSpy(&m_commander, &Commander::dataForComm);
 
-    m_commander.scheduleSMeterRead(0, false);
+    m_commander.scheduleSMeterRead(0);
     m_commander.dispatchNextScheduledCommand();
 
     QCOMPARE(wireSpy.count(), 1);
@@ -401,7 +468,7 @@ void CommanderCodecTest::sMeterSubReadWaitsForReplyFamilyDrainBeforeSelectingCon
     QSignalSpy wireSpy(&m_commander, &Commander::dataForComm);
     m_commander.beginReplyFamilyDrain(funcSMeter, 500);
 
-    m_commander.scheduleSMeterRead(1, true);
+    m_commander.scheduleSMeterRead(1);
     m_commander.dispatchNextScheduledCommand();
 
     QCOMPARE(wireSpy.count(), 0);
@@ -418,7 +485,7 @@ void CommanderCodecTest::sMeterSubReadWaitsForReplyFamilyDrainBeforeSelectingCon
     QTRY_VERIFY_WITH_TIMEOUT(!m_commander.m_receiverScopedReadActive, 250);
     QCOMPARE(wireSpy.count(), 3);
     QCOMPARE(wireSpy.at(1).at(0).toByteArray(), QByteArray::fromHex("fefea2e107d0"));
-    QCOMPARE(wireSpy.at(2).at(0).toByteArray(), QByteArray::fromHex("fefea2e1271201"));
+    QCOMPARE(wireSpy.at(2).at(0).toByteArray(), QByteArray::fromHex("fefea2e1271200"));
     QCOMPARE(m_commander.correlationDiagnostics().subSMeterTimeouts, quint64(1));
     QCOMPARE(m_commander.schedulerDiagnostics().scheduledFrames, quint64(3));
     QCOMPARE(m_commander.schedulerDiagnostics().directFrames, quint64(0));
@@ -428,7 +495,7 @@ void CommanderCodecTest::sMeterSubReadRestoresContextAfterReply()
 {
     QSignalSpy wireSpy(&m_commander, &Commander::dataForComm);
 
-    m_commander.scheduleSMeterRead(1, true);
+    m_commander.scheduleSMeterRead(1);
     m_commander.dispatchNextScheduledCommand();
 
     QCOMPARE(wireSpy.count(), 1);
@@ -441,13 +508,41 @@ void CommanderCodecTest::sMeterSubReadRestoresContextAfterReply()
 
     QCOMPARE(wireSpy.count(), 4);
     QCOMPARE(wireSpy.at(2).at(0).toByteArray(), QByteArray::fromHex("fefea2e107d0"));
-    QCOMPARE(wireSpy.at(3).at(0).toByteArray(), QByteArray::fromHex("fefea2e1271201"));
+    QCOMPARE(wireSpy.at(3).at(0).toByteArray(), QByteArray::fromHex("fefea2e1271200"));
     QTRY_VERIFY_WITH_TIMEOUT(!m_commander.m_receiverScopedReadActive, 250);
     QCOMPARE(m_commander.correlationDiagnostics().subSMeterRequests, quint64(1));
     QCOMPARE(m_commander.correlationDiagnostics().subSMeterReplies, quint64(1));
     QCOMPARE(m_commander.correlationDiagnostics().subSMeterTimeouts, quint64(0));
     QCOMPARE(m_commander.schedulerDiagnostics().scheduledFrames, quint64(3));
     QCOMPARE(m_commander.schedulerDiagnostics().directFrames, quint64(1));
+}
+
+void CommanderCodecTest::sMeterSubReadPreservesOperatorSelectedSub()
+{
+    QSignalSpy wireSpy(&m_commander, &Commander::dataForComm);
+    m_commander.setOperatorSelectedVfo(vfoSub);
+    m_commander.scheduleSMeterRead(1);
+    m_commander.dispatchNextScheduledCommand();
+
+    QCOMPARE(wireSpy.count(), 1);
+    QCOMPARE(wireSpy.at(0).at(0).toByteArray(), QByteArray::fromHex("fefea2e11502"));
+    m_commander.handleNewData(QByteArray::fromHex("fefee1a215020000fd"));
+
+    QCOMPARE(wireSpy.count(), 1);
+    QTRY_VERIFY_WITH_TIMEOUT(!m_commander.m_receiverScopedReadActive, 250);
+}
+
+void CommanderCodecTest::receiverScopedReadPreservesOperatorSelectedSub()
+{
+    QSignalSpy wireSpy(&m_commander, &Commander::dataForComm);
+    m_commander.setOperatorSelectedVfo(vfoSub);
+    m_commander.requestReceiverScopedRead(funcModeGet, 1);
+
+    QTRY_COMPARE_WITH_TIMEOUT(wireSpy.count(), 2, 250);
+    QCOMPARE(wireSpy.at(0).at(0).toByteArray(), QByteArray::fromHex("fefea2e107d1"));
+    QCOMPARE(wireSpy.at(1).at(0).toByteArray(), QByteArray::fromHex("fefea2e104"));
+    QTRY_VERIFY_WITH_TIMEOUT(!m_commander.m_receiverScopedReadActive, 250);
+    QCOMPARE(wireSpy.count(), 2);
 }
 
 void CommanderCodecTest::survivesCombinedTransportAndSchedulerFaultSoak()

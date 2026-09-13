@@ -21,7 +21,7 @@ Multimedia.
 
 ## Status
 
-[SDR9700 26.9.1](https://github.com/w5jwp/SDR9700/releases/tag/v26.9.1) is the
+[SDR9700 26.9.1](https://github.com/w5jwp/sdr9700/releases/tag/v26.9.1) is the
 current stable release. The project remains under active development and
 provides an IC-9700-focused LAN control surface on Linux and Apple Silicon
 macOS, backed by automated protocol, scheduler, routing, model, and GUI tests.
@@ -107,7 +107,7 @@ systems, and optional USB controllers is welcome.
 ### macOS (Apple Silicon)
 
 Download the `SDR9700-<version>-macOS-apple-silicon.dmg` from the
-[latest SDR9700 release](https://github.com/w5jwp/SDR9700/releases/latest), open
+[latest SDR9700 release](https://github.com/w5jwp/sdr9700/releases/latest), open
 it, and drag SDR9700 into Applications.
 
 The release application includes Qt and its other runtime libraries. Users do
@@ -201,6 +201,9 @@ On macOS:
 
 The [documentation index](docs/README.md) links the architecture, development,
 release, radio-protocol, and research material maintained with the source.
+
+Local task files belong in the [workspace guide](workspace/WORKSPACE.md); only
+that guide is tracked in Git.
 
 Repository-level policy and community documents remain at the project root:
 

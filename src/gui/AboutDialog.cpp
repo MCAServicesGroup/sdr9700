@@ -67,7 +67,7 @@ AboutDialog::AboutDialog(QWidget* parent)
     contentLayout->addWidget(desc);
 
     auto* projectLink = new QLabel(
-        QStringLiteral("<a href=\"https://github.com/w5jwp/SDR9700\">github.com/w5jwp/SDR9700</a>"), content);
+        QStringLiteral("<a href=\"https://github.com/w5jwp/sdr9700\">github.com/w5jwp/sdr9700</a>"), content);
     projectLink->setAlignment(Qt::AlignCenter);
     projectLink->setOpenExternalLinks(true);
     projectLink->setTextInteractionFlags(Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);

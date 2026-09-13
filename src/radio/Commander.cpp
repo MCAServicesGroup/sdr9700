@@ -27,6 +27,8 @@ constexpr int kSchedulerDiagnosticsIntervalMs = 30000;
 constexpr qsizetype kMaxScheduledCommands = 64;
 constexpr int kMaxConsecutiveMeterDispatches = 3;
 constexpr int kMaxConsecutiveInteractiveDispatches = 3;
+constexpr qint64 kMeterQueueBudgetMs = 100;
+constexpr qint64 kBackgroundStarvationCeilingMs = 1500;
 constexpr qint64 kScopeAssemblyLifetimeMs = 250;
 
 QString logToken(QString value)
@@ -324,15 +326,20 @@ CommanderSchedulerDiagnostics Commander::schedulerDiagnostics() const
     return diagnostics;
 }
 
+void Commander::setOperatorSelectedVfo(vfo_t vfo)
+{
+    m_operatorSelectedVfo = vfo == vfoSub ? vfoSub : vfoMain;
+}
+
 void Commander::scheduleMeterRead(Funcs func, uchar receiver)
 {
     enqueueScheduledRead(ScheduledCommandClass::Meter, func, receiver);
 }
 
-void Commander::scheduleSMeterRead(uchar receiver, bool restoreScopeSub)
+void Commander::scheduleSMeterRead(uchar receiver)
 {
     enqueueScheduledAction(ScheduledCommandClass::Meter, funcSMeter, receiver,
-                           [this, receiver, restoreScopeSub]()
+                           [this, receiver]()
                            {
                                discardExpiredPendingReplies();
                                if (replyFamilyBlocked(funcSMeter))
@@ -341,10 +348,15 @@ void Commander::scheduleSMeterRead(uchar receiver, bool restoreScopeSub)
                                    // S-meter family can actually reach the wire. Otherwise a
                                    // deferred read has no transmission timeout to release the
                                    // physical MAIN/SUB context and scheduler gate.
-                                   scheduleSMeterRead(receiver, restoreScopeSub);
+                                   scheduleSMeterRead(receiver);
                                    return;
                                }
-                               if (receiver == 0)
+                               // The selected VFO already provides the requested
+                               // receiver identity. Avoid repeatedly re-selecting
+                               // SUB while it is the operator-selected receiver:
+                               // those CI-V writes add needless LAN traffic during
+                               // the real-time audio stream.
+                               if (receiver == 0 || m_operatorSelectedVfo == vfoSub)
                                {
                                    receiveCommand(funcSMeter, QVariant(), receiver);
                                    return;
@@ -354,7 +366,6 @@ void Commander::scheduleSMeterRead(uchar receiver, bool restoreScopeSub)
                                m_receiverScopedReadActive = true;
                                m_smeterScopedReadActive = true;
                                m_smeterScopedReceiver = receiver;
-                               m_smeterRestoreScopeSub = restoreScopeSub;
                                receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoSub), 0);
                                QTimer::singleShot(50, this,
                                                   [this, receiver]()
@@ -413,9 +424,9 @@ void Commander::executeReceiverScopedAction(uchar receiver, std::function<void()
                            if (!m_shutdownComplete)
                            {
                                action();
-                               if (targetVfo == vfoSub)
+                               if (targetVfo != m_operatorSelectedVfo)
                                {
-                                   receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoMain), 0);
+                                   receiveCommand(funcSelectVFO, QVariant::fromValue(m_operatorSelectedVfo), 0);
                                }
                            }
                            QTimer::singleShot(25, this, &Commander::finishReceiverScopedAction);
@@ -443,7 +454,7 @@ void Commander::enqueueScheduledAction(ScheduledCommandClass commandClass, Funcs
             << " dropping interactive=" << funcString[func] << " receiver=" << receiver;
         return;
     }
-    m_scheduledCommands.append({commandClass, func, receiver, std::move(action)});
+    m_scheduledCommands.append({commandClass, func, receiver, std::move(action), m_pendingCommandClock.elapsed()});
     m_schedulerDiagnostics.highWaterMark = std::max(m_schedulerDiagnostics.highWaterMark, m_scheduledCommands.size());
     if (!m_scheduledCommandTimer->isActive())
     {
@@ -475,7 +486,7 @@ void Commander::enqueueScheduledRead(ScheduledCommandClass commandClass, Funcs f
         return;
     }
 
-    m_scheduledCommands.append({commandClass, func, receiver, {}});
+    m_scheduledCommands.append({commandClass, func, receiver, {}, m_pendingCommandClock.elapsed()});
     m_schedulerDiagnostics.highWaterMark = std::max(m_schedulerDiagnostics.highWaterMark, m_scheduledCommands.size());
     if (!m_scheduledCommandTimer->isActive())
     {
@@ -502,11 +513,39 @@ void Commander::dispatchNextScheduledCommand()
         m_scheduledCommandTimer->start();
         return;
     }
+    const qint64 nowMs = m_pendingCommandClock.elapsed();
+    bool meterQueued = false;
+    bool meterOverdue = false;
+    bool backgroundStarved = false;
+    for (const ScheduledCommand& command : m_scheduledCommands)
+    {
+        if (command.commandClass == ScheduledCommandClass::Meter)
+        {
+            meterQueued = true;
+            meterOverdue = meterOverdue || nowMs - command.enqueuedAtMs >= kMeterQueueBudgetMs;
+        }
+        else if (command.commandClass != ScheduledCommandClass::InteractiveSet)
+        {
+            const qint64 referenceMs = std::max(command.enqueuedAtMs, m_lastBackgroundDispatchMs);
+            backgroundStarved = backgroundStarved || nowMs - referenceMs >= kBackgroundStarvationCeilingMs;
+        }
+    }
+    // Alternate aged background work with meters, but keep the fairness guard
+    // from becoming an indefinite hold when meters replenish faster than the
+    // link can dispatch them.
+    const bool yieldToMeters = (m_backgroundSinceMeter || meterOverdue) && !backgroundStarved;
     if (interactive != m_scheduledCommands.cend() &&
         (m_consecutiveInteractiveDispatches < kMaxConsecutiveInteractiveDispatches ||
          nonInteractive == m_scheduledCommands.cend()))
     {
         selected = std::distance(m_scheduledCommands.cbegin(), interactive);
+    }
+    else if (yieldToMeters && meterQueued)
+    {
+        const auto meter =
+            std::find_if(m_scheduledCommands.cbegin(), m_scheduledCommands.cend(), [](const ScheduledCommand& command)
+                         { return command.commandClass == ScheduledCommandClass::Meter; });
+        selected = std::distance(m_scheduledCommands.cbegin(), meter);
     }
     else if (nonInteractive != m_scheduledCommands.cend())
     {
@@ -536,10 +575,16 @@ void Commander::dispatchNextScheduledCommand()
     }
     if (command.commandClass == ScheduledCommandClass::Meter)
     {
+        m_backgroundSinceMeter = false;
         ++m_consecutiveMeterDispatches;
     }
     else
     {
+        if (command.commandClass != ScheduledCommandClass::InteractiveSet)
+        {
+            m_backgroundSinceMeter = true;
+            m_lastBackgroundDispatchMs = nowMs;
+        }
         m_consecutiveMeterDispatches = 0;
     }
     ++m_schedulerDiagnostics.dispatchedCommands;
@@ -603,12 +648,14 @@ void Commander::resetScheduledCommands()
     m_scheduledCommands.clear();
     m_consecutiveMeterDispatches = 0;
     m_consecutiveInteractiveDispatches = 0;
+    m_backgroundSinceMeter = false;
+    m_lastBackgroundDispatchMs = -1;
     m_dispatchingScheduledCommand = false;
     m_mainSubExchangeConfirmationPending = false;
     m_receiverScopedReadActive = false;
     m_smeterScopedReadActive = false;
     m_smeterScopedReceiver = 0xff;
-    m_smeterRestoreScopeSub = false;
+    m_operatorSelectedVfo = vfoMain;
 }
 
 void Commander::prepDataAndSend(QByteArray data)
@@ -950,12 +997,16 @@ void Commander::finishSMeterRead()
         return;
     }
 
+    const uchar scopedReceiver = m_smeterScopedReceiver;
     m_smeterScopedReadActive = false;
     m_smeterScopedReceiver = 0xff;
     const bool wasDispatchingScheduledCommand = m_dispatchingScheduledCommand;
     m_dispatchingScheduledCommand = true;
-    receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoMain), 0);
-    receiveCommandNoReadback(funcScopeMainSub, QVariant::fromValue<bool>(m_smeterRestoreScopeSub), 0);
+    if (scopedReceiver == 1 && m_operatorSelectedVfo != vfoSub)
+    {
+        receiveCommand(funcSelectVFO, QVariant::fromValue(m_operatorSelectedVfo), 0);
+    }
+    receiveCommandNoReadback(funcScopeMainSub, QVariant::fromValue<bool>(m_operatorSelectedVfo == vfoSub), 0);
     m_dispatchingScheduledCommand = wasDispatchingScheduledCommand;
     QTimer::singleShot(25, this, &Commander::finishReceiverScopedAction);
 }

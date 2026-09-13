@@ -294,14 +294,14 @@ void MainWindow::buildToolBar()
     quitAction->setShortcut(QKeySequence::Quit);
     connect(quitAction, &QAction::triggered, this,
             [this]() { QMetaObject::invokeMethod(this, &QWidget::close, Qt::QueuedConnection); });
-    auto* viewMenu = new QMenu(QStringLiteral("&View"), this);
+    auto* toolsMenu = new QMenu(QStringLiteral("&Tools"), this);
 #if !defined(Q_OS_MAC)
-    viewMenu->setStyleSheet(menuStyle);
+    toolsMenu->setStyleSheet(menuStyle);
 #endif
-    viewMenu->addAction("Data Decoder", this, &MainWindow::showDataDecoderDialog);
-    viewMenu->addAction("DTMF", this, &MainWindow::showDtmfDialog);
-    viewMenu->addAction("Memory Manager", this, &MainWindow::showMemoryWindow);
-    viewMenu->addAction("Meters", this, &MainWindow::showMetersDialog);
+    toolsMenu->addAction("Data Decoder", this, &MainWindow::showDataDecoderDialog);
+    toolsMenu->addAction("DTMF", this, &MainWindow::showDtmfDialog);
+    toolsMenu->addAction("Memory Manager", this, &MainWindow::showMemoryWindow);
+    toolsMenu->addAction("Meters", this, &MainWindow::showMetersDialog);
 
     auto* windowMenu = new QMenu(QStringLiteral("&Window"), this);
     windowMenu->setObjectName(QStringLiteral("windowMenu"));
@@ -426,7 +426,7 @@ void MainWindow::buildToolBar()
     nativeMenuBar->setNativeMenuBar(true);
     nativeMenuBar->addMenu(fileMenu);
     nativeMenuBar->addMenu(settingsMenu);
-    nativeMenuBar->addMenu(viewMenu);
+    nativeMenuBar->addMenu(toolsMenu);
     nativeMenuBar->addMenu(windowMenu);
     nativeMenuBar->addMenu(helpMenu);
     nativeMenuBar->setVisible(true);
@@ -435,7 +435,7 @@ void MainWindow::buildToolBar()
     m_titleBar->addMenu(QStringLiteral("&File"), fileMenu);
     auto* settingsAction = m_titleBar->addAction(QStringLiteral("&Settings"), this, [this]() { showSettingsDialog(); });
     settingsAction->setObjectName(QStringLiteral("settingsAction"));
-    m_titleBar->addMenu(QStringLiteral("&View"), viewMenu);
+    m_titleBar->addMenu(QStringLiteral("&Tools"), toolsMenu);
     m_titleBar->addMenu(QStringLiteral("&Window"), windowMenu);
     m_titleBar->addMenu(QStringLiteral("&Help"), helpMenu);
 #endif

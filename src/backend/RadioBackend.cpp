@@ -44,6 +44,7 @@ constexpr int kMemoryWriteReadbackDelayMs = 250;
 constexpr int kVfoStatePollIntervalMs = 250;
 constexpr int kReceiverContextSettleMs = 250;
 constexpr int kPttReleaseTailMs = 150;
+constexpr int kPttOnConfirmationMs = 1000;
 constexpr int kPttOffConfirmationMs = 1000;
 constexpr int kMaxTransmitDurationMs = 180000;
 constexpr uchar kHardwareTxTimeoutTimer = 1; // 3 minutes, the IC-9700's shortest non-off value.
@@ -525,16 +526,21 @@ RadioBackend::RadioBackend(QObject* parent)
             {
                 if (on && m_pttState.offPending() && m_pttOffConfirmationTimer && m_pttOffConfirmationTimer->isActive())
                 {
-                    // A queued status read can return the pre-unkey state after
-                    // the radio accepted the PTT-off command. Keep the UI
-                    // released during this short confirmation window; safety
-                    // monitoring remains armed through PttConfirmationPolicy.
+                    // A queued status read can return after an unkey request.
+                    // Republishing that still-keyed readback corrects callers
+                    // that optimistically presented receive on release.
                     m_pttState.confirm(true);
+                    emit pttChanged(true);
                     return;
                 }
+                const bool publish = m_pttState.shouldPublishReadback(on);
                 if (!on && m_pttReleaseDelayTimer)
                 {
                     m_pttReleaseDelayTimer->stop();
+                }
+                if (m_pttOnConfirmationTimer && (on || !m_pttState.desiredActive()))
+                {
+                    m_pttOnConfirmationTimer->stop();
                 }
                 if (!on && m_pttOffConfirmationTimer)
                 {
@@ -549,7 +555,10 @@ RadioBackend::RadioBackend(QObject* parent)
                     disarmTransmitSafety();
                 }
                 m_pttState.confirm(on);
-                emit pttChanged(on);
+                if (publish)
+                {
+                    emit pttChanged(on);
+                }
             });
     connect(m_radioRouter, &RadioRouter::scopeDataReady, m_scopeController, &ScopeController::acceptScopeData);
 
@@ -557,6 +566,23 @@ RadioBackend::RadioBackend(QObject* parent)
     m_pttReleaseDelayTimer->setSingleShot(true);
     m_pttReleaseDelayTimer->setInterval(kPttReleaseTailMs);
     connect(m_pttReleaseDelayTimer, &QTimer::timeout, this, &RadioBackend::sendPttOffNow);
+
+    m_pttOnConfirmationTimer = new QTimer(this);
+    m_pttOnConfirmationTimer->setSingleShot(true);
+    m_pttOnConfirmationTimer->setInterval(kPttOnConfirmationMs);
+    connect(
+        m_pttOnConfirmationTimer, &QTimer::timeout, this,
+        [this]()
+        {
+            if (!m_pttState.desiredActive() || m_pttState.confirmedActive())
+            {
+                return;
+            }
+            emit statusMessage(
+                QStringLiteral("PTT stopped: radio did not confirm transmit within %1 ms").arg(kPttOnConfirmationMs),
+                MessageSeverity::Error);
+            sendPttOffNow();
+        });
 
     m_pttOffConfirmationTimer = new QTimer(this);
     m_pttOffConfirmationTimer->setSingleShot(true);
@@ -1123,6 +1149,10 @@ void RadioBackend::shutdownConnection(bool emitDisconnectedSignal, bool emitDisc
     {
         m_pttReleaseDelayTimer->stop();
     }
+    if (m_pttOnConfirmationTimer)
+    {
+        m_pttOnConfirmationTimer->stop();
+    }
     if (m_pttOffConfirmationTimer)
     {
         m_pttOffConfirmationTimer->stop();
@@ -1429,7 +1459,10 @@ void RadioBackend::selectVfo(Vfo vfo)
     m_activeVfo = vfo;
     invokeOnCurrentCommander(
         [vfo](Commander* commandSession)
-        { commandSession->receiveCommand(funcVFOBandMS, QVariant::fromValue<bool>(vfo == Vfo::Sub), 0); });
+        {
+            commandSession->setOperatorSelectedVfo(vfo == Vfo::Sub ? vfoSub : vfoMain);
+            commandSession->receiveCommand(funcVFOBandMS, QVariant::fromValue<bool>(vfo == Vfo::Sub), 0);
+        });
 }
 
 void RadioBackend::exchangeMainSub()
@@ -2375,6 +2408,10 @@ bool RadioBackend::setPtt(bool on)
                     commandSession->receiveCommand(funcSelectedMode, QVariant(), 0);
                 }
             });
+        if (m_pttOnConfirmationTimer)
+        {
+            m_pttOnConfirmationTimer->start();
+        }
         return true;
     }
     else
@@ -2415,10 +2452,13 @@ void RadioBackend::sendPttOffNow()
     {
         m_pttReleaseDelayTimer->stop();
     }
+    if (m_pttOnConfirmationTimer)
+    {
+        m_pttOnConfirmationTimer->stop();
+    }
     // Always send an unkey request. If local state ever gets stale, suppressing
     // this command can leave the radio transmitting until disconnect.
     m_pttState.requestOff();
-    emit pttChanged(false);
     if (m_pttOffConfirmationTimer)
     {
         m_pttOffConfirmationTimer->start();
@@ -3221,12 +3261,12 @@ void RadioBackend::onLanReady()
                 // CI-V 15 02 has no receiver byte. Sample the inactive side in
                 // the same serialized receiver-scoped path as every other
                 // receiver-less transaction. This is required even when the
-                // target matches the logical UI selection because background
-                // routing intentionally restores the radio's physical context
-                // to MAIN. A direct select/read/restore burst here could steal
-                // the context between another transaction's select and write.
-                invokeOnCurrentCommander([activeVfo, receiver](Commander* commandSession)
-                                         { commandSession->scheduleSMeterRead(receiver, activeVfo == Vfo::Sub); });
+                // target matches the logical UI selection because a background
+                // transaction may have temporarily selected the other receiver.
+                // A direct select/read/restore burst here could steal context
+                // between another transaction's select and write.
+                invokeOnCurrentCommander([receiver](Commander* commandSession)
+                                         { commandSession->scheduleSMeterRead(receiver); });
             });
     m_smeterPollTimer->start();
 }

@@ -40,6 +40,7 @@ class PttConfirmationPolicy
     bool offPending() const { return m_offPending; }
     bool safetyActive() const { return m_confirmedActive || m_desiredActive || m_offPending; }
     bool transmitMetersActive() const { return m_desiredActive || (m_confirmedActive && !m_offPending); }
+    bool shouldPublishReadback(bool active) const { return active != m_confirmedActive || (active && m_offPending); }
 
   private:
     bool m_confirmedActive{false};

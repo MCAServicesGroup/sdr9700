@@ -185,6 +185,7 @@ class RadioBackend : public IRadioBackend
     // immediately while TX safety remains armed until radio confirmation.
     sdr9700::PttConfirmationPolicy m_pttState;
     QTimer* m_pttReleaseDelayTimer{nullptr};
+    QTimer* m_pttOnConfirmationTimer{nullptr};
     QTimer* m_pttOffConfirmationTimer{nullptr};
     QTimer* m_pttMaxDurationTimer{nullptr};
     QTimer* m_scopeRetryTimer{nullptr};

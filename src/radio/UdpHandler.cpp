@@ -1243,21 +1243,22 @@ void UdpHandler::dataReceived()
 
                 m_connectionType = boundedLatin1(in->connection, sizeof(in->connection));
                 qInfo(logUdp()).noquote().nospace() << "Connection type=" << m_connectionType;
-                // IC-9700 accepts mono LPCM16 for LAN audio; Qt audio handlers
-                // convert to/from the local device channel layout.
+                // The IC-9700 supports LPCM16 LAN receive audio in either
+                // mono (0x04) or stereo (0x10). Stereo carries the separate
+                // MAIN/SUB receiver paths when the radio provides them, so do
+                // not reduce an explicitly requested two-channel stream to
+                // mono during login. LAN transmit audio remains mono LPCM16.
                 static constexpr quint8 kLpcmMono16 = 0x04;
-                if (rxSetup.codec != kLpcmMono16 || (txSetup.codec != 0 && txSetup.codec != kLpcmMono16))
+                static constexpr quint8 kLpcmStereo16 = 0x10;
+                if (rxSetup.codec != kLpcmMono16 && rxSetup.codec != kLpcmStereo16)
                 {
-                    qWarning(logUdp()).noquote() << "Unsupported LAN audio codec requested; using mono LPCM16";
-                    // Codec normalization is automatic and requires no user
-                    // action. Keep it in diagnostics; presenting it as a status message
-                    // on every bootstrap replacement obscures the connection
-                    // and standby-wake lifecycle.
+                    qWarning(logUdp()).noquote() << "Unsupported LAN receive audio codec requested; using mono LPCM16";
                     rxSetup.codec = kLpcmMono16;
-                    if (txSetup.codec != 0)
-                    {
-                        txSetup.codec = kLpcmMono16;
-                    }
+                }
+                if (txSetup.codec != 0 && txSetup.codec != kLpcmMono16)
+                {
+                    qWarning(logUdp()).noquote() << "Unsupported LAN transmit audio codec requested; using mono LPCM16";
+                    txSetup.codec = kLpcmMono16;
                 }
 
                 if (in->error == kLoginErrorInvalidCredentials)
