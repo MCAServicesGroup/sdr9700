@@ -18,6 +18,7 @@
 
 #include <QComboBox>
 #include <QLabel>
+#include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QToolButton>
@@ -34,6 +35,70 @@ namespace
 constexpr int kSpectrumToolbarHeight = 29;
 constexpr int kExchangeScopeSyncTimeoutMs = 2000;
 constexpr int kShelfShadowHeightPx = 8;
+
+class SpectrumToolbar : public QWidget
+{
+  public:
+    using QWidget::QWidget;
+
+    void setCenteredControl(QWidget* control)
+    {
+        m_centeredControl = control;
+        positionControls();
+    }
+
+    void setLeadingControls(QVector<QWidget*> controls)
+    {
+        m_leadingControls = controls;
+        positionControls();
+    }
+
+  protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QWidget::resizeEvent(event);
+        positionControls();
+    }
+
+  private:
+    void positionControls()
+    {
+        if (!m_centeredControl)
+        {
+            return;
+        }
+        const QRect bounds = contentsRect();
+        const int centerX = bounds.x() + bounds.width() / 2;
+        const int x = centerX - m_centeredControl->width() / 2;
+        const int y = bounds.y() + (bounds.height() - m_centeredControl->height()) / 2;
+        m_centeredControl->move(x, y);
+        m_centeredControl->raise();
+
+        int controlsWidth = 0;
+        for (QWidget* control : m_leadingControls)
+        {
+            if (control)
+            {
+                controlsWidth += control->width();
+            }
+        }
+        const int availableWidth = x - bounds.x();
+        const int gap = qMax(0, (availableWidth - controlsWidth) / (m_leadingControls.size() + 1));
+        int controlX = bounds.x() + gap;
+        for (QWidget* control : m_leadingControls)
+        {
+            if (!control)
+            {
+                continue;
+            }
+            control->move(controlX, bounds.y() + (bounds.height() - control->height()) / 2);
+            controlX += control->width() + gap;
+        }
+    }
+
+    QWidget* m_centeredControl{nullptr};
+    QVector<QWidget*> m_leadingControls;
+};
 } // namespace
 
 SpectrumScopeController::SpectrumScopeController(MainWindow* window) : QObject(window), m_window(window)
@@ -341,7 +406,7 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
     spectrumFrameLayout->setContentsMargins(1, 1, 1, 1);
     spectrumFrameLayout->setSpacing(0);
 
-    auto* spectrumToolbar = new QWidget(spectrumFrame);
+    auto* spectrumToolbar = new SpectrumToolbar(spectrumFrame);
     spectrumToolbar->setObjectName(QStringLiteral("spectrumToolbar"));
     spectrumToolbar->setFixedHeight(kSpectrumToolbarHeight);
     spectrumToolbar->setAccessibleName(QStringLiteral("Spectrum controls toolbar"));
@@ -352,10 +417,6 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
     spectrumToolbar->setStyleSheet(
         QStringLiteral("QWidget#spectrumToolbar { background: %1; border: 0; border-bottom: 1px solid %2; }")
             .arg(UiTheme::Color::WindowChrome, UiTheme::Color::StatusBorder));
-    auto* spectrumToolbarLayout = new QHBoxLayout(spectrumToolbar);
-    spectrumToolbarLayout->setContentsMargins(8, 2, 8, 2);
-    spectrumToolbarLayout->setSpacing(6);
-
     m_tuningStepSelector = new QComboBox(spectrumToolbar);
     m_tuningStepSelector->setObjectName(QStringLiteral("spectrumStepSelector"));
     m_tuningStepSelector->setAccessibleName(QStringLiteral("Tuning step"));
@@ -484,15 +545,10 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
         return control;
     };
 
-    spectrumToolbarLayout->addWidget(makeInlineSelector(QStringLiteral("STEP"), m_tuningStepSelector), 0,
-                                     Qt::AlignVCenter);
-    spectrumToolbarLayout->addSpacing(50);
-    spectrumToolbarLayout->addWidget(makeInlineSelector(QStringLiteral("SPAN"), spanSelector), 0, Qt::AlignVCenter);
-    spectrumToolbarLayout->addSpacing(50);
-    spectrumToolbarLayout->addWidget(
-        makeInlineSelector(QStringLiteral("PEAK HOLD"), peakHoldSelector, kPeakHoldChevronSpacing), 0,
-        Qt::AlignVCenter);
-    spectrumToolbarLayout->addSpacing(50);
+    auto* stepControl = makeInlineSelector(QStringLiteral("STEP"), m_tuningStepSelector);
+    auto* spanControl = makeInlineSelector(QStringLiteral("SPAN"), spanSelector);
+    auto* peakHoldControl = makeInlineSelector(QStringLiteral("PEAK HOLD"), peakHoldSelector, kPeakHoldChevronSpacing);
+
     auto* recenterButton = new QToolButton(spectrumToolbar);
     recenterButton->setObjectName(QStringLiteral("spectrumRecenterButton"));
     recenterButton->setText(QStringLiteral("RECENTER"));
@@ -507,8 +563,9 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
                        "font-weight: bold; padding: 0 4px; } QToolButton:hover { color: %2; }")
             .arg(UiTheme::Color::TextStatusSecondary, UiTheme::Color::TextBright));
     connect(recenterButton, &QToolButton::clicked, this, [this]() { recenterActiveVfo(true); });
-    spectrumToolbarLayout->addWidget(recenterButton, 0, Qt::AlignVCenter);
-    spectrumToolbarLayout->addStretch();
+    recenterButton->adjustSize();
+    spectrumToolbar->setCenteredControl(recenterButton);
+    spectrumToolbar->setLeadingControls({stepControl, spanControl, peakHoldControl});
     spectrumFrameLayout->addWidget(spectrumToolbar);
     spectrumFrameLayout->addWidget(m_window->m_spectrumScopeDisplay);
     spectrumInsetLayout->addWidget(spectrumFrame);
