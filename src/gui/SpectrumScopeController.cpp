@@ -27,6 +27,7 @@
 #include <QWidget>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 using namespace sdr9700::ui::main_window;
 
@@ -53,6 +54,12 @@ class SpectrumToolbar : public QWidget
         positionControls();
     }
 
+    void setAnchorXProvider(std::function<int()> provider)
+    {
+        m_anchorXProvider = provider;
+        positionControls();
+    }
+
   protected:
     void resizeEvent(QResizeEvent* event) override
     {
@@ -68,7 +75,8 @@ class SpectrumToolbar : public QWidget
             return;
         }
         const QRect bounds = contentsRect();
-        const int centerX = bounds.x() + bounds.width() / 2;
+        const int defaultCenterX = bounds.x() + bounds.width() / 2;
+        const int centerX = m_anchorXProvider ? m_anchorXProvider() : defaultCenterX;
         const int x = centerX - m_centeredControl->width() / 2;
         const int y = bounds.y() + (bounds.height() - m_centeredControl->height()) / 2;
         m_centeredControl->move(x, y);
@@ -98,6 +106,7 @@ class SpectrumToolbar : public QWidget
 
     QWidget* m_centeredControl{nullptr};
     QVector<QWidget*> m_leadingControls;
+    std::function<int()> m_anchorXProvider;
 };
 } // namespace
 
@@ -566,6 +575,16 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
     recenterButton->adjustSize();
     spectrumToolbar->setCenteredControl(recenterButton);
     spectrumToolbar->setLeadingControls({stepControl, spanControl, peakHoldControl});
+    spectrumToolbar->setAnchorXProvider(
+        [this, spectrumToolbar]()
+        {
+            if (!m_window->m_vfoSelectionController || !m_window->m_vfoSelectionController->panel())
+            {
+                return spectrumToolbar->contentsRect().center().x();
+            }
+            const QWidget* panel = m_window->m_vfoSelectionController->panel();
+            return spectrumToolbar->mapFromGlobal(panel->mapToGlobal(panel->rect().center())).x();
+        });
     spectrumFrameLayout->addWidget(spectrumToolbar);
     spectrumFrameLayout->addWidget(m_window->m_spectrumScopeDisplay);
     spectrumInsetLayout->addWidget(spectrumFrame);
