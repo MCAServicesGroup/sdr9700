@@ -29,7 +29,7 @@ jobs:
             clang-format-23 \
             qt6-base-dev qt6-multimedia-dev qt6-svg-dev libqt6sql6-sqlite libssl-dev libopus-dev \
             libspeexdsp-dev libxkbcommon-dev libeigen3-dev libhidapi-dev
-          clang-format-23 --version | grep -E '^clang-format version 23\.'
+          clang-format-23 --version | grep -E 'clang-format version 23\.'
       - name: Build cppcheck 2.21.0
         run: |
           wget -q https://github.com/cppcheck-opensource/cppcheck/archive/refs/tags/2.21.0.tar.gz \
