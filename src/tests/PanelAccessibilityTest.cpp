@@ -94,6 +94,15 @@ void PanelAccessibilityTest::utilityDialogsAreResizableAndFrameless()
     }
     QCOMPARE(groupTitles, QStringList({QStringLiteral("Audio"), QStringLiteral("Radio"), QStringLiteral("Receive"),
                                        QStringLiteral("Transmit")}));
+    QStringList labelTexts;
+    for (const auto* label : meters.findChildren<QLabel*>())
+    {
+        labelTexts.append(label->text());
+    }
+    QVERIFY(labelTexts.contains(QStringLiteral("Audio Average")));
+    QVERIFY(labelTexts.contains(QStringLiteral("Audio Peak")));
+    QVERIFY(!labelTexts.contains(QStringLiteral("Microphone Average")));
+    QVERIFY(!labelTexts.contains(QStringLiteral("Microphone Peak")));
 }
 
 void PanelAccessibilityTest::metersSurviveRepeatedUpdatesAndDestruction()

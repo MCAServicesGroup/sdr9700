@@ -104,10 +104,10 @@ MetersDialog::MetersDialog(QWidget* parent) : sdr9700::ui::UtilityWindow(QString
 
     auto* audioGrid = createMeterSection(contentLayout, QStringLiteral("Audio"), QStringLiteral("audioMeters"));
     m_txAudioAverageMeter =
-        addMeterRow(audioGrid, 0, QStringLiteral("Microphone Average"),
+        addMeterRow(audioGrid, 0, QStringLiteral("Audio Average"),
                     QStringLiteral("Local microphone input average level, including before PTT; high at 60% or above"));
     m_txAudioPeakMeter = addMeterRow(
-        audioGrid, 1, QStringLiteral("Microphone Peak"),
+        audioGrid, 1, QStringLiteral("Audio Peak"),
         QStringLiteral("Local microphone input peak level, including before PTT; high at 85%, clipping at 95%"));
     m_compressionMeter =
         addMeterRow(audioGrid, 2, QStringLiteral("Compression"), QStringLiteral("Transmit compression"));
