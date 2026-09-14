@@ -1,5 +1,6 @@
 // QtTest invokes private slots through the generated meta-object.
 #include "AudioConverter.h"
+#include "TxAudioMonitoringPolicy.h"
 #include "TxAudioPacing.h"
 
 #include <QtTest>
@@ -25,6 +26,7 @@ class AudioConverterTest : public QObject
     void resamplesBetweenSupportedRates();
     void rejectsPartialStereoFrame();
     void catchesUpTxAudioPacingWithoutBursting();
+    void monitorsMicrophoneBeforePttWithoutQueuingTransmitAudio();
 };
 
 namespace
@@ -265,6 +267,15 @@ void AudioConverterTest::catchesUpTxAudioPacingWithoutBursting()
     const auto recovered = txAudioPumpDecision(120, 4);
     QCOMPARE(recovered.framesDue, qint64(3));
     QCOMPARE(recovered.framesAccountedFor, qint64(7));
+}
+
+void AudioConverterTest::monitorsMicrophoneBeforePttWithoutQueuingTransmitAudio()
+{
+    QVERIFY(sdr9700::audio::shouldCaptureTxAudio(true, true, true));
+    QVERIFY(!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(false, false));
+    QVERIFY(!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(false, true));
+    QVERIFY(!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(true, true));
+    QVERIFY(sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(true, false));
 }
 
 QTEST_GUILESS_MAIN(AudioConverterTest)
