@@ -2,6 +2,7 @@
 #include "ScopeController.h"
 #include "WaterfallController.h"
 
+#include <QLoggingCategory>
 #include <QSignalSpy>
 #include <QTest>
 #include <QTimer>
@@ -11,6 +12,7 @@ class WaterfallScopeTest : public QObject
     Q_OBJECT
 
   private slots:
+    void initTestCase();
     void convertsAndClampsRawScopeBytes();
     void rejectsInvalidScopeFrames();
     void coalescesScopeFrames();
@@ -22,6 +24,14 @@ class WaterfallScopeTest : public QObject
     void mapsPartialDataRangeToIdlePixels();
     void pausePreventsRendering();
 };
+
+void WaterfallScopeTest::initTestCase()
+{
+    // Timing assertions measure the pacing controller, not synchronous test-log
+    // throughput. GitHub's macOS runner can spend longer writing one debug line
+    // than the source interval when every incoming frame is logged.
+    QLoggingCategory::setFilterRules(QStringLiteral("spectrumScope.debug=false\nwaterfall.debug=false"));
+}
 
 void WaterfallScopeTest::convertsAndClampsRawScopeBytes()
 {
@@ -115,12 +125,17 @@ void WaterfallScopeTest::sustainsSelectedFrameRate()
     ScopeData frame;
     frame.valid = true;
     frame.data = QByteArray::fromHex("01");
+    int sourceFrameCount = 0;
     QTimer sourceTimer;
     sourceTimer.setTimerType(Qt::PreciseTimer);
-    sourceTimer.setInterval(33);
+    // Drive the selected 30 FPS limiter faster than its output cadence. This
+    // leaves enough headroom for timer coalescing on shared macOS CI runners
+    // while still rejecting the old arrival-plus-interval pacing behavior.
+    sourceTimer.setInterval(16);
     connect(&sourceTimer, &QTimer::timeout, &controller,
-            [&controller, &frame]()
+            [&controller, &frame, &sourceFrameCount]()
             {
+                ++sourceFrameCount;
                 frame.data[0] = char(uchar(frame.data[0]) + 1);
                 controller.acceptScopeData(frame);
             });
@@ -129,11 +144,12 @@ void WaterfallScopeTest::sustainsSelectedFrameRate()
     QTest::qWait(2000);
     sourceTimer.stop();
 
-    // A 30 Hz source must not collapse toward the old ~18 Hz behavior. Leave
-    // scheduling headroom for shared CI runners while still rejecting a timer
-    // that waits a complete extra source period after every emission.
-    QVERIFY2(dataSpy.count() >= 50, qPrintable(QStringLiteral("emitted %1 frames").arg(dataSpy.count())));
+    QVERIFY2(sourceFrameCount >= 55,
+             qPrintable(QStringLiteral("source produced only %1 frames").arg(sourceFrameCount)));
+    QVERIFY2(dataSpy.count() >= 50,
+             qPrintable(QStringLiteral("emitted %1 of %2 source frames").arg(dataSpy.count()).arg(sourceFrameCount)));
     QVERIFY(dataSpy.count() <= 62);
+    QVERIFY(dataSpy.count() <= sourceFrameCount);
 }
 
 void WaterfallScopeTest::resetDropsPendingScopeFrame()
