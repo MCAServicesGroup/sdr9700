@@ -71,6 +71,7 @@ set(SDR9700_CORE_SOURCES
     core/LoggingConfiguration.cpp
     core/RadioSessionWatchdog.h
     radio/RadioSessionOwnership.h
+    backend/ReceiverAudioReadinessPolicy.h
     radio/RadioSessionCorrelation.h
     radio/RadioSessionRecoveryStore.h
     radio/RetainedSessionRemovalPolicy.h

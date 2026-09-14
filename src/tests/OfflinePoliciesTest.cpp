@@ -4,6 +4,7 @@
 #include "MemorySyncPolicy.h"
 #include "MainSubExchangePolicy.h"
 #include "PttConfirmationPolicy.h"
+#include "ReceiverAudioReadinessPolicy.h"
 #include "RadioSessionOwnership.h"
 #include "RadioSessionCorrelation.h"
 #include "RadioSessionRecoveryStore.h"
@@ -49,6 +50,7 @@ class OfflinePoliciesTest : public QObject
     void waitsForRetainedTokenRemovalBeforeReplacementLogin();
     void refusesRecoveryWhileJournalOwnerIsAlive();
     void expiresMeterPollDeadlinesConservatively();
+    void waitsForBothReceiverIdentitiesBeforeAudio();
 };
 
 void OfflinePoliciesTest::selectsAudioDevicesAcrossDefaultChangesAndHotplug()
@@ -83,6 +85,15 @@ void OfflinePoliciesTest::expiresMeterPollDeadlinesConservatively()
     QVERIFY(!meterPollDeadlineExpired(true, 299, 300));
     QVERIFY(meterPollDeadlineExpired(true, 300, 300));
     QVERIFY(meterPollDeadlineExpired(true, 301, 300));
+}
+
+void OfflinePoliciesTest::waitsForBothReceiverIdentitiesBeforeAudio()
+{
+    using sdr9700::backend::receiverAudioReady;
+    QVERIFY(!receiverAudioReady(false, false, false, false));
+    QVERIFY(!receiverAudioReady(true, true, false, false));
+    QVERIFY(!receiverAudioReady(true, true, true, false));
+    QVERIFY(receiverAudioReady(true, true, true, true));
 }
 
 void OfflinePoliciesTest::refusesRecoveryWhileJournalOwnerIsAlive()

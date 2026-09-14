@@ -1,6 +1,7 @@
 #include "RadioBackend.h"
 
 #include "MainSubExchangeConfirmationPolicy.h"
+#include "ReceiverAudioReadinessPolicy.h"
 #include "VfoReceiverCommandRoute.h"
 
 #include "Commander.h"
@@ -256,7 +257,18 @@ RadioBackend::RadioBackend(QObject* parent)
                 if (func == funcFreqGet || func == funcFreqSet || func == funcSelectedFreq ||
                     func == funcUnselectedFreq)
                 {
-                    observeVfoFrequency(value.value<Frequency>().Hz, receiver);
+                    const quint64 frequencyHz = value.value<Frequency>().Hz;
+                    observeVfoFrequency(frequencyHz, receiver);
+                    if (frequencyHz > 0 && receiver == kSubReceiver)
+                    {
+                        m_initialSubFrequencyReceived = true;
+                    }
+                }
+                if ((func == funcModeGet || func == funcModeSet || func == funcSelectedMode ||
+                     func == funcUnselectedMode) &&
+                    receiver == kSubReceiver)
+                {
+                    m_initialSubModeReceived = true;
                 }
                 // funcVFOBandMS also reports the short-lived physical
                 // selections used to route receiver-scoped CI-V work. Those
@@ -285,6 +297,7 @@ RadioBackend::RadioBackend(QObject* parent)
                     m_smeterPollQueuedClock.invalidate();
                     m_smeterPollPendingClock.invalidate();
                 }
+                updateAudioReadyState();
                 emit radioValueUpdated(func, value, receiver);
             });
     connect(m_radioRouter, &RadioRouter::frequencyReported, this,
@@ -1268,6 +1281,9 @@ void RadioBackend::shutdownConnection(bool emitDisconnectedSignal, bool emitDisc
     m_initialModeReceived = false;
     m_initialMainFrequencyReceived = false;
     m_initialMainModeReceived = false;
+    m_initialSubFrequencyReceived = false;
+    m_initialSubModeReceived = false;
+    m_audioReady = false;
     m_initialStateRequested = false;
     m_currentBandKey = -1;
     m_currentMainFrequencyHz = 0;
@@ -2350,6 +2366,12 @@ bool RadioBackend::setPtt(bool on)
 
     if (on)
     {
+        if (!m_audioReady)
+        {
+            emit statusMessage(QStringLiteral("PTT blocked: waiting for MAIN and SUB audio readiness"),
+                               MessageSeverity::Error);
+            return false;
+        }
         if (m_dualWatchTransition.pending())
         {
             emit statusMessage(QStringLiteral("PTT blocked: waiting for dual-watch transition"),
@@ -2826,8 +2848,25 @@ void RadioBackend::updateReadyState()
                                }
                            });
         emit connectionStageChanged(ConnectionStage::SyncingRadioState, QStringLiteral("Synchronizing memories"));
-        invokeOnCurrentCommander([](Commander* c) { c->enableAudio(); });
+        updateAudioReadyState();
     }
+}
+
+void RadioBackend::updateAudioReadyState()
+{
+    if (m_audioReady || !m_commander ||
+        !sdr9700::backend::receiverAudioReady(m_initialMainFrequencyReceived, m_initialMainModeReceived,
+                                              m_initialSubFrequencyReceived, m_initialSubModeReceived))
+    {
+        return;
+    }
+
+    m_audioReady = true;
+    qInfo(logRadio()).noquote().nospace()
+        << "Audio readiness confirmed mainFrequencyReceived=" << m_initialMainFrequencyReceived
+        << " mainModeReceived=" << m_initialMainModeReceived
+        << " subFrequencyReceived=" << m_initialSubFrequencyReceived << " subModeReceived=" << m_initialSubModeReceived;
+    invokeOnCurrentCommander([](Commander* commandSession) { commandSession->enableAudio(); });
 }
 
 void RadioBackend::setScopeSyncDegraded(bool degraded)
@@ -3015,6 +3054,9 @@ void RadioBackend::onLanReady()
     m_initialModeReceived = false;
     m_initialMainFrequencyReceived = false;
     m_initialMainModeReceived = false;
+    m_initialSubFrequencyReceived = false;
+    m_initialSubModeReceived = false;
+    m_audioReady = false;
     m_initialStateRequested = false;
     m_txMeterPollTick = 0;
     m_smeterPollTick = 0;

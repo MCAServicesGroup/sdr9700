@@ -127,6 +127,7 @@ class RadioBackend : public IRadioBackend
     void finishDualWatchTransition(bool success);
     void scheduleSubVfoControlRefresh();
     void updateReadyState();
+    void updateAudioReadyState();
     void setScopeSyncDegraded(bool degraded);
     void handleReportedFrequency(quint64 hz);
     void sendLanModLevel(int level);
@@ -198,8 +199,11 @@ class RadioBackend : public IRadioBackend
     bool m_initialModeReceived{false};
     bool m_initialMainFrequencyReceived{false};
     bool m_initialMainModeReceived{false};
+    bool m_initialSubFrequencyReceived{false};
+    bool m_initialSubModeReceived{false};
     bool m_initialStateRequested{false};
     bool m_radioReady{false};
+    bool m_audioReady{false};
     int m_syncReconnectAttempts{0};
     bool m_syncReconnectPending{false};
     // Tracks only the pre-readiness bootstrap. Once the directed CI-V probe
