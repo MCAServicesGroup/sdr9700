@@ -5,7 +5,6 @@
 #include <QTimer>
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <iterator>
 #include <limits>
 
@@ -188,6 +187,7 @@ void WaterfallController::clearDisplay()
     {
         m_waterfall.fill(kWaterfallIdleColor);
     }
+    m_firstVisibleRow = 0;
     emit imageChanged();
 }
 
@@ -199,6 +199,7 @@ void WaterfallController::rebuildImage()
     }
     m_waterfall = QImage(m_canvasSize, QImage::Format_RGB32);
     m_waterfall.fill(kWaterfallIdleColor);
+    m_firstVisibleRow = 0;
     emit imageChanged();
 }
 
@@ -223,20 +224,15 @@ void WaterfallController::renderPendingRow()
     const int w = m_waterfall.width();
     const int h = m_waterfall.height();
     Q_ASSERT(m_waterfall.format() == QImage::Format_RGB32);
-    if (h > 1)
-    {
-        const qsizetype stride = m_waterfall.bytesPerLine();
-        memmove(m_waterfall.bits() + stride, m_waterfall.constBits(), size_t(stride * (h - 1)));
-    }
-
-    QRgb* row = reinterpret_cast<QRgb*>(m_waterfall.bits());
+    m_firstVisibleRow = (m_firstVisibleRow + h - 1) % h;
+    QRgb* row = reinterpret_cast<QRgb*>(m_waterfall.scanLine(m_firstVisibleRow));
     if (levels.isEmpty())
     {
         for (int x = 0; x < w; ++x)
         {
             row[x] = kWaterfallIdleColor;
         }
-        emit imageChanged();
+        emit rowRendered(m_firstVisibleRow, m_firstVisibleRow);
         return;
     }
 
@@ -272,5 +268,5 @@ void WaterfallController::renderPendingRow()
         const int bin = binForDisplayX(x, levels.size());
         row[x] = bin >= 0 ? levelToColor(levels[bin]) : kWaterfallIdleColor;
     }
-    emit imageChanged();
+    emit rowRendered(m_firstVisibleRow, m_firstVisibleRow);
 }

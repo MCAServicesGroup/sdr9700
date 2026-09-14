@@ -87,6 +87,12 @@ void MainWindowHelpersTest::formatsRadioValues()
     QCOMPARE(toneOptionLabel(ratrTT), QStringLiteral("TSQL"));
     QCOMPARE(toneOptionLabel(ratrDD), QStringLiteral("DTCS"));
     QCOMPARE(memoryModeLabel(modeFM), QStringLiteral("FM"));
+    QCOMPARE(radioLevelPercent(-1), 0);
+    QCOMPARE(radioLevelPercent(0), 0);
+    QCOMPARE(radioLevelPercent(127), 50);
+    QCOMPARE(radioLevelPercent(180), 71);
+    QCOMPARE(radioLevelPercent(255), 100);
+    QCOMPARE(radioLevelPercent(256), 100);
 }
 
 void MainWindowHelpersTest::mapsTuningSteps_data()

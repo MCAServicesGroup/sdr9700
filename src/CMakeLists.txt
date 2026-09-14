@@ -70,6 +70,7 @@ set(sdr9700_CORE_SOURCES
     core/LoggingConfiguration.h
     core/LoggingConfiguration.cpp
     core/RadioSessionWatchdog.h
+    core/SpectrumFrameRate.h
     radio/RadioSessionOwnership.h
     backend/ReceiverReadinessPolicy.h
     radio/RadioSessionCorrelation.h
@@ -273,6 +274,24 @@ target_link_libraries(sdr9700_app_support PUBLIC
     Qt6::Network
     Qt6::Multimedia
 )
+if(sdr9700_ENABLE_GPU_PANADAPTER)
+    target_compile_definitions(sdr9700_app_support PUBLIC SDR9700_GPU_PANADAPTER)
+    if(TARGET Qt6::GuiPrivate AND NOT sdr9700_QT_PRIVATE_INCLUDE_ROOT)
+        target_link_libraries(sdr9700_app_support PRIVATE Qt6::GuiPrivate)
+    else()
+        target_include_directories(sdr9700_app_support PRIVATE ${sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS})
+    endif()
+
+    qt_add_shaders(sdr9700_app_support "sdr9700_panadapter_shaders"
+        PREFIX
+            "/shaders"
+        FILES
+            gui/shaders/panadapter_color.vert
+            gui/shaders/panadapter_color.frag
+            gui/shaders/panadapter_texture.vert
+            gui/shaders/panadapter_texture.frag
+    )
+endif()
 if(HIDAPI_FOUND)
     target_compile_definitions(sdr9700_app_support PUBLIC HAVE_HIDAPI)
 endif()
@@ -317,9 +336,9 @@ set_target_properties(sdr9700 PROPERTIES
 
 if(APPLE)
     set_target_properties(sdr9700 PROPERTIES
-        MACOSX_BUNDLE_BUNDLE_NAME "sdr9700"
+        MACOSX_BUNDLE_BUNDLE_NAME "SDR9700"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT "Copyright sdr9700 contributors"
+        MACOSX_BUNDLE_COPYRIGHT "Copyright SDR9700 contributors"
         MACOSX_BUNDLE_GUI_IDENTIFIER "org.w5jwp.sdr9700"
         MACOSX_BUNDLE_ICON_FILE "sdr9700_app_icon.png"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/packaging/macos/Info.plist.in"
@@ -609,7 +628,10 @@ if(BUILD_TESTING)
         Qt6::Test
     )
     add_test(NAME GuiSmokeTest COMMAND GuiSmokeTest)
-    set_tests_properties(GuiSmokeTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    set_tests_properties(GuiSmokeTest PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 60
+    )
 
     add_executable(MemoryManagerSmokeTest
         tests/MemoryManagerSmokeTest.cpp

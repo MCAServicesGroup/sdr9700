@@ -42,7 +42,7 @@ constexpr std::array kSettingDefinitions{
     SettingDefinition{"spectrumScopeGridDensity", "spectrumScope", "gridDensity"},
     SettingDefinition{"spectrumScopeGridLineColor", "spectrumScope", "gridLineColor"},
     SettingDefinition{"spectrumScopeInvertMouseWheel", "spectrumScope", "invertMouseWheel"},
-    SettingDefinition{"spectrumScopePeakHoldSeconds", "spectrumScope", "peakHoldSeconds"},
+    SettingDefinition{"spectrumScopeFramesPerSecond", "spectrumScope", "framesPerSecond"},
     SettingDefinition{"spectrumScopeSpanHZ", "spectrumScope", "spanHZ"},
     SettingDefinition{"mainWindowPositionX", "mainWindow", "positionX"},
     SettingDefinition{"mainWindowPositionY", "mainWindow", "positionY"},

@@ -105,7 +105,11 @@ class FakeRadioBackend : public IRadioBackend
         recalledBand = recall;
         ++bandRecallCalls;
     }
-    void requestVfoState(Vfo value) override { requestedVfoState = value; }
+    void requestVfoState(Vfo value) override
+    {
+        requestedVfoState = value;
+        ++requestedVfoStateCalls;
+    }
     void setVfoAgcMode(Vfo, const QString&) override {}
     void setVfoAttenuatorEnabled(Vfo, bool) override {}
     void setVfoNbEnabled(Vfo, bool enabled) override
@@ -134,8 +138,18 @@ class FakeRadioBackend : public IRadioBackend
         ++vfoNrLevelCalls;
     }
     void setVfoPreampLevel(Vfo, int) override {}
-    void setVfoRfGain(Vfo, int) override {}
-    void setVfoSquelch(Vfo, int) override {}
+    void setVfoRfGain(Vfo vfo, int level) override
+    {
+        requestedLevelVfo = vfo;
+        requestedRfGain = level;
+        ++vfoRfGainCalls;
+    }
+    void setVfoSquelch(Vfo vfo, int level) override
+    {
+        requestedLevelVfo = vfo;
+        requestedSquelch = level;
+        ++vfoSquelchCalls;
+    }
     bool setDualWatchEnabled(bool enabled) override
     {
         ++dualWatchCalls;
@@ -180,6 +194,7 @@ class FakeRadioBackend : public IRadioBackend
     int selectVfoCalls{0};
     Vfo selectedVfo{Vfo::Main};
     Vfo requestedVfoState{Vfo::Main};
+    int requestedVfoStateCalls{0};
     bool dualWatchEnabled{false};
     bool dialLockEnabled{false};
     bool dualWatchAccepted{true};
@@ -209,6 +224,11 @@ class FakeRadioBackend : public IRadioBackend
     int requestedNrLevel{0};
     int vfoNrEnabledCalls{0};
     int vfoNrLevelCalls{0};
+    Vfo requestedLevelVfo{Vfo::Main};
+    int requestedRfGain{-1};
+    int requestedSquelch{-1};
+    int vfoRfGainCalls{0};
+    int vfoSquelchCalls{0};
 };
 
 class VfoBackendTest : public QObject
@@ -231,12 +251,231 @@ class VfoBackendTest : public QObject
     void radioStateInvalidatesLiveStateButKeepsSessionRecallSeparate();
     void vfoDisplayConsumesConfirmedRadioStateWithoutReceiverBleed();
     void filtersMenuKeepsControlColumnsAligned();
+    void levelMenuUsesSameRoundedPercentageAsControl_data();
+    void levelMenuUsesSameRoundedPercentageAsControl();
+    void receiverLevelsIgnoreStaleReadbacks_data();
+    void receiverLevelsIgnoreStaleReadbacks();
+    void receiverLevelTimeoutRefreshesAuthoritativeState();
+    void mainSubExchangeKeepsReceiverLevelState();
     void controllerFrequencyRequestWaitsForRadioConfirmation();
     void bandRecallRejectsPressureUntilCompleteIdentitySettles();
     void uiSelectionIgnoresBackgroundReceiverRouting();
     void dualWatchRequestReportsBackendAcceptance();
     void receiverPairActionsRespectLifecycleGates();
 };
+
+void VfoBackendTest::levelMenuUsesSameRoundedPercentageAsControl_data()
+{
+    QTest::addColumn<int>("receiver");
+
+    QTest::newRow("main") << 0;
+    QTest::newRow("sub") << 1;
+}
+
+void VfoBackendTest::levelMenuUsesSameRoundedPercentageAsControl()
+{
+    QFETCH(int, receiver);
+
+    FakeRadioBackend backend;
+    sdr9700::RadioState state(&backend);
+    QWidget parent;
+    VfoController controller(receiver == 0 ? Vfo::Main : Vfo::Sub, &backend, &state, &parent);
+
+    Frequency frequency;
+    frequency.Hz = receiver == 0 ? 146520000 : 433920000;
+    ModeInfo mode;
+    mode.mk = modeFM;
+    mode.name = QStringLiteral("FM");
+    mode.filter = 1;
+    emit backend.radioValueConfirmed(funcFreqGet, QVariant::fromValue(frequency), receiver);
+    emit backend.radioValueConfirmed(funcModeGet, QVariant::fromValue(mode), receiver);
+    emit backend.radioValueConfirmed(funcSquelch, 180, receiver);
+
+    auto* squelchButton = controller.display()->findChild<QPushButton*>(QStringLiteral("vfoSQLButton"));
+    QVERIFY(squelchButton);
+    QCOMPARE(squelchButton->text(), QStringLiteral("SQL 71%"));
+
+    bool inspected = false;
+    QTimer::singleShot(0, this,
+                       [&inspected]()
+                       {
+                           auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+                           QVERIFY(menu);
+                           auto* slider = menu->findChild<QSlider*>(QStringLiteral("vfoSQLLevelSlider"));
+                           auto* label = menu->findChild<QLabel*>(QStringLiteral("vfoSQLLevelLabel"));
+                           QVERIFY(slider);
+                           QVERIFY(label);
+                           QCOMPARE(slider->value(), 180);
+                           QCOMPARE(label->text(), QStringLiteral("71%"));
+                           inspected = true;
+                           menu->close();
+                       });
+    emit controller.display()->receiverControlClicked(QStringLiteral("SQL"));
+    QVERIFY(inspected);
+}
+
+void VfoBackendTest::receiverLevelsIgnoreStaleReadbacks_data()
+{
+    QTest::addColumn<int>("receiver");
+    QTest::addColumn<int>("function");
+    QTest::addColumn<QString>("control");
+
+    QTest::newRow("main-rfg") << 0 << int(funcRfGain) << QStringLiteral("RFG");
+    QTest::newRow("main-sql") << 0 << int(funcSquelch) << QStringLiteral("SQL");
+    QTest::newRow("sub-rfg") << 1 << int(funcRfGain) << QStringLiteral("RFG");
+    QTest::newRow("sub-sql") << 1 << int(funcSquelch) << QStringLiteral("SQL");
+}
+
+void VfoBackendTest::receiverLevelsIgnoreStaleReadbacks()
+{
+    QFETCH(int, receiver);
+    QFETCH(int, function);
+    QFETCH(QString, control);
+    const auto func = static_cast<Funcs>(function);
+    const Vfo vfo = receiver == 0 ? Vfo::Main : Vfo::Sub;
+
+    FakeRadioBackend backend;
+    sdr9700::RadioState state(&backend);
+    QWidget parent;
+    VfoController controller(vfo, &backend, &state, &parent);
+
+    Frequency frequency;
+    frequency.Hz = receiver == 0 ? 146520000 : 433920000;
+    ModeInfo mode;
+    mode.mk = modeFM;
+    mode.name = QStringLiteral("FM");
+    mode.filter = 1;
+    emit backend.radioValueConfirmed(funcFreqGet, QVariant::fromValue(frequency), receiver);
+    emit backend.radioValueConfirmed(funcModeGet, QVariant::fromValue(mode), receiver);
+    emit backend.radioValueConfirmed(func, 59, receiver);
+
+    auto* button = controller.display()->findChild<QPushButton*>(QStringLiteral("vfo%1Button").arg(control));
+    QVERIFY(button);
+    QCOMPARE(button->text(), QStringLiteral("%1 23%").arg(control));
+
+    bool submitted = false;
+    QTimer::singleShot(0, this,
+                       [&submitted, control]()
+                       {
+                           auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+                           QVERIFY(menu);
+                           auto* slider = menu->findChild<QSlider*>(QStringLiteral("vfo%1LevelSlider").arg(control));
+                           QVERIFY(slider);
+                           slider->setValue(102);
+                           QVERIFY(QMetaObject::invokeMethod(slider, "sliderReleased", Qt::DirectConnection));
+                           submitted = true;
+                           menu->close();
+                       });
+    emit controller.display()->receiverControlClicked(control);
+    QVERIFY(submitted);
+    QCOMPARE(backend.requestedLevelVfo, vfo);
+    if (func == funcRfGain)
+    {
+        QCOMPARE(backend.vfoRfGainCalls, 1);
+        QCOMPARE(backend.requestedRfGain, 102);
+    }
+    else
+    {
+        QCOMPARE(backend.vfoSquelchCalls, 1);
+        QCOMPARE(backend.requestedSquelch, 102);
+    }
+
+    emit backend.radioValueConfirmed(func, 80, receiver);
+    QCOMPARE(button->text(), QStringLiteral("%1 23%").arg(control));
+    emit backend.radioValueConfirmed(func, 102, receiver);
+    QCOMPARE(button->text(), QStringLiteral("%1 40%").arg(control));
+}
+
+void VfoBackendTest::receiverLevelTimeoutRefreshesAuthoritativeState()
+{
+    FakeRadioBackend backend;
+    sdr9700::RadioState state(&backend);
+    QWidget parent;
+    VfoController controller(Vfo::Sub, &backend, &state, &parent);
+
+    Frequency frequency;
+    frequency.Hz = 433920000;
+    ModeInfo mode;
+    mode.mk = modeFM;
+    mode.name = QStringLiteral("FM");
+    mode.filter = 1;
+    emit backend.radioValueConfirmed(funcFreqGet, QVariant::fromValue(frequency), 1);
+    emit backend.radioValueConfirmed(funcModeGet, QVariant::fromValue(mode), 1);
+    emit backend.radioValueConfirmed(funcSquelch, 59, 1);
+
+    auto* button = controller.display()->findChild<QPushButton*>(QStringLiteral("vfoSQLButton"));
+    QVERIFY(button);
+    bool submitted = false;
+    QTimer::singleShot(0, this,
+                       [&submitted]()
+                       {
+                           auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+                           QVERIFY(menu);
+                           auto* slider = menu->findChild<QSlider*>(QStringLiteral("vfoSQLLevelSlider"));
+                           QVERIFY(slider);
+                           slider->setValue(102);
+                           QVERIFY(QMetaObject::invokeMethod(slider, "sliderReleased", Qt::DirectConnection));
+                           submitted = true;
+                           menu->close();
+                       });
+    emit controller.display()->receiverControlClicked(QStringLiteral("SQL"));
+    QVERIFY(submitted);
+    emit backend.radioValueConfirmed(funcSquelch, 80, 1);
+    QCOMPARE(button->text(), QStringLiteral("SQL 23%"));
+
+    QTRY_COMPARE_WITH_TIMEOUT(backend.requestedVfoStateCalls, 1, 1500);
+    QCOMPARE(backend.requestedVfoState, Vfo::Sub);
+    emit backend.radioValueConfirmed(funcSquelch, 80, 1);
+    QCOMPARE(button->text(), QStringLiteral("SQL 31%"));
+}
+
+void VfoBackendTest::mainSubExchangeKeepsReceiverLevelState()
+{
+    FakeRadioBackend backend;
+    sdr9700::RadioState state(&backend);
+    QWidget parent;
+    VfoController mainController(Vfo::Main, &backend, &state, &parent);
+    VfoController subController(Vfo::Sub, &backend, &state, &parent);
+
+    Frequency mainFrequency;
+    mainFrequency.Hz = 146520000;
+    Frequency subFrequency;
+    subFrequency.Hz = 433920000;
+    ModeInfo mode;
+    mode.mk = modeFM;
+    mode.name = QStringLiteral("FM");
+    mode.filter = 1;
+    emit backend.radioValueConfirmed(funcFreqGet, QVariant::fromValue(mainFrequency), 0);
+    emit backend.radioValueConfirmed(funcModeGet, QVariant::fromValue(mode), 0);
+    emit backend.radioValueConfirmed(funcFreqGet, QVariant::fromValue(subFrequency), 1);
+    emit backend.radioValueConfirmed(funcModeGet, QVariant::fromValue(mode), 1);
+    emit backend.radioValueConfirmed(funcSquelch, 48, 0);
+    emit backend.radioValueConfirmed(funcSquelch, 70, 1);
+    emit backend.radioValueConfirmed(funcRfGain, 200, 0);
+    emit backend.radioValueConfirmed(funcRfGain, 100, 1);
+
+    auto* mainSquelch = mainController.display()->findChild<QPushButton*>(QStringLiteral("vfoSQLButton"));
+    auto* subSquelch = subController.display()->findChild<QPushButton*>(QStringLiteral("vfoSQLButton"));
+    auto* mainRfGain = mainController.display()->findChild<QPushButton*>(QStringLiteral("vfoRFGButton"));
+    auto* subRfGain = subController.display()->findChild<QPushButton*>(QStringLiteral("vfoRFGButton"));
+    QVERIFY(mainSquelch);
+    QVERIFY(subSquelch);
+    QVERIFY(mainRfGain);
+    QVERIFY(subRfGain);
+    QCOMPARE(mainSquelch->text(), QStringLiteral("SQL 19%"));
+    QCOMPARE(subSquelch->text(), QStringLiteral("SQL 27%"));
+    QCOMPARE(mainRfGain->text(), QStringLiteral("RFG 78%"));
+    QCOMPARE(subRfGain->text(), QStringLiteral("RFG 39%"));
+
+    mainController.captureExchangeableControlState();
+    subController.captureExchangeableControlState();
+    mainController.applyCapturedControlExchange(&subController);
+
+    QCOMPARE(mainSquelch->text(), QStringLiteral("SQL 19%"));
+    QCOMPARE(subSquelch->text(), QStringLiteral("SQL 27%"));
+    QCOMPARE(mainRfGain->text(), QStringLiteral("RFG 78%"));
+    QCOMPARE(subRfGain->text(), QStringLiteral("RFG 39%"));
+}
 
 void VfoBackendTest::filtersMenuKeepsControlColumnsAligned()
 {

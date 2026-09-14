@@ -28,9 +28,9 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>sdr9700 connects directly to your Icom IC-9700 transceiver over your local network.</string>
+    <string>SDR9700 connects directly to your Icom IC-9700 transceiver over your local network.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>sdr9700 uses microphone audio when transmitting through your Icom IC-9700 transceiver.</string>
+    <string>SDR9700 uses microphone audio when transmitting through your Icom IC-9700 transceiver.</string>
     <key>NSQuitAlwaysKeepsWindows</key>
     <false/>
     <key>NSPrincipalClass</key>

@@ -59,7 +59,6 @@ class VfoController : public QObject
         bool manualNotchEnabled{false};
         bool nrEnabled{false};
         int preampLevel{0};
-        int squelch{0};
     };
 
     const sdr9700::RadioState::Receiver* confirmedReceiverState() const;
@@ -78,6 +77,10 @@ class VfoController : public QObject
     void updateDisplayEnabled();
     void updateReceiverControlDisplay();
     void updateTransmitFrequencyDisplay();
+    void requestReceiverLevel(Funcs func, int level);
+    void applyReceiverLevelConfirmation(Funcs func, const QVariant& value, uchar receiver);
+    void receiverLevelConfirmationTimedOut(Funcs func);
+    void clearPendingReceiverLevels();
     void applyExchangeableControlState(const ExchangeableControlState& state);
     bool pendingBandRecallIdentityIsConfirmed() const;
     void finishPendingBandRecall();
@@ -123,6 +126,10 @@ class VfoController : public QObject
     QTimer m_initialPublishTimer;
     QTimer m_bandRecallSettleTimer;
     QTimer m_bandRecallTimeoutTimer;
+    QTimer m_rfGainConfirmationTimer;
+    QTimer m_squelchConfirmationTimer;
+    std::optional<int> m_pendingRfGain;
+    std::optional<int> m_pendingSquelch;
     std::optional<availableBands> m_pendingBandRecall;
     std::optional<ExchangeableControlState> m_capturedExchangeState;
 };

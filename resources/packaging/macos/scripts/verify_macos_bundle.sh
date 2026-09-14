@@ -16,6 +16,11 @@ if [ ! -x "${contents_path}/MacOS/sdr9700" ]; then
     exit 1
 fi
 
+if [ "$(plutil -extract CFBundleDisplayName raw -o - "${contents_path}/Info.plist")" != "SDR9700" ]; then
+    echo "Unexpected CFBundleDisplayName; expected SDR9700" >&2
+    exit 1
+fi
+
 errors_file="$(mktemp /tmp/sdr9700-bundle-errors.XXXXXX)"
 trap 'rm -f "${errors_file}"' EXIT HUP INT TERM
 

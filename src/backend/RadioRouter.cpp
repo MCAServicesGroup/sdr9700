@@ -416,6 +416,8 @@ void RadioRouter::route(const CacheItem& item)
         break;
     }
     case funcRfGain:
+        qInfo(logRadio()).noquote().nospace() << "Receiver level readback control=RFG receiver=" << int(item.receiver)
+                                              << " raw=" << qBound(0, item.value.toInt(), 255);
         emit radioValueUpdated(item.command, item.value, item.receiver);
         if (item.receiver == kMainReceiver)
             emit rfGainChanged(qBound(0, item.value.toInt(), 255));
@@ -448,6 +450,8 @@ void RadioRouter::route(const CacheItem& item)
     case funcSquelch:
     {
         const int level = qBound(0, item.value.toInt(), 255);
+        qInfo(logRadio()).noquote().nospace()
+            << "Receiver level readback control=SQL receiver=" << int(item.receiver) << " raw=" << level;
         emit radioValueUpdated(item.command, QVariant(level), item.receiver);
         if (item.receiver == kMainReceiver)
             emit squelchChanged(level > 0, level);

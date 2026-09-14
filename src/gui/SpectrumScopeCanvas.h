@@ -1,22 +1,35 @@
 // cppcheck-suppress-file unusedStructMember
 #pragma once
 
-#include <QElapsedTimer>
 #include <QColor>
+#include <QByteArray>
+#include <QImage>
 #include <QPixmap>
 #include <QPoint>
 #include <QSize>
 #include <QTimer>
 #include <QVector>
-#include <QWidget>
+#include <memory>
 
-class SpectrumScopeCanvas : public QWidget
+#ifdef SDR9700_GPU_PANADAPTER
+#include <QRhiWidget>
+class QRhiCommandBuffer;
+using SpectrumScopeCanvasBase = QRhiWidget;
+#else
+#include <QWidget>
+using SpectrumScopeCanvasBase = QWidget;
+#endif
+
+class QPainter;
+
+class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
 {
     Q_OBJECT
     friend class SpectrumCanvasTest;
 
   public:
     explicit SpectrumScopeCanvas(QWidget* parent = nullptr);
+    ~SpectrumScopeCanvas() override;
 
     static int scaleHeight() { return 26; }
 
@@ -29,8 +42,6 @@ class SpectrumScopeCanvas : public QWidget
     void setGridDensity(int density);
     void setInteractionLocked(bool locked);
     void setInvertMouseWheel(bool invert);
-    void setPeakHoldDurationMs(int durationMs);
-    int peakHoldDurationMs() const { return m_peakHoldDurationMs; }
     void setFilterWidth(int lowHz, int highHz);
     void updateSpectrum(const QVector<float>& levels, bool outOfRange);
     void clearDisplay();
@@ -43,6 +54,11 @@ class SpectrumScopeCanvas : public QWidget
 
   protected:
     void paintEvent(QPaintEvent* event) override;
+#ifdef SDR9700_GPU_PANADAPTER
+    void initialize(QRhiCommandBuffer* commandBuffer) override;
+    void render(QRhiCommandBuffer* commandBuffer) override;
+    void releaseResources() override;
+#endif
     void mousePressEvent(QMouseEvent* ev) override;
     void mouseReleaseEvent(QMouseEvent* ev) override;
     void wheelEvent(QWheelEvent* ev) override;
@@ -58,12 +74,18 @@ class SpectrumScopeCanvas : public QWidget
     double sourcePositionForDisplayX(double x, int binCount) const;
     static float interpolatedLevel(const QVector<float>& levels, double sourcePosition);
     static QVector<float> spatiallySmoothedBins(const QVector<float>& bins);
-    void rebuildDisplayBins();
     bool isSpectrumClickArea(const QPoint& pos) const;
     void invalidateStaticLayer();
     void ensureStaticLayer();
     void renderStaticLayer(QPainter* painter) const;
+    void renderDynamicLayer(QPainter* painter) const;
     void scheduleRepaint();
+#ifdef SDR9700_GPU_PANADAPTER
+    void ensureGpuLayers();
+    void rebuildGpuTrace();
+    void invalidateGpuOverlay();
+    struct GpuState;
+#endif
 
     double m_startMhz{144.0};
     double m_endMhz{146.0};
@@ -92,16 +114,23 @@ class SpectrumScopeCanvas : public QWidget
 
     QVector<float> m_spectrumBins;
     QVector<float> m_displaySpectrumBins;
-    QVector<float> m_peakHold;
-    QVector<float> m_displayPeakHold;
-    QVector<qint64> m_peakHoldTimestampsMs;
     QPixmap m_staticLayer;
     QSize m_staticLayerSize;
     qreal m_staticLayerDevicePixelRatio{0.0};
     bool m_staticLayerDirty{true};
 
-    QTimer m_peakDecayTimer;
+#ifdef SDR9700_GPU_PANADAPTER
+    std::unique_ptr<GpuState> m_gpuState;
+    QImage m_gpuOverlayLayer;
+    QByteArray m_gpuFillVertices;
+    QByteArray m_gpuFeatherVertices;
+    QByteArray m_gpuLineVertices;
+    QSize m_gpuTraceSize;
+    bool m_gpuBackgroundDirty{true};
+    bool m_gpuOverlayDirty{true};
+    bool m_gpuOverlayTextureDirty{true};
+    bool m_gpuTraceDirty{true};
+#endif
+
     QTimer m_repaintTimer;
-    QElapsedTimer m_peakClock;
-    int m_peakHoldDurationMs{2000};
 };

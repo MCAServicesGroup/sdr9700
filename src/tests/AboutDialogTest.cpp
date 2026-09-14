@@ -2,6 +2,7 @@
 
 #include <QLabel>
 #include <QtTest>
+#include <algorithm>
 
 class AboutDialogTest final : public QObject
 {
@@ -11,6 +12,7 @@ class AboutDialogTest final : public QObject
     void presentsProjectIdentityAndAccessibleLink()
     {
         AboutDialog dialog;
+        QCOMPARE(dialog.windowTitle(), QStringLiteral("About SDR9700"));
         const auto labels = dialog.findChildren<QLabel*>();
         QLabel* description = nullptr;
         QLabel* projectLink = nullptr;
@@ -29,6 +31,8 @@ class AboutDialogTest final : public QObject
         }
 
         QVERIFY(description != nullptr);
+        QVERIFY(std::any_of(labels.cbegin(), labels.cend(),
+                            [](const QLabel* label) { return label->text().contains(QStringLiteral("SDR9700")); }));
         QVERIFY(description->wordWrap());
         QVERIFY(projectLink != nullptr);
         QVERIFY(projectLink->openExternalLinks());

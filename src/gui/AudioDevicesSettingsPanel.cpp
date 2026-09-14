@@ -49,8 +49,8 @@ AudioDevicesSettingsPanel::AudioDevicesSettingsPanel(QWidget* parent) : QWidget(
 
     m_outputChannelsCombo = new QComboBox(outputGroup);
     m_outputChannelsCombo->setObjectName(QStringLiteral("audioOutputChannels"));
-    m_outputChannelsCombo->addItem(QStringLiteral("LPCM 16-bit, 1 channel"), 1);
-    m_outputChannelsCombo->addItem(QStringLiteral("LPCM 16-bit, 2 channels"), 2);
+    m_outputChannelsCombo->addItem(QStringLiteral("Mono mix (MAIN + SUB)"), 1);
+    m_outputChannelsCombo->addItem(QStringLiteral("Stereo (MAIN left, SUB right)"), 2);
 
     const QByteArray savedOut = QByteArray::fromBase64(settings.value("audioOutputDeviceID").toString().toLatin1());
     const int savedOutputChannels = qBound(1, settings.value("audioOutputChannels", 2).toInt(), 2);
@@ -62,7 +62,7 @@ AudioDevicesSettingsPanel::AudioDevicesSettingsPanel(QWidget* parent) : QWidget(
 
     auto* outputDeviceLabel = new QLabel(QStringLiteral("Device:"), outputGroup);
     outputDeviceLabel->setBuddy(m_outputCombo);
-    auto* codecLabel = new QLabel(QStringLiteral("Codec:"), outputGroup);
+    auto* codecLabel = new QLabel(QStringLiteral("Playback:"), outputGroup);
     codecLabel->setBuddy(m_outputChannelsCombo);
     outputLayout->addWidget(outputDeviceLabel, 0, 0, Qt::AlignLeft | Qt::AlignVCenter);
     outputLayout->addWidget(m_outputCombo, 0, 1);

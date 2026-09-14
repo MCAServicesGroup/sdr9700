@@ -70,6 +70,7 @@ jobs:
       - name: Build and test
         run: |
           make release
+          grep -Fq 'sdr9700_ENABLE_GPU_PANADAPTER:BOOL=ON' src/build/CMakeCache.txt
           ctest --test-dir src/build --output-on-failure
 
       - name: Import Developer ID certificate

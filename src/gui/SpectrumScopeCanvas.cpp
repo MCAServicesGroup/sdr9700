@@ -3,16 +3,23 @@
 #include "LogCategories.h"
 
 #include <QFontMetrics>
+#include <QFile>
+#include <QGuiApplication>
 #include <QLinearGradient>
+#include <QMatrix4x4>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QPainterPath>
 #include <QPolygonF>
 #include <QSizeF>
 #include <QWheelEvent>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iterator>
+
+#ifdef SDR9700_GPU_PANADAPTER
+#include <rhi/qrhi.h>
+#endif
 
 namespace
 {
@@ -26,7 +33,9 @@ constexpr int kGridDensityFewer = 0;
 constexpr int kGridDensityMore = 2;
 constexpr float kSpectrumSmoothingAlpha = 0.35f;
 constexpr float kMaximumSpatialSmoothBlend = 0.75f;
-constexpr int kTraceSamplesPerPixel = 2;
+constexpr int kTraceSamplesPerPixel = 1;
+constexpr int kMinimumRasterTraceSamples = 64;
+constexpr int kRasterTraceColorSegmentPoints = 24;
 constexpr int kToolbarShadowHeightPx = 8;
 constexpr int kScaleShadowHeightPx = 8;
 constexpr double kScopeDisplayExponent = 0.58;
@@ -72,49 +81,126 @@ int normalizedGridDensity(int density)
 {
     return qBound(kGridDensityFewer, density, kGridDensityMore);
 }
+
+#ifdef SDR9700_GPU_PANADAPTER
+using ColorVertex = std::array<float, 6>;
+using TextureVertex = std::array<float, 4>;
+
+struct alignas(16) TextureUniforms
+{
+    float matrix[16]{};
+    float rowOffset{0.0f};
+    float padding[3]{0.0f, 0.0f, 0.0f};
+};
+
+QShader loadShader(const QString& path)
+{
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? QShader::fromSerialized(file.readAll()) : QShader();
+}
+
+QRhiGraphicsPipeline::TargetBlend alphaBlend()
+{
+    QRhiGraphicsPipeline::TargetBlend blend;
+    blend.enable = true;
+    blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+    blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+    blend.srcAlpha = QRhiGraphicsPipeline::One;
+    blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+    return blend;
+}
+
+const char* rhiBackendName(QRhi::Implementation backend)
+{
+    switch (backend)
+    {
+    case QRhi::Vulkan:
+        return "Vulkan";
+    case QRhi::OpenGLES2:
+        return "OpenGL";
+    case QRhi::D3D11:
+        return "Direct3D11";
+    case QRhi::Metal:
+        return "Metal";
+    case QRhi::D3D12:
+        return "Direct3D12";
+    case QRhi::Null:
+        return "Null";
+    }
+    return "Unknown";
+}
+#endif
 } // namespace
 
-SpectrumScopeCanvas::SpectrumScopeCanvas(QWidget* parent) : QWidget(parent)
+#ifdef SDR9700_GPU_PANADAPTER
+struct SpectrumScopeCanvas::GpuState
 {
+    QRhi* rhi{nullptr};
+    QRhiRenderPassDescriptor* renderPassDescriptor{nullptr};
+    QSize outputSize;
+    qsizetype traceBufferCapacity{0};
+    std::unique_ptr<QRhiBuffer> quadBuffer;
+    std::unique_ptr<QRhiBuffer> uniformBuffer;
+    std::unique_ptr<QRhiBuffer> traceBuffer;
+    std::unique_ptr<QRhiTexture> backgroundTexture;
+    std::unique_ptr<QRhiTexture> overlayTexture;
+    std::unique_ptr<QRhiSampler> sampler;
+    std::unique_ptr<QRhiShaderResourceBindings> colorBindings;
+    std::unique_ptr<QRhiShaderResourceBindings> backgroundBindings;
+    std::unique_ptr<QRhiShaderResourceBindings> overlayBindings;
+    std::unique_ptr<QRhiGraphicsPipeline> backgroundPipeline;
+    std::unique_ptr<QRhiGraphicsPipeline> overlayPipeline;
+    std::unique_ptr<QRhiGraphicsPipeline> fillPipeline;
+    std::unique_ptr<QRhiGraphicsPipeline> featherPipeline;
+    std::unique_ptr<QRhiGraphicsPipeline> linePipeline;
+
+    void release()
+    {
+        linePipeline.reset();
+        featherPipeline.reset();
+        fillPipeline.reset();
+        overlayPipeline.reset();
+        backgroundPipeline.reset();
+        overlayBindings.reset();
+        backgroundBindings.reset();
+        colorBindings.reset();
+        sampler.reset();
+        overlayTexture.reset();
+        backgroundTexture.reset();
+        traceBuffer.reset();
+        uniformBuffer.reset();
+        quadBuffer.reset();
+        traceBufferCapacity = 0;
+        outputSize = {};
+        renderPassDescriptor = nullptr;
+        rhi = nullptr;
+    }
+};
+#endif
+
+SpectrumScopeCanvas::SpectrumScopeCanvas(QWidget* parent) : SpectrumScopeCanvasBase(parent)
+{
+#ifdef SDR9700_GPU_PANADAPTER
+    if (QGuiApplication::platformName() == QStringLiteral("offscreen"))
+    {
+        setApi(QRhiWidget::Api::Null);
+    }
+#ifdef Q_OS_MAC
+    else
+    {
+        setApi(QRhiWidget::Api::Metal);
+    }
+#endif
+    m_gpuState = std::make_unique<GpuState>();
+#endif
     setMouseTracking(true);
     setFocusPolicy(Qt::ClickFocus);
-
-    m_peakDecayTimer.setInterval(50);
-    connect(&m_peakDecayTimer, &QTimer::timeout, this,
-            [this]()
-            {
-                if (m_peakHoldDurationMs <= 0 || m_peakHold.isEmpty() ||
-                    m_peakHoldTimestampsMs.size() != m_peakHold.size())
-                {
-                    return;
-                }
-                const qint64 nowMs = m_peakClock.elapsed();
-                bool changed = false;
-                for (int i = 0; i < m_peakHold.size(); ++i)
-                {
-                    if (nowMs - m_peakHoldTimestampsMs[i] >= m_peakHoldDurationMs)
-                    {
-                        if (!m_spectrumBins.isEmpty() && i < m_spectrumBins.size() &&
-                            !qFuzzyCompare(m_peakHold[i], m_spectrumBins[i]))
-                        {
-                            m_peakHold[i] = m_spectrumBins[i];
-                            changed = true;
-                        }
-                        m_peakHoldTimestampsMs[i] = nowMs;
-                    }
-                }
-                if (changed)
-                {
-                    rebuildDisplayBins();
-                    scheduleRepaint();
-                }
-            });
-    m_peakDecayTimer.start();
     m_repaintTimer.setSingleShot(true);
     m_repaintTimer.setInterval(16);
     connect(&m_repaintTimer, &QTimer::timeout, this, qOverload<>(&SpectrumScopeCanvas::update));
-    m_peakClock.start();
 }
+
+SpectrumScopeCanvas::~SpectrumScopeCanvas() = default;
 
 int SpectrumScopeCanvas::plotHeight() const
 {
@@ -276,16 +362,6 @@ QVector<float> SpectrumScopeCanvas::spatiallySmoothedBins(const QVector<float>& 
     return smoothedBins;
 }
 
-void SpectrumScopeCanvas::rebuildDisplayBins()
-{
-    // Peak hold intentionally skips temporal smoothing so it retains the
-    // strongest captured sample. It does use the same spatial presentation as
-    // the live trace, preventing held peaks from exposing the radio's coarse
-    // source-bin stair steps.
-    m_displaySpectrumBins = spatiallySmoothedBins(m_spectrumBins);
-    m_displayPeakHold = spatiallySmoothedBins(m_peakHold);
-}
-
 bool SpectrumScopeCanvas::isSpectrumClickArea(const QPoint& pos) const
 {
     const QRect plotRect(plotLeftX(), 0, qMax(0, width() - plotLeftX()), qMax(0, plotHeight() - 1));
@@ -295,7 +371,19 @@ bool SpectrumScopeCanvas::isSpectrumClickArea(const QPoint& pos) const
 void SpectrumScopeCanvas::invalidateStaticLayer()
 {
     m_staticLayerDirty = true;
+#ifdef SDR9700_GPU_PANADAPTER
+    m_gpuBackgroundDirty = true;
+    m_gpuTraceDirty = true;
+    invalidateGpuOverlay();
+#endif
 }
+
+#ifdef SDR9700_GPU_PANADAPTER
+void SpectrumScopeCanvas::invalidateGpuOverlay()
+{
+    m_gpuOverlayDirty = true;
+}
+#endif
 
 void SpectrumScopeCanvas::ensureStaticLayer()
 {
@@ -507,11 +595,17 @@ void SpectrumScopeCanvas::setDataFrequencyRange(double startMhz, double endMhz)
     m_dataStartMhz = startMhz;
     m_dataEndMhz = endMhz;
     m_resetSpectrumSmoothing = true;
+#ifdef SDR9700_GPU_PANADAPTER
+    m_gpuTraceDirty = true;
+#endif
 }
 
 void SpectrumScopeCanvas::setVfoFrequency(double freqMhz)
 {
     m_vfoMhz = freqMhz;
+#ifdef SDR9700_GPU_PANADAPTER
+    invalidateGpuOverlay();
+#endif
     scheduleRepaint();
 }
 
@@ -530,6 +624,9 @@ void SpectrumScopeCanvas::setVfoMarkerColor(const QColor& color)
     }
 
     m_vfoMarkerColor = markerColor;
+#ifdef SDR9700_GPU_PANADAPTER
+    invalidateGpuOverlay();
+#endif
     scheduleRepaint();
 }
 
@@ -586,6 +683,9 @@ void SpectrumScopeCanvas::setFilterWidth(int lowHz, int highHz)
 {
     m_filterLowHz = lowHz;
     m_filterHighHz = highHz;
+#ifdef SDR9700_GPU_PANADAPTER
+    invalidateGpuOverlay();
+#endif
     scheduleRepaint();
 }
 
@@ -604,25 +704,6 @@ void SpectrumScopeCanvas::setInteractionLocked(bool locked)
 void SpectrumScopeCanvas::setInvertMouseWheel(bool invert)
 {
     m_invertMouseWheel = invert;
-}
-
-void SpectrumScopeCanvas::setPeakHoldDurationMs(int durationMs)
-{
-    durationMs = qMax(0, durationMs);
-    if (m_peakHoldDurationMs == durationMs)
-    {
-        return;
-    }
-    m_peakHoldDurationMs = durationMs;
-    m_peakHold.clear();
-    m_peakHoldTimestampsMs.clear();
-    if (durationMs > 0 && !m_spectrumBins.isEmpty())
-    {
-        m_peakHold = m_spectrumBins;
-        m_peakHoldTimestampsMs.fill(m_peakClock.elapsed(), m_spectrumBins.size());
-    }
-    rebuildDisplayBins();
-    scheduleRepaint();
 }
 
 void SpectrumScopeCanvas::updateSpectrum(const QVector<float>& levels, bool outOfRange)
@@ -647,31 +728,21 @@ void SpectrumScopeCanvas::updateSpectrum(const QVector<float>& levels, bool outO
                 kSpectrumSmoothingAlpha * levels[i] + (1.0f - kSpectrumSmoothingAlpha) * m_spectrumBins[i];
         }
     }
+    const bool outOfRangeChanged = m_scopeOutOfRange != outOfRange;
     m_scopeOutOfRange = outOfRange;
-    if (m_peakHoldDurationMs <= 0)
+#ifdef SDR9700_GPU_PANADAPTER
+    if (outOfRangeChanged)
     {
-        m_peakHold.clear();
-        m_peakHoldTimestampsMs.clear();
+        invalidateGpuOverlay();
     }
-    else if (m_peakHold.size() != levels.size())
-    {
-        m_peakHold = levels;
-        m_peakHoldTimestampsMs.fill(m_peakClock.elapsed(), levels.size());
-    }
-    else
-    {
-        const qint64 nowMs = m_peakClock.elapsed();
-        for (int i = 0; i < levels.size(); ++i)
-        {
-            if (levels[i] > m_peakHold[i])
-            {
-                m_peakHold[i] = levels[i];
-                m_peakHoldTimestampsMs[i] = nowMs;
-            }
-        }
-    }
+#else
+    Q_UNUSED(outOfRangeChanged)
+#endif
 
-    rebuildDisplayBins();
+    m_displaySpectrumBins = spatiallySmoothedBins(m_spectrumBins);
+#ifdef SDR9700_GPU_PANADAPTER
+    m_gpuTraceDirty = true;
+#endif
 
     scheduleRepaint();
 }
@@ -680,11 +751,12 @@ void SpectrumScopeCanvas::clearDisplay()
 {
     m_spectrumBins.clear();
     m_displaySpectrumBins.clear();
-    m_peakHold.clear();
-    m_displayPeakHold.clear();
-    m_peakHoldTimestampsMs.clear();
     m_scopeOutOfRange = false;
     m_resetSpectrumSmoothing = true;
+#ifdef SDR9700_GPU_PANADAPTER
+    m_gpuTraceDirty = true;
+    invalidateGpuOverlay();
+#endif
     scheduleRepaint();
 }
 
@@ -696,11 +768,72 @@ void SpectrumScopeCanvas::scheduleRepaint()
     }
 }
 
+void SpectrumScopeCanvas::renderDynamicLayer(QPainter* painter) const
+{
+    if (!painter)
+    {
+        return;
+    }
+
+    const int specH = plotHeight();
+    const int w = width();
+    const int specTop = 0;
+    const int specDrawH = specH;
+    if (m_scopeOutOfRange)
+    {
+        painter->setPen(QColor(0xff, 0x7a, 0x7a));
+        QFont font = painter->font();
+        font.setPointSize(10);
+        font.setBold(true);
+        painter->setFont(font);
+        painter->drawText(QRect(0, specTop, w, specDrawH), Qt::AlignCenter, QStringLiteral("OUT OF RANGE"));
+    }
+
+    const double visibleStartMhz = lowFrequencyMhz(m_startMhz, m_endMhz);
+    const double visibleEndMhz = highFrequencyMhz(m_startMhz, m_endMhz);
+    if (m_vfoMhz >= visibleStartMhz && m_vfoMhz <= visibleEndMhz && m_filterHighHz > m_filterLowHz)
+    {
+        const double loMhz = m_vfoMhz + m_filterLowHz / 1e6;
+        const double hiMhz = m_vfoMhz + m_filterHighHz / 1e6;
+        const int fx1 = freqToX(loMhz);
+        const int fx2 = freqToX(hiMhz);
+        painter->fillRect(fx1, 0, fx2 - fx1, specH, QColor(0x00, 0xb4, 0xd8, 22));
+    }
+
+    if (m_vfoMhz >= visibleStartMhz && m_vfoMhz <= visibleEndMhz)
+    {
+        const int vx = freqToX(m_vfoMhz);
+        const int scaleY = specH - 1;
+        painter->setPen(QPen(m_vfoMarkerColor, 1, Qt::SolidLine));
+        painter->drawLine(vx, 0, vx, scaleY - 1);
+    }
+
+    const int shadowTop = qMax(0, specH - kScaleShadowHeightPx);
+    QLinearGradient scaleShadow(0, shadowTop, 0, specH);
+    scaleShadow.setColorAt(0.0, QColor(0x00, 0x08, 0x0f, 0));
+    scaleShadow.setColorAt(1.0, QColor(0x00, 0x04, 0x08, 220));
+    painter->fillRect(0, shadowTop, w, specH - shadowTop, scaleShadow);
+    painter->fillRect(0, specH - 1, w, 1, UiTheme::Color::ScopeShelfEdge);
+
+    const int toolbarShadowHeight = qMin(specH, kToolbarShadowHeightPx);
+    QLinearGradient toolbarShadow(0, 0, 0, toolbarShadowHeight);
+    toolbarShadow.setColorAt(0.0, QColor(0x00, 0x04, 0x08, 180));
+    toolbarShadow.setColorAt(1.0, QColor(0x00, 0x08, 0x0f, 0));
+    painter->fillRect(0, 0, w, toolbarShadowHeight, toolbarShadow);
+    painter->fillRect(0, 0, w, 1, UiTheme::Color::ScopeShelfEdge);
+}
+
 void SpectrumScopeCanvas::paintEvent(QPaintEvent* event)
 {
+#ifdef SDR9700_GPU_PANADAPTER
+    if (api() != QRhiWidget::Api::Null)
+    {
+        QRhiWidget::paintEvent(event);
+        return;
+    }
+#endif
     Q_UNUSED(event)
 
-    static const QColor kPeak(0x8b, 0xa0, 0xb0, 95);
     ensureStaticLayer();
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, false);
@@ -717,12 +850,11 @@ void SpectrumScopeCanvas::paintEvent(QPaintEvent* event)
         p.setRenderHint(QPainter::Antialiasing, true);
         p.save();
         p.setClipRect(spectrumPlotRect);
-        QPainterPath peakPath;
         QVector<QPointF> tracePoints;
         QVector<float> traceLevels;
-        bool peakFirst = true;
 
-        const int sampleCount = qMax(1, plotWidthPx() * kTraceSamplesPerPixel);
+        const int sampleCount =
+            qMax(1, qMin(plotWidthPx(), qMax(kMinimumRasterTraceSamples, m_displaySpectrumBins.size())));
         tracePoints.reserve(sampleCount + 1);
         traceLevels.reserve(sampleCount + 1);
         for (int sample = 0; sample <= sampleCount; ++sample)
@@ -735,109 +867,389 @@ void SpectrumScopeCanvas::paintEvent(QPaintEvent* event)
             const double sy = levelToY(level, specTop, specDrawH);
             tracePoints.append(QPointF(x, sy));
             traceLevels.append(level);
-
-            if (!m_displayPeakHold.isEmpty() && sourcePosition >= 0.0)
-            {
-                const double py = levelToY(interpolatedLevel(m_displayPeakHold, sourcePosition), specTop, specDrawH);
-                if (peakFirst)
-                {
-                    peakPath.moveTo(x, py);
-                    peakFirst = false;
-                }
-                else
-                {
-                    peakPath.lineTo(x, py);
-                }
-            }
         }
 
+        QPolygonF tracePolygon(tracePoints);
+        QPolygonF fillPolygon(tracePolygon);
+        fillPolygon.append(QPointF(tracePoints.constLast().x(), specH));
+        fillPolygon.append(QPointF(tracePoints.constFirst().x(), specH));
+        QColor fillTopColor = UiTheme::spectrumSignalColor(0.5);
+        fillTopColor.setAlpha(54);
+        QLinearGradient fillGradient(0.0, 0.0, 0.0, specH);
+        fillGradient.setColorAt(0.0, fillTopColor);
+        fillGradient.setColorAt(1.0, QColor(0x00, 0x00, 0x4d, 178));
         p.setPen(Qt::NoPen);
-        for (int i = 0; i + 1 < tracePoints.size(); ++i)
-        {
-            const QPointF& first = tracePoints[i];
-            const QPointF& second = tracePoints[i + 1];
-            const float averageLevel = (traceLevels[i] + traceLevels[i + 1]) * 0.5f;
-            QColor topColor = spectrumHeatColor(averageLevel);
-            topColor.setAlpha(54);
-            const QColor bottomColor(0x00, 0x00, 0x4d, 178);
-            QLinearGradient fillGradient(0.0, qMin(first.y(), second.y()), 0.0, specH);
-            fillGradient.setColorAt(0.0, topColor);
-            fillGradient.setColorAt(1.0, bottomColor);
-            QPolygonF segment;
-            segment << first << second << QPointF(second.x(), specH) << QPointF(first.x(), specH);
-            p.setBrush(fillGradient);
-            p.drawPolygon(segment);
-        }
+        p.setBrush(fillGradient);
+        p.drawPolygon(fillPolygon);
 
-        p.setPen(QPen(kPeak, 1));
-        p.drawPath(peakPath);
-
-        for (int i = 0; i + 1 < tracePoints.size(); ++i)
+        auto drawColoredTrace = [&](qreal width, int alpha)
         {
-            QColor featherColor = spectrumHeatColor((traceLevels[i] + traceLevels[i + 1]) * 0.5f);
-            featherColor.setAlpha(56);
-            p.setPen(QPen(featherColor, 3.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-            p.drawLine(tracePoints[i], tracePoints[i + 1]);
-        }
-        for (int i = 0; i + 1 < tracePoints.size(); ++i)
-        {
-            const QColor traceColor = spectrumHeatColor((traceLevels[i] + traceLevels[i + 1]) * 0.5f);
-            p.setPen(QPen(traceColor, 1.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-            p.drawLine(tracePoints[i], tracePoints[i + 1]);
-        }
+            for (int first = 0; first + 1 < tracePoints.size(); first += kRasterTraceColorSegmentPoints)
+            {
+                const int last = qMin(first + kRasterTraceColorSegmentPoints, tracePoints.size() - 1);
+                float segmentLevel = traceLevels[first];
+                QPolygonF segment;
+                segment.reserve(last - first + 1);
+                for (int index = first; index <= last; ++index)
+                {
+                    segmentLevel = qMax(segmentLevel, traceLevels[index]);
+                    segment.append(tracePoints[index]);
+                }
+                QColor color = spectrumHeatColor(segmentLevel);
+                color.setAlpha(alpha);
+                p.setPen(QPen(color, width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                p.drawPolyline(segment);
+            }
+        };
+        drawColoredTrace(3.0, 56);
+        drawColoredTrace(1.0, 255);
 
         p.restore();
         p.setRenderHint(QPainter::Antialiasing, false);
     }
 
-    if (m_scopeOutOfRange)
-    {
-        p.setPen(QColor(0xff, 0x7a, 0x7a));
-        QFont f = p.font();
-        f.setPointSize(10);
-        f.setBold(true);
-        p.setFont(f);
-        p.drawText(QRect(0, specTop, w, specDrawH), Qt::AlignCenter, QStringLiteral("OUT OF RANGE"));
-    }
-
-    const double visibleStartMhz = lowFrequencyMhz(m_startMhz, m_endMhz);
-    const double visibleEndMhz = highFrequencyMhz(m_startMhz, m_endMhz);
-    if (m_vfoMhz >= visibleStartMhz && m_vfoMhz <= visibleEndMhz && m_filterHighHz > m_filterLowHz)
-    {
-        const double loMhz = m_vfoMhz + m_filterLowHz / 1e6;
-        const double hiMhz = m_vfoMhz + m_filterHighHz / 1e6;
-        const int fx1 = freqToX(loMhz);
-        const int fx2 = freqToX(hiMhz);
-        const QColor filterFill(0x00, 0xb4, 0xd8, 22);
-        p.fillRect(fx1, 0, fx2 - fx1, specH, filterFill);
-    }
-
-    if (m_vfoMhz >= visibleStartMhz && m_vfoMhz <= visibleEndMhz)
-    {
-        const int vx = freqToX(m_vfoMhz);
-        const int scaleY = specH - 1;
-        p.setPen(QPen(m_vfoMarkerColor, 1, Qt::SolidLine));
-        p.drawLine(vx, 0, vx, scaleY - 1);
-    }
-
-    // A soft shadow and restrained neutral highlight give the frequency scale
-    // the appearance of sitting above the spectrum without a colored border.
-    const int shadowTop = qMax(0, specH - kScaleShadowHeightPx);
-    QLinearGradient scaleShadow(0, shadowTop, 0, specH);
-    scaleShadow.setColorAt(0.0, QColor(0x00, 0x08, 0x0f, 0));
-    scaleShadow.setColorAt(1.0, QColor(0x00, 0x04, 0x08, 220));
-    p.fillRect(0, shadowTop, w, specH - shadowTop, scaleShadow);
-    p.fillRect(0, specH - 1, w, 1, UiTheme::Color::ScopeShelfEdge);
-
-    // Echo the shelf treatment beneath the panadapter toolbar, using a softer
-    // shadow so the toolbar is separated without crowding the spectrum plot.
-    const int toolbarShadowHeight = qMin(specH, kToolbarShadowHeightPx);
-    QLinearGradient toolbarShadow(0, 0, 0, toolbarShadowHeight);
-    toolbarShadow.setColorAt(0.0, QColor(0x00, 0x04, 0x08, 180));
-    toolbarShadow.setColorAt(1.0, QColor(0x00, 0x08, 0x0f, 0));
-    p.fillRect(0, 0, w, toolbarShadowHeight, toolbarShadow);
-    p.fillRect(0, 0, w, 1, UiTheme::Color::ScopeShelfEdge);
+    renderDynamicLayer(&p);
 }
+
+#ifdef SDR9700_GPU_PANADAPTER
+void SpectrumScopeCanvas::ensureGpuLayers()
+{
+    const bool staticLayerWasDirty = m_staticLayerDirty || m_staticLayerSize != size();
+    ensureStaticLayer();
+    if (staticLayerWasDirty)
+    {
+        m_gpuBackgroundDirty = true;
+        m_gpuTraceDirty = true;
+    }
+
+    const qreal devicePixelRatio = devicePixelRatioF();
+    const QSize pixelSize = (QSizeF(size()) * devicePixelRatio).toSize();
+    if (!m_gpuOverlayDirty && m_gpuOverlayLayer.size() == pixelSize &&
+        qFuzzyCompare(m_gpuOverlayLayer.devicePixelRatio(), devicePixelRatio))
+    {
+        return;
+    }
+
+    m_gpuOverlayLayer = QImage(pixelSize, QImage::Format_RGBA8888);
+    m_gpuOverlayLayer.setDevicePixelRatio(devicePixelRatio);
+    m_gpuOverlayLayer.fill(Qt::transparent);
+    QPainter painter(&m_gpuOverlayLayer);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    renderDynamicLayer(&painter);
+    m_gpuOverlayDirty = false;
+    m_gpuOverlayTextureDirty = true;
+}
+
+void SpectrumScopeCanvas::rebuildGpuTrace()
+{
+    m_gpuFillVertices.clear();
+    m_gpuFeatherVertices.clear();
+    m_gpuLineVertices.clear();
+    m_gpuTraceSize = size();
+    m_gpuTraceDirty = false;
+    if (m_displaySpectrumBins.isEmpty() || width() <= 1 || height() <= 1)
+    {
+        return;
+    }
+
+    const int sampleCount = qMax(1, plotWidthPx() * kTraceSamplesPerPixel);
+    const int pointCount = sampleCount + 1;
+    QVector<QPointF> points;
+    QVector<QColor> colors;
+    points.reserve(pointCount);
+    colors.reserve(pointCount);
+    for (int sample = 0; sample <= sampleCount; ++sample)
+    {
+        const double x = plotLeftX() + (double(sample) / sampleCount) * plotWidthPx();
+        const double sourcePosition = sourcePositionForDisplayX(x, m_displaySpectrumBins.size());
+        const float level =
+            sourcePosition >= 0.0 ? interpolatedLevel(m_displaySpectrumBins, sourcePosition) : m_minLevel;
+        points.append(QPointF(x, levelToY(level, 0, plotHeight())));
+        colors.append(spectrumHeatColor(level));
+    }
+
+    auto normalizedX = [this](double x) { return float((2.0 * x / qMax(1, width() - 1)) - 1.0); };
+    auto normalizedY = [this](double y) { return float(1.0 - (2.0 * y / qMax(1, height() - 1))); };
+    auto colorVertex = [&](const QPointF& point, const QColor& color, float alpha)
+    {
+        return ColorVertex{normalizedX(point.x()), normalizedY(point.y()), color.redF(),
+                           color.greenF(),         color.blueF(),          alpha};
+    };
+
+    m_gpuFillVertices.resize(pointCount * 2 * qsizetype(sizeof(ColorVertex)));
+    auto* fillVertices = reinterpret_cast<ColorVertex*>(m_gpuFillVertices.data());
+    const QColor bottomColor(0x00, 0x00, 0x4d);
+    for (int index = 0; index < pointCount; ++index)
+    {
+        fillVertices[index * 2] = colorVertex(points[index], colors[index], 54.0f / 255.0f);
+        fillVertices[index * 2 + 1] =
+            colorVertex(QPointF(points[index].x(), plotHeight()), bottomColor, 178.0f / 255.0f);
+    }
+
+    m_gpuFeatherVertices.resize(pointCount * qsizetype(sizeof(ColorVertex)));
+    m_gpuLineVertices.resize(pointCount * qsizetype(sizeof(ColorVertex)));
+    auto* featherVertices = reinterpret_cast<ColorVertex*>(m_gpuFeatherVertices.data());
+    auto* lineVertices = reinterpret_cast<ColorVertex*>(m_gpuLineVertices.data());
+    for (int index = 0; index < pointCount; ++index)
+    {
+        featherVertices[index] = colorVertex(points[index], colors[index], 56.0f / 255.0f);
+        lineVertices[index] = colorVertex(points[index], colors[index], 1.0f);
+    }
+}
+
+void SpectrumScopeCanvas::initialize(QRhiCommandBuffer* commandBuffer)
+{
+    if (!m_gpuState)
+    {
+        m_gpuState = std::make_unique<GpuState>();
+    }
+
+    QRhi* currentRhi = rhi();
+    QRhiRenderTarget* currentTarget = renderTarget();
+    const QSize outputSize = currentTarget ? currentTarget->pixelSize() : QSize();
+    if (!currentRhi || !currentTarget || outputSize.isEmpty())
+    {
+        return;
+    }
+    if (m_gpuState->rhi == currentRhi && m_gpuState->outputSize == outputSize &&
+        m_gpuState->renderPassDescriptor == currentTarget->renderPassDescriptor())
+    {
+        return;
+    }
+
+    const bool rhiChanged = m_gpuState->rhi != currentRhi;
+    m_gpuState->release();
+    GpuState& state = *m_gpuState;
+    state.rhi = currentRhi;
+    state.outputSize = outputSize;
+    state.renderPassDescriptor = currentTarget->renderPassDescriptor();
+
+    static constexpr TextureVertex kQuadVertices[] = {
+        {-1.0f, 1.0f, 0.0f, 0.0f},
+        {-1.0f, -1.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 0.0f},
+        {1.0f, -1.0f, 1.0f, 1.0f},
+    };
+    state.quadBuffer.reset(
+        state.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(kQuadVertices)));
+    state.uniformBuffer.reset(
+        state.rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(TextureUniforms)));
+    state.backgroundTexture.reset(state.rhi->newTexture(QRhiTexture::RGBA8, outputSize));
+    state.overlayTexture.reset(state.rhi->newTexture(QRhiTexture::RGBA8, outputSize));
+    state.sampler.reset(state.rhi->newSampler(QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+                                              QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+
+    const bool resourcesCreated = state.quadBuffer->create() && state.uniformBuffer->create() &&
+                                  state.backgroundTexture->create() && state.overlayTexture->create() &&
+                                  state.sampler->create();
+    if (!resourcesCreated)
+    {
+        qCritical(logSpectrumScope()) << "Could not create GPU panadapter resources";
+        state.release();
+        return;
+    }
+
+    state.colorBindings.reset(state.rhi->newShaderResourceBindings());
+    state.colorBindings->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+        0, QRhiShaderResourceBinding::VertexStage, state.uniformBuffer.get())});
+    state.colorBindings->create();
+    auto createTextureBindings = [&](QRhiTexture* texture)
+    {
+        std::unique_ptr<QRhiShaderResourceBindings> bindings(state.rhi->newShaderResourceBindings());
+        bindings->setBindings({QRhiShaderResourceBinding::uniformBuffer(0, QRhiShaderResourceBinding::VertexStage,
+                                                                        state.uniformBuffer.get()),
+                               QRhiShaderResourceBinding::sampledTexture(1, QRhiShaderResourceBinding::FragmentStage,
+                                                                         texture, state.sampler.get())});
+        bindings->create();
+        return bindings;
+    };
+    state.backgroundBindings = createTextureBindings(state.backgroundTexture.get());
+    state.overlayBindings = createTextureBindings(state.overlayTexture.get());
+
+    const QShader colorVertexShader = loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_color.vert.qsb"));
+    const QShader colorFragmentShader = loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_color.frag.qsb"));
+    const QShader textureVertexShader = loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_texture.vert.qsb"));
+    const QShader textureFragmentShader =
+        loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_texture.frag.qsb"));
+    if (!colorVertexShader.isValid() || !colorFragmentShader.isValid() || !textureVertexShader.isValid() ||
+        !textureFragmentShader.isValid())
+    {
+        qCritical(logSpectrumScope()) << "Could not load GPU panadapter shaders";
+        state.release();
+        return;
+    }
+
+    QRhiVertexInputLayout textureLayout;
+    textureLayout.setBindings({QRhiVertexInputBinding(4 * sizeof(float))});
+    textureLayout.setAttributes({QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float2, 0),
+                                 QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float2, 2 * sizeof(float))});
+    auto createTexturePipeline = [&](QRhiShaderResourceBindings* bindings, bool blending)
+    {
+        std::unique_ptr<QRhiGraphicsPipeline> pipeline(state.rhi->newGraphicsPipeline());
+        pipeline->setShaderStages(
+            {{QRhiShaderStage::Vertex, textureVertexShader}, {QRhiShaderStage::Fragment, textureFragmentShader}});
+        pipeline->setVertexInputLayout(textureLayout);
+        pipeline->setShaderResourceBindings(bindings);
+        pipeline->setTopology(QRhiGraphicsPipeline::TriangleStrip);
+        pipeline->setSampleCount(currentTarget->sampleCount());
+        pipeline->setRenderPassDescriptor(state.renderPassDescriptor);
+        if (blending)
+        {
+            pipeline->setTargetBlends({alphaBlend()});
+        }
+        pipeline->create();
+        return pipeline;
+    };
+    state.backgroundPipeline = createTexturePipeline(state.backgroundBindings.get(), false);
+    state.overlayPipeline = createTexturePipeline(state.overlayBindings.get(), true);
+
+    QRhiVertexInputLayout colorLayout;
+    colorLayout.setBindings({QRhiVertexInputBinding(6 * sizeof(float))});
+    colorLayout.setAttributes({QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float2, 0),
+                               QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, 2 * sizeof(float))});
+    auto createColorPipeline = [&](QRhiGraphicsPipeline::Topology topology, float lineWidth)
+    {
+        std::unique_ptr<QRhiGraphicsPipeline> pipeline(state.rhi->newGraphicsPipeline());
+        pipeline->setShaderStages(
+            {{QRhiShaderStage::Vertex, colorVertexShader}, {QRhiShaderStage::Fragment, colorFragmentShader}});
+        pipeline->setVertexInputLayout(colorLayout);
+        pipeline->setShaderResourceBindings(state.colorBindings.get());
+        pipeline->setTopology(topology);
+        pipeline->setLineWidth(lineWidth);
+        pipeline->setSampleCount(currentTarget->sampleCount());
+        pipeline->setRenderPassDescriptor(state.renderPassDescriptor);
+        pipeline->setTargetBlends({alphaBlend()});
+        pipeline->create();
+        return pipeline;
+    };
+    state.fillPipeline = createColorPipeline(QRhiGraphicsPipeline::TriangleStrip, 1.0f);
+    state.featherPipeline = createColorPipeline(QRhiGraphicsPipeline::LineStrip, 3.0f);
+    state.linePipeline = createColorPipeline(QRhiGraphicsPipeline::LineStrip, 1.0f);
+
+    if (rhiChanged)
+    {
+        const QRhiDriverInfo driver = state.rhi->driverInfo();
+        qInfo(logSpectrumScope()).noquote().nospace()
+            << "GPU panadapter initialized backend=" << rhiBackendName(state.rhi->backend())
+            << " device=" << driver.deviceName;
+    }
+
+    QRhiResourceUpdateBatch* updates = state.rhi->nextResourceUpdateBatch();
+    updates->uploadStaticBuffer(state.quadBuffer.get(), kQuadVertices);
+    commandBuffer->resourceUpdate(updates);
+    m_gpuBackgroundDirty = true;
+    m_gpuOverlayDirty = true;
+    m_gpuOverlayTextureDirty = true;
+    m_gpuTraceDirty = true;
+}
+
+void SpectrumScopeCanvas::render(QRhiCommandBuffer* commandBuffer)
+{
+    if (!m_gpuState || !m_gpuState->rhi || !renderTarget())
+    {
+        return;
+    }
+
+    ensureGpuLayers();
+    if (m_gpuTraceDirty || m_gpuTraceSize != size())
+    {
+        rebuildGpuTrace();
+    }
+
+    GpuState& state = *m_gpuState;
+    const qsizetype requiredTraceBytes =
+        m_gpuFillVertices.size() + m_gpuFeatherVertices.size() + m_gpuLineVertices.size();
+    if (requiredTraceBytes > state.traceBufferCapacity)
+    {
+        state.traceBufferCapacity = qMax<qsizetype>(requiredTraceBytes, 4096);
+        state.traceBuffer.reset(
+            state.rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, quint32(state.traceBufferCapacity)));
+        if (!state.traceBuffer->create())
+        {
+            qCritical(logSpectrumScope()) << "Could not create GPU spectrum vertex buffer";
+            state.traceBuffer.reset();
+            state.traceBufferCapacity = 0;
+        }
+    }
+
+    TextureUniforms uniforms;
+    const QMatrix4x4 matrix = state.rhi->clipSpaceCorrMatrix();
+    std::copy(matrix.constData(), matrix.constData() + 16, uniforms.matrix);
+    QRhiResourceUpdateBatch* updates = state.rhi->nextResourceUpdateBatch();
+    updates->updateDynamicBuffer(state.uniformBuffer.get(), 0, sizeof(uniforms), &uniforms);
+
+    if (m_gpuBackgroundDirty)
+    {
+        const QImage background = m_staticLayer.toImage().convertToFormat(QImage::Format_RGBA8888);
+        updates->uploadTexture(state.backgroundTexture.get(), background);
+        m_gpuBackgroundDirty = false;
+    }
+    if (m_gpuOverlayTextureDirty)
+    {
+        updates->uploadTexture(state.overlayTexture.get(), m_gpuOverlayLayer);
+        m_gpuOverlayTextureDirty = false;
+    }
+    if (state.traceBuffer && requiredTraceBytes > 0)
+    {
+        qsizetype offset = 0;
+        updates->updateDynamicBuffer(state.traceBuffer.get(), quint32(offset), quint32(m_gpuFillVertices.size()),
+                                     m_gpuFillVertices.constData());
+        offset += m_gpuFillVertices.size();
+        updates->updateDynamicBuffer(state.traceBuffer.get(), quint32(offset), quint32(m_gpuFeatherVertices.size()),
+                                     m_gpuFeatherVertices.constData());
+        offset += m_gpuFeatherVertices.size();
+        updates->updateDynamicBuffer(state.traceBuffer.get(), quint32(offset), quint32(m_gpuLineVertices.size()),
+                                     m_gpuLineVertices.constData());
+    }
+
+    commandBuffer->beginPass(renderTarget(), Qt::black, {1.0f, 0}, updates);
+    commandBuffer->setViewport(QRhiViewport(0, 0, state.outputSize.width(), state.outputSize.height()));
+    QRhiCommandBuffer::VertexInput binding(state.quadBuffer.get(), 0);
+    commandBuffer->setGraphicsPipeline(state.backgroundPipeline.get());
+    commandBuffer->setShaderResources(state.backgroundBindings.get());
+    commandBuffer->setVertexInput(0, 1, &binding);
+    commandBuffer->draw(4);
+
+    if (state.traceBuffer && requiredTraceBytes > 0)
+    {
+        quint32 offset = 0;
+        binding = QRhiCommandBuffer::VertexInput(state.traceBuffer.get(), offset);
+        commandBuffer->setGraphicsPipeline(state.fillPipeline.get());
+        commandBuffer->setShaderResources(state.colorBindings.get());
+        commandBuffer->setVertexInput(0, 1, &binding);
+        commandBuffer->draw(quint32(m_gpuFillVertices.size() / sizeof(ColorVertex)));
+
+        offset += quint32(m_gpuFillVertices.size());
+        binding = QRhiCommandBuffer::VertexInput(state.traceBuffer.get(), offset);
+        commandBuffer->setGraphicsPipeline(state.featherPipeline.get());
+        commandBuffer->setShaderResources(state.colorBindings.get());
+        commandBuffer->setVertexInput(0, 1, &binding);
+        commandBuffer->draw(quint32(m_gpuFeatherVertices.size() / sizeof(ColorVertex)));
+
+        offset += quint32(m_gpuFeatherVertices.size());
+        binding = QRhiCommandBuffer::VertexInput(state.traceBuffer.get(), offset);
+        commandBuffer->setGraphicsPipeline(state.linePipeline.get());
+        commandBuffer->setShaderResources(state.colorBindings.get());
+        commandBuffer->setVertexInput(0, 1, &binding);
+        commandBuffer->draw(quint32(m_gpuLineVertices.size() / sizeof(ColorVertex)));
+    }
+
+    binding = QRhiCommandBuffer::VertexInput(state.quadBuffer.get(), 0);
+    commandBuffer->setGraphicsPipeline(state.overlayPipeline.get());
+    commandBuffer->setShaderResources(state.overlayBindings.get());
+    commandBuffer->setVertexInput(0, 1, &binding);
+    commandBuffer->draw(4);
+    commandBuffer->endPass();
+}
+
+void SpectrumScopeCanvas::releaseResources()
+{
+    if (m_gpuState)
+    {
+        m_gpuState->release();
+    }
+}
+#endif
 
 void SpectrumScopeCanvas::mousePressEvent(QMouseEvent* ev)
 {

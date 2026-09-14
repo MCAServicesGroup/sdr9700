@@ -5,6 +5,7 @@
 #include "VfoDisplay.h"
 #include "backend/IRadioBackend.h"
 #include "backend/TransmitFrequencyPolicy.h"
+#include "core/LogCategories.h"
 #include "models/VfoModel.h"
 #include "models/RadioState.h"
 
@@ -18,6 +19,11 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidgetAction>
+
+namespace
+{
+constexpr int kReceiverLevelConfirmationTimeoutMs = 1000;
+}
 
 VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioState* radioState, QWidget* displayParent,
                              QObject* parent)
@@ -53,6 +59,14 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                     m_backend->requestVfoState(m_vfo);
                 }
             });
+    m_rfGainConfirmationTimer.setSingleShot(true);
+    m_rfGainConfirmationTimer.setInterval(kReceiverLevelConfirmationTimeoutMs);
+    connect(&m_rfGainConfirmationTimer, &QTimer::timeout, this,
+            [this]() { receiverLevelConfirmationTimedOut(funcRfGain); });
+    m_squelchConfirmationTimer.setSingleShot(true);
+    m_squelchConfirmationTimer.setInterval(kReceiverLevelConfirmationTimeoutMs);
+    connect(&m_squelchConfirmationTimer, &QTimer::timeout, this,
+            [this]() { receiverLevelConfirmationTimedOut(funcSquelch); });
 
     connect(m_display, &VfoDisplay::frequencySubmitted, this,
             [this](const QString& text)
@@ -139,7 +153,7 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                         (func != funcAGCTimeConstant && func != funcAttenuator && func != funcNoiseBlanker &&
                          func != funcNBLevel && func != funcAutoNotch && func != funcManualNotch &&
                          func != funcNoiseReduction && func != funcNRLevel && func != funcPreamp &&
-                         func != funcRfGain && func != funcSquelch && func != funcRFPower && func != funcSMeter))
+                         func != funcRFPower && func != funcSMeter))
                     {
                         return;
                     }
@@ -185,14 +199,6 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                         m_preampLevel = qBound(0, value.toInt(), 3);
                         updateReceiverControlDisplay();
                         return;
-                    case funcRfGain:
-                        m_rfGain = qBound(0, value.toInt(), 255);
-                        updateReceiverControlDisplay();
-                        return;
-                    case funcSquelch:
-                        m_squelch = qBound(0, value.toInt(), 255);
-                        updateReceiverControlDisplay();
-                        return;
                     case funcRFPower:
                         if (m_vfo == Vfo::Main)
                         {
@@ -210,6 +216,14 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                         return;
                     }
                 });
+        connect(m_backend, &IRadioBackend::radioValueConfirmed, this,
+                [this](Funcs func, const QVariant& value, uchar receiver)
+                {
+                    if (func == funcRfGain || func == funcSquelch)
+                    {
+                        applyReceiverLevelConfirmation(func, value, receiver);
+                    }
+                });
         connect(m_backend, &IRadioBackend::disconnected, this,
                 [this]()
                 {
@@ -220,6 +234,7 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                     m_autoNotchReceived = false;
                     m_manualNotchReceived = false;
                     m_nrLevelReceived = false;
+                    clearPendingReceiverLevels();
                     m_display->setReceiverControlState(QStringLiteral("FILTERS"), QString(), false);
                     m_display->setReceiverControlToolTip(QStringLiteral("FILTERS"), QString());
                 });
@@ -430,15 +445,105 @@ void VfoController::setLanModLevel(int value)
     if (m_vfo == Vfo::Main)
     {
         m_display->setReceiverControlState(
-            QStringLiteral("MOD"), QStringLiteral("%1%").arg(qRound(m_lanModLevel * 100.0 / 255.0)), m_lanModLevel > 0);
+            QStringLiteral("MOD"),
+            QStringLiteral("%1%").arg(sdr9700::ui::main_window::radioLevelPercent(m_lanModLevel)), m_lanModLevel > 0);
     }
+}
+
+void VfoController::requestReceiverLevel(Funcs func, int level)
+{
+    if (!m_backend || (func != funcRfGain && func != funcSquelch))
+    {
+        return;
+    }
+
+    const int boundedLevel = qBound(0, level, 255);
+    if (func == funcRfGain)
+    {
+        m_pendingRfGain = boundedLevel;
+        m_rfGainConfirmationTimer.start();
+        m_backend->setVfoRfGain(m_vfo, boundedLevel);
+        return;
+    }
+
+    m_pendingSquelch = boundedLevel;
+    m_squelchConfirmationTimer.start();
+    m_backend->setVfoSquelch(m_vfo, boundedLevel);
+}
+
+void VfoController::applyReceiverLevelConfirmation(Funcs func, const QVariant& value, uchar receiver)
+{
+    const uchar expectedReceiver = m_vfo == Vfo::Main ? 0 : 1;
+    if (receiver != expectedReceiver || (func != funcRfGain && func != funcSquelch))
+    {
+        return;
+    }
+
+    const int level = qBound(0, value.toInt(), 255);
+    std::optional<int>& pending = func == funcRfGain ? m_pendingRfGain : m_pendingSquelch;
+    const char* const control = func == funcRfGain ? "RFG" : "SQL";
+    if (pending.has_value() && level != *pending)
+    {
+        qInfo(logRadio()).noquote().nospace()
+            << "Receiver level stale readback ignored control=" << control
+            << " vfo=" << (m_vfo == Vfo::Main ? "MAIN" : "SUB") << " receiver=" << int(receiver)
+            << " pendingRaw=" << *pending << " readbackRaw=" << level;
+        return;
+    }
+
+    if (pending.has_value())
+    {
+        pending.reset();
+        QTimer& confirmationTimer = func == funcRfGain ? m_rfGainConfirmationTimer : m_squelchConfirmationTimer;
+        confirmationTimer.stop();
+    }
+    if (func == funcRfGain)
+    {
+        m_rfGain = level;
+    }
+    else
+    {
+        m_squelch = level;
+    }
+    qInfo(logRadio()).noquote().nospace()
+        << "Receiver level applied control=" << control << " vfo=" << (m_vfo == Vfo::Main ? "MAIN" : "SUB")
+        << " receiver=" << int(receiver) << " raw=" << level
+        << " percent=" << sdr9700::ui::main_window::radioLevelPercent(level);
+    updateReceiverControlDisplay();
+}
+
+void VfoController::receiverLevelConfirmationTimedOut(Funcs func)
+{
+    std::optional<int>& pending = func == funcRfGain ? m_pendingRfGain : m_pendingSquelch;
+    if (!pending.has_value())
+    {
+        return;
+    }
+
+    const char* const control = func == funcRfGain ? "RFG" : "SQL";
+    qWarning(logRadio()).noquote().nospace()
+        << "Receiver level confirmation timed out control=" << control
+        << " vfo=" << (m_vfo == Vfo::Main ? "MAIN" : "SUB") << " pendingRaw=" << *pending << " action=refresh";
+    pending.reset();
+    if (m_backend)
+    {
+        m_backend->requestVfoState(m_vfo);
+    }
+}
+
+void VfoController::clearPendingReceiverLevels()
+{
+    m_pendingRfGain.reset();
+    m_pendingSquelch.reset();
+    m_rfGainConfirmationTimer.stop();
+    m_squelchConfirmationTimer.stop();
 }
 
 void VfoController::captureExchangeableControlState()
 {
-    m_capturedExchangeState = ExchangeableControlState{
-        m_agcMode,   m_attenuatorEnabled, m_nbEnabled, m_autoNotchEnabled, m_manualNotchEnabled,
-        m_nrEnabled, m_preampLevel,       m_squelch};
+    m_capturedExchangeState = ExchangeableControlState{m_agcMode,          m_attenuatorEnabled,  m_nbEnabled,
+                                                       m_autoNotchEnabled, m_manualNotchEnabled, m_nrEnabled,
+                                                       m_preampLevel};
 }
 
 void VfoController::discardCapturedExchangeableControlState()
@@ -470,7 +575,6 @@ void VfoController::applyExchangeableControlState(const ExchangeableControlState
     m_manualNotchEnabled = state.manualNotchEnabled;
     m_nrEnabled = state.nrEnabled;
     m_preampLevel = state.preampLevel;
-    m_squelch = state.squelch;
     updateReceiverControlDisplay();
 }
 
@@ -632,7 +736,7 @@ void VfoController::updateReceiverControlDisplay()
     m_display->setReceiverControlToolTip(
         QStringLiteral("FILTERS"), QStringLiteral("%1 • %2 • %3 • %4").arg(filterLabel, nbLabel, notchLabel, nrLabel));
     m_display->setReceiverControlState(QStringLiteral("PRE"), QString(), (m_preampLevel & 0x01) != 0);
-    const int rfPercent = qBound(0, qRound(m_rfGain * 100.0 / 255.0), 100);
+    const int rfPercent = sdr9700::ui::main_window::radioLevelPercent(m_rfGain);
     m_display->setReceiverControlState(QStringLiteral("RFG"), QStringLiteral("%1%").arg(rfPercent), m_rfGain > 0);
     const std::optional<duplexMode_t> duplexMode = confirmedDuplexMode();
     const std::optional<quint64> repeaterOffsetHz = confirmedRepeaterOffsetHz();
@@ -660,11 +764,11 @@ void VfoController::updateReceiverControlDisplay()
         m_display->setReceiverControlState(QStringLiteral("XFC"), QString(), m_xfcEnabled);
         m_display->setReceiverControlState(QStringLiteral("COMP"), QString(), m_compressorEnabled);
     }
-    const int squelchPercent = qBound(0, qRound(m_squelch * 100.0 / 255.0), 100);
+    const int squelchPercent = sdr9700::ui::main_window::radioLevelPercent(m_squelch);
     m_display->setReceiverControlState(QStringLiteral("SQL"), QStringLiteral("%1%").arg(squelchPercent), m_squelch > 0);
     if (m_vfo == Vfo::Main)
     {
-        const int txPowerPercent = qBound(0, qRound(m_txPower * 100.0 / 255.0), 100);
+        const int txPowerPercent = sdr9700::ui::main_window::radioLevelPercent(m_txPower);
         m_display->setReceiverControlState(QStringLiteral("TX PWR"), QStringLiteral("%1%").arg(txPowerPercent),
                                            m_txPower > 0);
     }
@@ -952,7 +1056,8 @@ void VfoController::showReceiverControlMenu(const QString& control)
         auto* layout = new QHBoxLayout(panel);
         layout->setContentsMargins(8, 6, 8, 6);
         layout->setSpacing(6);
-        auto* label = new QLabel(QStringLiteral("%1%").arg(currentValue * 100 / 255), panel);
+        auto* label =
+            new QLabel(QStringLiteral("%1%").arg(sdr9700::ui::main_window::radioLevelPercent(currentValue)), panel);
         auto* slider = new QSlider(Qt::Horizontal, panel);
         slider->setObjectName(QStringLiteral("vfo%1LevelSlider").arg(control.simplified().remove(QLatin1Char(' '))));
         slider->setAccessibleName(
@@ -969,19 +1074,19 @@ void VfoController::showReceiverControlMenu(const QString& control)
             QStringLiteral("QLabel { color: %1; font-size: 10px; font-weight: bold; background: transparent; }")
                 .arg(UiTheme::Color::TextMuted));
         bool submitted = false;
-        connect(slider, &QSlider::valueChanged, label,
-                [label](int value) { label->setText(QStringLiteral("%1%").arg(value * 100 / 255)); });
+        connect(slider, &QSlider::valueChanged, label, [label](int value)
+                { label->setText(QStringLiteral("%1%").arg(sdr9700::ui::main_window::radioLevelPercent(value))); });
         connect(slider, &QSlider::sliderReleased, this,
                 [this, control, slider, &submitted]()
                 {
                     submitted = true;
                     if (control == QStringLiteral("RFG"))
                     {
-                        m_backend->setVfoRfGain(m_vfo, slider->value());
+                        requestReceiverLevel(funcRfGain, slider->value());
                     }
                     else if (control == QStringLiteral("SQL"))
                     {
-                        m_backend->setVfoSquelch(m_vfo, slider->value());
+                        requestReceiverLevel(funcSquelch, slider->value());
                     }
                     else if (control == QStringLiteral("MOD"))
                     {
@@ -1003,11 +1108,11 @@ void VfoController::showReceiverControlMenu(const QString& control)
         {
             if (control == QStringLiteral("RFG"))
             {
-                m_backend->setVfoRfGain(m_vfo, slider->value());
+                requestReceiverLevel(funcRfGain, slider->value());
             }
             else if (control == QStringLiteral("SQL"))
             {
-                m_backend->setVfoSquelch(m_vfo, slider->value());
+                requestReceiverLevel(funcSquelch, slider->value());
             }
             else if (control == QStringLiteral("MOD"))
             {

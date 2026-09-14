@@ -62,6 +62,8 @@ jobs:
         run: echo "$(brew --prefix qt)/bin" >> "$GITHUB_PATH"
       - name: Build
         run: make release
+      - name: Verify Metal panadapter build
+        run: grep -Fq 'sdr9700_ENABLE_GPU_PANADAPTER:BOOL=ON' src/build/CMakeCache.txt
       - name: Test
         run: ctest --test-dir src/build --output-on-failure
       - name: Verify self-contained application bundle

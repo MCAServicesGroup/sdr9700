@@ -39,7 +39,6 @@ class SpectrumScopeDisplay : public QWidget
     void setGridDensity(int density);
     void setInteractionLocked(bool locked);
     void setInvertMouseWheel(bool invert);
-    void setPeakHoldDurationMs(int durationMs);
     void updateSpectrum(const QVector<float>& levels, bool outOfRange);
     void clearDisplay();
     void setFilterWidth(int lowHz, int highHz);

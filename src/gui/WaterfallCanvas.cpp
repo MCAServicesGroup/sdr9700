@@ -1,42 +1,397 @@
 #include "WaterfallCanvas.h"
+#include "LogCategories.h"
 #include "UiTheme.h"
+
+#include <QFile>
+#include <QGuiApplication>
 #include <QLinearGradient>
+#include <QMatrix4x4>
 #include <QPainter>
+#include <algorithm>
+#include <array>
+#include <utility>
+
+#ifdef SDR9700_GPU_PANADAPTER
+#include <rhi/qrhi.h>
+#endif
 
 namespace
 {
 const QColor kWaterfallBg(0x00, 0x24, 0xd8);
 constexpr int kControlShelfShadowHeightPx = 8;
+
+#ifdef SDR9700_GPU_PANADAPTER
+using TextureVertex = std::array<float, 4>;
+
+struct alignas(16) TextureUniforms
+{
+    float matrix[16]{};
+    float rowOffset{0.0f};
+    float padding[3]{0.0f, 0.0f, 0.0f};
+};
+
+QShader loadShader(const QString& path)
+{
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? QShader::fromSerialized(file.readAll()) : QShader();
+}
+
+QRhiGraphicsPipeline::TargetBlend alphaBlend()
+{
+    QRhiGraphicsPipeline::TargetBlend blend;
+    blend.enable = true;
+    blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+    blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+    blend.srcAlpha = QRhiGraphicsPipeline::One;
+    blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+    return blend;
+}
+#endif
 } // namespace
 
-WaterfallCanvas::WaterfallCanvas(QWidget* parent) : QWidget(parent)
+#ifdef SDR9700_GPU_PANADAPTER
+struct WaterfallCanvas::GpuState
 {
+    QRhi* rhi{nullptr};
+    QRhiRenderPassDescriptor* renderPassDescriptor{nullptr};
+    QSize outputSize;
+    QSize waterfallTextureSize;
+    std::unique_ptr<QRhiBuffer> quadBuffer;
+    std::unique_ptr<QRhiBuffer> waterfallUniformBuffer;
+    std::unique_ptr<QRhiBuffer> shelfUniformBuffer;
+    std::unique_ptr<QRhiTexture> waterfallTexture;
+    std::unique_ptr<QRhiTexture> shelfTexture;
+    std::unique_ptr<QRhiSampler> waterfallSampler;
+    std::unique_ptr<QRhiSampler> shelfSampler;
+    std::unique_ptr<QRhiShaderResourceBindings> waterfallBindings;
+    std::unique_ptr<QRhiShaderResourceBindings> shelfBindings;
+    std::unique_ptr<QRhiGraphicsPipeline> waterfallPipeline;
+    std::unique_ptr<QRhiGraphicsPipeline> shelfPipeline;
+
+    void release()
+    {
+        shelfPipeline.reset();
+        waterfallPipeline.reset();
+        shelfBindings.reset();
+        waterfallBindings.reset();
+        shelfSampler.reset();
+        waterfallSampler.reset();
+        shelfTexture.reset();
+        waterfallTexture.reset();
+        shelfUniformBuffer.reset();
+        waterfallUniformBuffer.reset();
+        quadBuffer.reset();
+        waterfallTextureSize = {};
+        outputSize = {};
+        renderPassDescriptor = nullptr;
+        rhi = nullptr;
+    }
+};
+#endif
+
+WaterfallCanvas::WaterfallCanvas(QWidget* parent) : WaterfallCanvasBase(parent)
+{
+#ifdef SDR9700_GPU_PANADAPTER
+    if (QGuiApplication::platformName() == QStringLiteral("offscreen"))
+    {
+        setApi(QRhiWidget::Api::Null);
+    }
+#ifdef Q_OS_MAC
+    else
+    {
+        setApi(QRhiWidget::Api::Metal);
+    }
+#endif
+    m_gpuState = std::make_unique<GpuState>();
+#endif
     setAutoFillBackground(false);
 }
+
+WaterfallCanvas::~WaterfallCanvas() = default;
 
 void WaterfallCanvas::setWaterfallImageSource(const QImage* image)
 {
     m_waterfall = image;
+    m_firstVisibleRow = 0;
+#ifdef SDR9700_GPU_PANADAPTER
+    m_changedPhysicalRows.clear();
+    m_fullTextureUploadPending = true;
+#endif
     update();
 }
 
-void WaterfallCanvas::paintEvent(QPaintEvent* event)
+void WaterfallCanvas::setWaterfallRow(int physicalRow, int firstVisibleRow)
 {
-    Q_UNUSED(event)
-
-    QPainter p(this);
-    p.fillRect(rect(), kWaterfallBg);
-    if (m_waterfall && !m_waterfall->isNull())
+    if (!m_waterfall || m_waterfall->isNull())
     {
-        p.drawImage(rect(), *m_waterfall, QRect(0, 0, m_waterfall->width(), qMin(height(), m_waterfall->height())));
+        return;
     }
+    m_firstVisibleRow = qBound(0, firstVisibleRow, m_waterfall->height() - 1);
+#ifdef SDR9700_GPU_PANADAPTER
+    if (physicalRow >= 0 && physicalRow < m_waterfall->height())
+    {
+        m_changedPhysicalRows.insert(physicalRow);
+    }
+#else
+    Q_UNUSED(physicalRow)
+#endif
+    update();
+}
 
-    // Continue the frequency-control shelf treatment below the strip. The
-    // neutral edge defines the shelf while the shadow fades into the waterfall.
+void WaterfallCanvas::paintShelf(QPainter* painter) const
+{
+    if (!painter)
+    {
+        return;
+    }
     const int shadowHeight = qMin(height(), kControlShelfShadowHeightPx);
     QLinearGradient shelfShadow(0, 0, 0, shadowHeight);
     shelfShadow.setColorAt(0.0, QColor(0x00, 0x04, 0x08, 220));
     shelfShadow.setColorAt(1.0, QColor(0x00, 0x08, 0x0f, 0));
-    p.fillRect(0, 0, width(), shadowHeight, shelfShadow);
-    p.fillRect(0, 0, width(), 1, UiTheme::Color::ScopeShelfEdge);
+    painter->fillRect(0, 0, width(), shadowHeight, shelfShadow);
+    painter->fillRect(0, 0, width(), 1, UiTheme::Color::ScopeShelfEdge);
 }
+
+void WaterfallCanvas::paintEvent(QPaintEvent* event)
+{
+#ifdef SDR9700_GPU_PANADAPTER
+    if (api() != QRhiWidget::Api::Null)
+    {
+        QRhiWidget::paintEvent(event);
+        return;
+    }
+#endif
+    Q_UNUSED(event)
+
+    QPainter painter(this);
+    painter.fillRect(rect(), kWaterfallBg);
+    if (m_waterfall && !m_waterfall->isNull())
+    {
+        const int sourceHeight = qMin(height(), m_waterfall->height());
+        const int firstPartHeight = qMin(sourceHeight, m_waterfall->height() - m_firstVisibleRow);
+        painter.drawImage(QRect(0, 0, width(), firstPartHeight), *m_waterfall,
+                          QRect(0, m_firstVisibleRow, m_waterfall->width(), firstPartHeight));
+        if (firstPartHeight < sourceHeight)
+        {
+            const int secondPartHeight = sourceHeight - firstPartHeight;
+            painter.drawImage(QRect(0, firstPartHeight, width(), secondPartHeight), *m_waterfall,
+                              QRect(0, 0, m_waterfall->width(), secondPartHeight));
+        }
+    }
+    paintShelf(&painter);
+}
+
+#ifdef SDR9700_GPU_PANADAPTER
+void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
+{
+    if (!m_gpuState)
+    {
+        m_gpuState = std::make_unique<GpuState>();
+    }
+
+    QRhi* currentRhi = rhi();
+    QRhiRenderTarget* currentTarget = renderTarget();
+    const QSize outputSize = currentTarget ? currentTarget->pixelSize() : QSize();
+    if (!currentRhi || !currentTarget || outputSize.isEmpty())
+    {
+        return;
+    }
+    if (m_gpuState->rhi == currentRhi && m_gpuState->outputSize == outputSize &&
+        m_gpuState->renderPassDescriptor == currentTarget->renderPassDescriptor())
+    {
+        return;
+    }
+
+    m_gpuState->release();
+    GpuState& state = *m_gpuState;
+    state.rhi = currentRhi;
+    state.outputSize = outputSize;
+    state.renderPassDescriptor = currentTarget->renderPassDescriptor();
+    state.waterfallTextureSize = m_waterfall && !m_waterfall->isNull() ? m_waterfall->size() : QSize(1, 1);
+
+    static constexpr TextureVertex kQuadVertices[] = {
+        {-1.0f, 1.0f, 0.0f, 0.0f},
+        {-1.0f, -1.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 0.0f},
+        {1.0f, -1.0f, 1.0f, 1.0f},
+    };
+    state.quadBuffer.reset(
+        state.rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(kQuadVertices)));
+    state.waterfallUniformBuffer.reset(
+        state.rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(TextureUniforms)));
+    state.shelfUniformBuffer.reset(
+        state.rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(TextureUniforms)));
+    state.waterfallTexture.reset(state.rhi->newTexture(QRhiTexture::BGRA8, state.waterfallTextureSize));
+    state.shelfTexture.reset(state.rhi->newTexture(QRhiTexture::RGBA8, outputSize));
+    state.waterfallSampler.reset(state.rhi->newSampler(QRhiSampler::Nearest, QRhiSampler::Nearest, QRhiSampler::None,
+                                                       QRhiSampler::ClampToEdge, QRhiSampler::Repeat));
+    state.shelfSampler.reset(state.rhi->newSampler(QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+                                                   QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+    const bool resourcesCreated = state.quadBuffer->create() && state.waterfallUniformBuffer->create() &&
+                                  state.shelfUniformBuffer->create() && state.waterfallTexture->create() &&
+                                  state.shelfTexture->create() && state.waterfallSampler->create() &&
+                                  state.shelfSampler->create();
+    if (!resourcesCreated)
+    {
+        qCritical(logWaterfall()) << "Could not create GPU waterfall resources";
+        state.release();
+        return;
+    }
+
+    auto createBindings = [&](QRhiBuffer* uniformBuffer, QRhiTexture* texture, QRhiSampler* sampler)
+    {
+        std::unique_ptr<QRhiShaderResourceBindings> bindings(state.rhi->newShaderResourceBindings());
+        bindings->setBindings(
+            {QRhiShaderResourceBinding::uniformBuffer(0, QRhiShaderResourceBinding::VertexStage, uniformBuffer),
+             QRhiShaderResourceBinding::sampledTexture(1, QRhiShaderResourceBinding::FragmentStage, texture, sampler)});
+        bindings->create();
+        return bindings;
+    };
+    state.waterfallBindings =
+        createBindings(state.waterfallUniformBuffer.get(), state.waterfallTexture.get(), state.waterfallSampler.get());
+    state.shelfBindings =
+        createBindings(state.shelfUniformBuffer.get(), state.shelfTexture.get(), state.shelfSampler.get());
+
+    const QShader vertexShader = loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_texture.vert.qsb"));
+    const QShader fragmentShader = loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_texture.frag.qsb"));
+    if (!vertexShader.isValid() || !fragmentShader.isValid())
+    {
+        qCritical(logWaterfall()) << "Could not load GPU waterfall shaders";
+        state.release();
+        return;
+    }
+
+    QRhiVertexInputLayout layout;
+    layout.setBindings({QRhiVertexInputBinding(4 * sizeof(float))});
+    layout.setAttributes({QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float2, 0),
+                          QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float2, 2 * sizeof(float))});
+    auto createPipeline = [&](QRhiShaderResourceBindings* bindings, bool blending)
+    {
+        std::unique_ptr<QRhiGraphicsPipeline> pipeline(state.rhi->newGraphicsPipeline());
+        pipeline->setShaderStages(
+            {{QRhiShaderStage::Vertex, vertexShader}, {QRhiShaderStage::Fragment, fragmentShader}});
+        pipeline->setVertexInputLayout(layout);
+        pipeline->setShaderResourceBindings(bindings);
+        pipeline->setTopology(QRhiGraphicsPipeline::TriangleStrip);
+        pipeline->setSampleCount(currentTarget->sampleCount());
+        pipeline->setRenderPassDescriptor(state.renderPassDescriptor);
+        if (blending)
+        {
+            pipeline->setTargetBlends({alphaBlend()});
+        }
+        pipeline->create();
+        return pipeline;
+    };
+    state.waterfallPipeline = createPipeline(state.waterfallBindings.get(), false);
+    state.shelfPipeline = createPipeline(state.shelfBindings.get(), true);
+
+    QRhiResourceUpdateBatch* updates = state.rhi->nextResourceUpdateBatch();
+    updates->uploadStaticBuffer(state.quadBuffer.get(), kQuadVertices);
+    commandBuffer->resourceUpdate(updates);
+    m_fullTextureUploadPending = true;
+    m_shelfUploadPending = true;
+}
+
+void WaterfallCanvas::render(QRhiCommandBuffer* commandBuffer)
+{
+    if (!m_gpuState || !m_gpuState->rhi || !renderTarget())
+    {
+        return;
+    }
+    GpuState& state = *m_gpuState;
+    if (m_waterfall && !m_waterfall->isNull() && state.waterfallTextureSize != m_waterfall->size())
+    {
+        state.waterfallTextureSize = m_waterfall->size();
+        state.waterfallTexture->setPixelSize(state.waterfallTextureSize);
+        if (!state.waterfallTexture->create())
+        {
+            qCritical(logWaterfall()) << "Could not resize GPU waterfall texture";
+            return;
+        }
+        m_fullTextureUploadPending = true;
+    }
+
+    const qreal devicePixelRatio = devicePixelRatioF();
+    if (m_shelfUploadPending || m_gpuShelfLayer.size() != state.outputSize)
+    {
+        m_gpuShelfLayer = QImage(state.outputSize, QImage::Format_RGBA8888);
+        m_gpuShelfLayer.setDevicePixelRatio(devicePixelRatio);
+        m_gpuShelfLayer.fill(Qt::transparent);
+        QPainter painter(&m_gpuShelfLayer);
+        paintShelf(&painter);
+        m_shelfUploadPending = true;
+    }
+
+    TextureUniforms waterfallUniforms;
+    TextureUniforms shelfUniforms;
+    const QMatrix4x4 matrix = state.rhi->clipSpaceCorrMatrix();
+    std::copy(matrix.constData(), matrix.constData() + 16, waterfallUniforms.matrix);
+    std::copy(matrix.constData(), matrix.constData() + 16, shelfUniforms.matrix);
+    if (m_waterfall && !m_waterfall->isNull())
+    {
+        waterfallUniforms.rowOffset = float(m_firstVisibleRow) / float(m_waterfall->height());
+    }
+
+    QRhiResourceUpdateBatch* updates = state.rhi->nextResourceUpdateBatch();
+    updates->updateDynamicBuffer(state.waterfallUniformBuffer.get(), 0, sizeof(waterfallUniforms), &waterfallUniforms);
+    updates->updateDynamicBuffer(state.shelfUniformBuffer.get(), 0, sizeof(shelfUniforms), &shelfUniforms);
+    if (m_waterfall && !m_waterfall->isNull())
+    {
+        if (m_fullTextureUploadPending)
+        {
+            updates->uploadTexture(state.waterfallTexture.get(), *m_waterfall);
+        }
+        else
+        {
+            QVector<QRhiTextureUploadEntry> entries;
+            entries.reserve(m_changedPhysicalRows.size());
+            for (int physicalRow : std::as_const(m_changedPhysicalRows))
+            {
+                QImage rowImage(const_cast<uchar*>(m_waterfall->constScanLine(physicalRow)), m_waterfall->width(), 1,
+                                m_waterfall->bytesPerLine(), QImage::Format_RGB32);
+                QRhiTextureSubresourceUploadDescription rowUpload(rowImage);
+                rowUpload.setSourceSize(QSize(m_waterfall->width(), 1));
+                rowUpload.setDestinationTopLeft(QPoint(0, physicalRow));
+                entries.append(QRhiTextureUploadEntry(0, 0, rowUpload));
+            }
+            if (!entries.isEmpty())
+            {
+                QRhiTextureUploadDescription upload;
+                upload.setEntries(entries.cbegin(), entries.cend());
+                updates->uploadTexture(state.waterfallTexture.get(), upload);
+            }
+        }
+    }
+    if (m_shelfUploadPending)
+    {
+        updates->uploadTexture(state.shelfTexture.get(), m_gpuShelfLayer);
+    }
+    m_fullTextureUploadPending = false;
+    m_shelfUploadPending = false;
+    m_changedPhysicalRows.clear();
+
+    commandBuffer->beginPass(renderTarget(), kWaterfallBg, {1.0f, 0}, updates);
+    commandBuffer->setViewport(QRhiViewport(0, 0, state.outputSize.width(), state.outputSize.height()));
+    const QRhiCommandBuffer::VertexInput binding(state.quadBuffer.get(), 0);
+    if (m_waterfall && !m_waterfall->isNull())
+    {
+        commandBuffer->setGraphicsPipeline(state.waterfallPipeline.get());
+        commandBuffer->setShaderResources(state.waterfallBindings.get());
+        commandBuffer->setVertexInput(0, 1, &binding);
+        commandBuffer->draw(4);
+    }
+    commandBuffer->setGraphicsPipeline(state.shelfPipeline.get());
+    commandBuffer->setShaderResources(state.shelfBindings.get());
+    commandBuffer->setVertexInput(0, 1, &binding);
+    commandBuffer->draw(4);
+    commandBuffer->endPass();
+}
+
+void WaterfallCanvas::releaseResources()
+{
+    if (m_gpuState)
+    {
+        m_gpuState->release();
+    }
+}
+#endif

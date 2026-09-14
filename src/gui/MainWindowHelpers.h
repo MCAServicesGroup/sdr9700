@@ -24,14 +24,13 @@ namespace sdr9700::ui::main_window
 constexpr auto kSpectrumScopeInvertMouseWheelSettingsKey = "spectrumScopeInvertMouseWheel";
 constexpr auto kTuningStepHZSettingsKey = "tuningStepHZ";
 constexpr auto kSpectrumScopeSpanHZSettingsKey = "spectrumScopeSpanHZ";
-constexpr auto kSpectrumScopePeakHoldSecondsSettingsKey = "spectrumScopePeakHoldSeconds";
+constexpr auto kSpectrumScopeFramesPerSecondSettingsKey = "spectrumScopeFramesPerSecond";
 constexpr auto kSpectrumScopeCenterLineColorSettingsKey = "spectrumScopeCenterLineColor";
 constexpr auto kSpectrumScopeBackgroundColorSettingsKey = "spectrumScopeBackgroundColor";
 constexpr auto kSpectrumScopeGridLineColorSettingsKey = "spectrumScopeGridLineColor";
 constexpr auto kSpectrumScopeGridDensitySettingsKey = "spectrumScopeGridDensity";
 constexpr int kDefaultTuningStepHZ = 100;
 constexpr quint64 kDefaultSpectrumScopeSpanHZ = 500000;
-constexpr int kDefaultSpectrumScopePeakHoldSeconds = 2;
 const QColor kDefaultSpectrumScopeCenterLineColor(0xf5, 0xf7, 0xf8);
 const QColor kDefaultSpectrumScopeBackgroundColor(0x08, 0x12, 0x1b);
 const QColor kDefaultSpectrumScopeGridLineColor(0x6f, 0x89, 0x9e);
@@ -114,6 +113,11 @@ inline quint64 spectrumTuneDisplayFrequency(quint64 confirmedHz, quint64 pending
 inline quint64 spectrumTunePendingAfterReadback(quint64 pendingHz, quint64 reportedHz)
 {
     return pendingHz > 0 && pendingHz == reportedHz ? 0 : pendingHz;
+}
+
+inline int radioLevelPercent(int rawLevel)
+{
+    return qRound(qBound(0, rawLevel, 255) * 100.0 / 255.0);
 }
 constexpr QSize kMemoryWindowSize(980, 620);
 constexpr int kMemoryBandColumnWidth = 80;

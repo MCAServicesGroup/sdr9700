@@ -1,5 +1,54 @@
 #include "AudioHandlerQtOutput.h"
 
+#include <cmath>
+
+namespace
+{
+constexpr int kChannelLevelLogIntervalMs = 1000;
+
+template <typename Sample, typename Magnitude>
+sdr9700::audio::StereoChannelPeaks stereoPeaks(const QByteArray& data, Magnitude magnitude)
+{
+    if (data.size() < qsizetype(2 * sizeof(Sample)) || data.size() % qsizetype(2 * sizeof(Sample)) != 0)
+    {
+        return {};
+    }
+
+    const auto* samples = reinterpret_cast<const Sample*>(data.constData());
+    const qsizetype sampleCount = data.size() / qsizetype(sizeof(Sample));
+    float channel0 = 0.0F;
+    float channel1 = 0.0F;
+    for (qsizetype sample = 0; sample < sampleCount; sample += 2)
+    {
+        channel0 = qMax(channel0, magnitude(samples[sample]));
+        channel1 = qMax(channel1, magnitude(samples[sample + 1]));
+    }
+    return {channel0, channel1, true};
+}
+} // namespace
+
+namespace sdr9700::audio
+{
+StereoChannelPeaks stereoChannelPeaks(const QByteArray& data, QAudioFormat::SampleFormat sampleFormat)
+{
+    switch (sampleFormat)
+    {
+    case QAudioFormat::Int16:
+        return stereoPeaks<qint16>(data, [](qint16 sample) { return qMin(1.0F, std::abs(float(sample)) / 32767.0F); });
+    case QAudioFormat::Int32:
+        return stereoPeaks<qint32>(data,
+                                   [](qint32 sample) { return qMin(1.0F, std::abs(double(sample)) / 2147483647.0); });
+    case QAudioFormat::Float:
+        return stereoPeaks<float>(data, [](float sample) { return qMin(1.0F, std::abs(sample)); });
+    case QAudioFormat::UInt8:
+        return stereoPeaks<quint8>(data,
+                                   [](quint8 sample) { return qMin(1.0F, std::abs(float(sample) - 128.0F) / 127.0F); });
+    default:
+        return {};
+    }
+}
+} // namespace sdr9700::audio
+
 bool AudioHandlerQtOutput::openDevice() noexcept
 {
     audioOutput = new QAudioSink(deviceInfo, nativeFormat, this);
@@ -7,7 +56,8 @@ bool AudioHandlerQtOutput::openDevice() noexcept
 
     connect(converter, &AudioConverter::converted, this, &AudioHandlerQtOutput::onConverted);
 
-    audioOutput->setBufferSize(nativeFormat.bytesForDuration(setupData.latency * 1000));
+    audioOutput->setBufferSize(
+        nativeFormat.bytesForDuration(sdr9700::audio::outputBufferDurationMs(setupData.latency) * 1000LL));
 
     audioDevice = audioOutput->start();
     if (!audioDevice)
@@ -17,10 +67,11 @@ bool AudioHandlerQtOutput::openDevice() noexcept
         return false;
     }
 
-    // Pre-fill half the buffer with silence so ALSA has data to pull
-    // before the first real audio packet arrives from the network.
+    // Pre-fill half the configured latency plus one 20 ms packet of silence
+    // while reserving room for the first real packet from the network.
     {
-        const int prefillBytes = audioOutput->bufferSize() / 2;
+        const int prefillBytes =
+            sdr9700::audio::outputPrefillBytes(nativeFormat, audioOutput->bufferSize(), setupData.latency);
         // Unsigned 8-bit PCM is centered at 0x80; all other supported Qt
         // formats represent silence with zero bits.
         const char silenceByte = nativeFormat.sampleFormat() == QAudioFormat::UInt8 ? char(0x80) : '\0';
@@ -28,7 +79,13 @@ bool AudioHandlerQtOutput::openDevice() noexcept
         audioDevice->write(silence.constData(), silence.size());
     }
 
-    qInfo(logAudio()).noquote() << "Connected to Qt audio output device" << deviceInfo.description();
+    qInfo(logAudio()).noquote().nospace()
+        << "Connected to Qt audio output device=" << deviceInfo.description()
+        << " requestedBufferMs=" << sdr9700::audio::outputBufferDurationMs(setupData.latency)
+        << " bufferMs=" << nativeFormat.durationForBytes(audioOutput->bufferSize()) / 1000 << " prefillMs="
+        << nativeFormat.durationForBytes(
+               sdr9700::audio::outputPrefillBytes(nativeFormat, audioOutput->bufferSize(), setupData.latency)) /
+               1000;
     return true;
 }
 
@@ -73,6 +130,18 @@ void AudioHandlerQtOutput::onConverted(const audioPacket& audio)
     {
         return;
     }
+    if (nativeFormat.channelCount() == 2 && logAudio().isDebugEnabled() &&
+        (!m_channelLevelLogTimer.isValid() || m_channelLevelLogTimer.elapsed() >= kChannelLevelLogIntervalMs))
+    {
+        m_channelLevelLogTimer.restart();
+        const sdr9700::audio::StereoChannelPeaks peaks =
+            sdr9700::audio::stereoChannelPeaks(audio.data, nativeFormat.sampleFormat());
+        if (peaks.valid)
+        {
+            qDebug(logAudio()).noquote().nospace()
+                << "RX stereo peaks channel0=" << peaks.channel0 << " channel1=" << peaks.channel1;
+        }
+    }
     writeToOutputDevice(audio.data, audio.seq, audio.amplitudePeak, audio.amplitudeRMS);
 }
 
@@ -89,7 +158,8 @@ void AudioHandlerQtOutput::writeToOutputDevice(const QByteArray& data, quint32 s
     // has a cushion before real audio resumes, preventing click cascades.
     if (isUnderrun.load(std::memory_order_relaxed))
     {
-        const int prefillBytes = audioOutput->bufferSize() / 2;
+        const int prefillBytes =
+            sdr9700::audio::outputPrefillBytes(nativeFormat, audioOutput->bufferSize(), setupData.latency);
         const int freeBytes = static_cast<int>(audioOutput->bytesFree());
         const int silenceBytes = qMin(prefillBytes, freeBytes);
         if (silenceBytes > 0)

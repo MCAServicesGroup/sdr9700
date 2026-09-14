@@ -257,7 +257,7 @@ void MainWindow::buildToolBar()
     m_titleBar = new MainTitleBar(this);
     const QString sliderFillColor = m_titleBar->palette().color(QPalette::Highlight).name(QColor::HexRgb);
     m_titleBar->setTitle(QStringLiteral("<span style='color:%1; font-size:13px; font-weight:bold;'>%2 v%3</span>")
-                             .arg(sliderFillColor, QString::fromLatin1(APP_NAME).toHtmlEscaped(),
+                             .arg(sliderFillColor, QString::fromLatin1(APP_DISPLAY_NAME).toHtmlEscaped(),
                                   QString::fromLatin1(APP_VERSION).toHtmlEscaped()));
 
     auto* fileMenu = new QMenu(QStringLiteral("&File"), this);
@@ -635,7 +635,8 @@ void MainWindow::moveSelectedMemory(int direction)
 
 void MainWindow::updateWindowTitle()
 {
-    QString title = QStringLiteral("%1 v%2").arg(QString::fromLatin1(APP_NAME), QString::fromLatin1(APP_VERSION));
+    QString title =
+        QStringLiteral("%1 v%2").arg(QString::fromLatin1(APP_DISPLAY_NAME), QString::fromLatin1(APP_VERSION));
 #if sdr9700_DEBUG_BUILD
     title += QStringLiteral(" (DEBUG)");
 #endif

@@ -78,6 +78,7 @@ class RadioBackend : public IRadioBackend
     void setScopeMode(int mode) override;
     void setScopeVfo(Vfo vfo) override;
     void setScopeFixedRangeHz(quint64 startHz, quint64 endHz) override;
+    void setSpectrumFramesPerSecond(int framesPerSecond) override;
 
     bool setPtt(bool on) override;
     void setTxPower(int level) override;

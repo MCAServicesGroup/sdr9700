@@ -63,14 +63,6 @@ enum class MessageSeverity
     Error,
 };
 
-enum underlay_t
-{
-    underlayNone,
-    underlayPeakHold,
-    underlayPeakBuffer,
-    underlayAverageBuffer
-};
-
 enum connectionType_t
 {
     connectionLAN

@@ -138,7 +138,11 @@ bool AudioHandlerBase::negotiateFormat(int minSampleRate)
 
     QList<int> channelCandidates;
     const int preferredChannels = qBound(1, preferred.channelCount(), 2);
-    if (radioFormat.channelCount() == 2)
+    if (!setupData.isinput && setupData.playbackChannels > 0)
+    {
+        channelCandidates.append(qBound(1, int(setupData.playbackChannels), 2));
+    }
+    else if (radioFormat.channelCount() == 2)
     {
         channelCandidates.append(2);
     }

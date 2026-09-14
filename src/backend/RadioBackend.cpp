@@ -1019,8 +1019,10 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
     static constexpr quint8 kLpcmMono16 = 0x04;
     static constexpr quint8 kLpcmStereo16 = 0x10;
     static constexpr quint16 kIc9700CivAddress = 0xA2;
-    const int outputChannels = qBound(1, AppSettings::instance().value("audioOutputChannels", 2).toInt(), 2);
-    m_rxChannelCount = outputChannels;
+    const int playbackChannels = qBound(1, AppSettings::instance().value("audioOutputChannels", 2).toInt(), 2);
+    // Always request both IC-9700 receiver channels. Mono playback is a local
+    // downmix; requesting the radio's one-channel codec discards SUB entirely.
+    m_rxChannelCount = 2;
     const int outputVolume = qBound(0, AppSettings::instance().value("volumeLevel", 128).toInt(), 255);
 
     audioSetup rxSetup;
@@ -1028,9 +1030,10 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
     rxSetup.isinput = false;
     rxSetup.sampleRate = m_rxSampleRate;
     rxSetup.latency = 80;
-    rxSetup.codec = outputChannels == 2 ? kLpcmStereo16 : kLpcmMono16;
+    rxSetup.codec = kLpcmStereo16;
     rxSetup.resampleQuality = 4;
     rxSetup.localAFgain = static_cast<quint8>(outputVolume);
+    rxSetup.playbackChannels = static_cast<quint8>(playbackChannels);
     rxSetup.port = m_rxDevice;
 
     audioSetup txSetup;
@@ -1866,6 +1869,9 @@ void RadioBackend::setVfoPreampLevel(Vfo vfo, int level)
 void RadioBackend::setVfoRfGain(Vfo vfo, int level)
 {
     const ushort value = static_cast<ushort>(qBound(0, level, 255));
+    qInfo(logRadio()).noquote().nospace()
+        << "Receiver level request control=RFG vfo=" << (vfo == Vfo::Main ? "MAIN" : "SUB")
+        << " receiver=" << int(sdr9700::backend::receiverForVfo(vfo)) << " raw=" << value;
     scheduleVfoReceiverCommand(vfo, funcRfGain,
                                [value](Commander* commandSession, uchar receiver)
                                {
@@ -1878,6 +1884,9 @@ void RadioBackend::setVfoRfGain(Vfo vfo, int level)
 void RadioBackend::setVfoSquelch(Vfo vfo, int level)
 {
     const ushort value = static_cast<ushort>(qBound(0, level, 255));
+    qInfo(logRadio()).noquote().nospace()
+        << "Receiver level request control=SQL vfo=" << (vfo == Vfo::Main ? "MAIN" : "SUB")
+        << " receiver=" << int(sdr9700::backend::receiverForVfo(vfo)) << " raw=" << value;
     scheduleVfoReceiverCommand(vfo, funcSquelch,
                                [value](Commander* commandSession, uchar receiver)
                                {
@@ -2357,6 +2366,13 @@ void RadioBackend::setScopeFixedRangeHz(quint64 startHz, quint64 endHz)
             commandSession->receiveCommand(funcScopeEdge, QVariant::fromValue<uchar>(bounds.edge), receiver);
             commandSession->receiveCommand(funcScopeMode, QVariant::fromValue<uchar>(1), receiver);
         });
+}
+
+void RadioBackend::setSpectrumFramesPerSecond(int framesPerSecond)
+{
+    QMetaObject::invokeMethod(
+        m_scopeController, [controller = m_scopeController, framesPerSecond]()
+        { controller->setFramesPerSecond(framesPerSecond); }, Qt::QueuedConnection);
 }
 
 bool RadioBackend::setPtt(bool on)

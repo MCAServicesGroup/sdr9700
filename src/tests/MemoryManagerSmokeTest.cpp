@@ -45,6 +45,7 @@
 #include <QStandardPaths>
 #include <QTableWidget>
 #include <QTimer>
+#include <QToolButton>
 #include <QWidget>
 #include <QtTest>
 #include <algorithm>
@@ -63,6 +64,7 @@ class MemoryManagerSmokeTest : public QObject
     void unnamedRadioMemoryIsPersistedWithFrequencyName();
     void memoryVisibilitySettingsHideOptionalCategoriesByDefault();
     void mainWindowRetainsFixedFramelessDesign();
+    void spectrumFrameRateSelectorDefaultsAndPersists();
     void fileMenuTracksRadioConnection();
     void selectorButtonsAvoidDynamicStyleSheets();
     void compressorMenuReflectsConfirmedLevel();
@@ -681,7 +683,7 @@ void MemoryManagerSmokeTest::mainWindowRetainsFixedFramelessDesign()
     QCoreApplication::removePostedEvents(&window, QEvent::MetaCall);
 
     QVERIFY(window.windowFlags().testFlag(Qt::FramelessWindowHint));
-    QString expectedTitle = QStringLiteral("sdr9700 v%1").arg(QString::fromLatin1(APP_VERSION));
+    QString expectedTitle = QStringLiteral("SDR9700 v%1").arg(QString::fromLatin1(APP_VERSION));
 #if sdr9700_DEBUG_BUILD
     expectedTitle += QStringLiteral(" (DEBUG)");
 #endif
@@ -692,6 +694,31 @@ void MemoryManagerSmokeTest::mainWindowRetainsFixedFramelessDesign()
     QVERIFY(window.findChild<QWidget*>(QStringLiteral("vfoDisplayStrip")) != nullptr);
     QVERIFY(window.findChild<QSlider*>(QStringLiteral("titleLanModSlider")) == nullptr);
     QVERIFY(window.findChild<QPushButton*>(QStringLiteral("vfoMODButton")) != nullptr);
+}
+
+void MemoryManagerSmokeTest::spectrumFrameRateSelectorDefaultsAndPersists()
+{
+    AppSettings& settings = AppSettings::instance();
+    settings.remove(QStringLiteral("spectrumScopeFramesPerSecond"));
+
+    RadioModel model;
+    MainWindow window(&model);
+    QCoreApplication::removePostedEvents(&window, QEvent::MetaCall);
+    auto* selector = window.findChild<QComboBox*>(QStringLiteral("spectrumFramesPerSecondSelector"));
+    QVERIFY(selector != nullptr);
+    QCOMPARE(selector->count(), 5);
+    QCOMPARE(selector->currentData().toInt(), 30);
+    QCOMPARE(selector->itemText(0), QStringLiteral("10"));
+    QCOMPARE(selector->itemText(4), QStringLiteral("30"));
+
+    const auto buttons = window.findChildren<QToolButton*>();
+    const auto previous = std::find_if(buttons.cbegin(), buttons.cend(), [](const QToolButton* button)
+                                       { return button->accessibleName() == QStringLiteral("Previous fps"); });
+    QVERIFY(previous != buttons.cend());
+    (*previous)->click();
+    QCOMPARE(selector->currentData().toInt(), 25);
+    QCOMPARE(settings.value(QStringLiteral("spectrumScopeFramesPerSecond")).toInt(), 25);
+    settings.remove(QStringLiteral("spectrumScopeFramesPerSecond"));
 }
 
 void MemoryManagerSmokeTest::fileMenuTracksRadioConnection()
@@ -989,6 +1016,14 @@ void MemoryManagerSmokeTest::persistentStatusMessageCanBeClearedByOwner()
     statusBarController->showStatusMessage(QStringLiteral("Radio ready."), 1);
     QCOMPARE(statusMessageLabel->text(), QStringLiteral("Radio ready"));
     QTRY_VERIFY_WITH_TIMEOUT(statusMessageLabel->text().isEmpty(), 100);
+
+    emit model.statusMessage(QStringLiteral("Warning message"), MessageSeverity::Warning);
+    QVERIFY(statusMessageLabel->styleSheet().contains(QString::fromLatin1(UiTheme::Color::Warning)));
+    QVERIFY(!statusMessageLabel->styleSheet().contains(QStringLiteral("font-weight: bold")));
+
+    emit model.statusMessage(QStringLiteral("Error message"), MessageSeverity::Error);
+    QVERIFY(statusMessageLabel->styleSheet().contains(QString::fromLatin1(UiTheme::Color::Danger)));
+    QVERIFY(!statusMessageLabel->styleSheet().contains(QStringLiteral("font-weight: bold")));
 }
 
 void MemoryManagerSmokeTest::automationIndicatorReflectsClientCount()

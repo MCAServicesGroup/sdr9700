@@ -51,6 +51,9 @@ struct audioSetup
     int portInt{0};
     quint8 resampleQuality{0};
     quint8 localAFgain{0};
+    // Zero selects the output device's normal channel negotiation. Receive
+    // audio can request one local channel while retaining a stereo radio codec.
+    quint8 playbackChannels{0};
     // Duration, in milliseconds, represented by one converted audio block.
     // The default matches the IC-9700 LAN audio packet cadence.
     quint16 blockSize{20};

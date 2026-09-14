@@ -24,9 +24,9 @@ static QPixmap roundedPixmap(const QPixmap& src, int radius)
 }
 
 AboutDialog::AboutDialog(QWidget* parent)
-    : sdr9700::ui::UtilityWindow(QStringLiteral("About %1").arg(QLatin1String(APP_NAME)), parent)
+    : sdr9700::ui::UtilityWindow(QStringLiteral("About %1").arg(QLatin1String(APP_DISPLAY_NAME)), parent)
 {
-    const QString title = QStringLiteral("About %1").arg(QLatin1String(APP_NAME));
+    const QString title = QStringLiteral("About %1").arg(QLatin1String(APP_DISPLAY_NAME));
     setMinimumSize(360, 320);
     resize(380, 340);
     auto* root = new QVBoxLayout(this);
@@ -49,7 +49,7 @@ AboutDialog::AboutDialog(QWidget* parent)
     iconLabel->setPixmap(roundedPixmap(scaled, 14));
     contentLayout->addWidget(iconLabel);
 
-    auto* appLabel = new QLabel(QString("<b style='font-size:18px'>%1</b>").arg(APP_NAME), content);
+    auto* appLabel = new QLabel(QString("<b style='font-size:18px'>%1</b>").arg(APP_DISPLAY_NAME), content);
     appLabel->setAlignment(Qt::AlignCenter);
     contentLayout->addWidget(appLabel);
 

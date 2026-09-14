@@ -3,6 +3,7 @@
 #include "ConfirmationDialog.h"
 #include "AppSettings.h"
 #include "MemorySyncPolicy.h"
+#include "SpectrumFrameRate.h"
 #include "UdpBase.h"
 
 #include <QCoreApplication>
@@ -263,6 +264,18 @@ QJsonObject cleanConfigurationSettings(const QJsonDocument& doc)
                        [](const QJsonValue& value, QJsonValue* normalized)
                        { return intStringValue(value, 0, 2, normalized); });
     insertCleanSetting(&spectrumScope, spectrumScopeSource, QStringLiteral("invertMouseWheel"), boolStringValue);
+    insertCleanSetting(&spectrumScope, spectrumScopeSource, QStringLiteral("framesPerSecond"),
+                       [](const QJsonValue& value, QJsonValue* normalized)
+                       {
+                           QJsonValue candidate;
+                           if (!intStringValue(value, 10, 30, &candidate) ||
+                               !sdr9700::isSupportedSpectrumFramesPerSecond(candidate.toString().toInt()))
+                           {
+                               return false;
+                           }
+                           *normalized = candidate;
+                           return true;
+                       });
     insertCleanSetting(&spectrumScope, spectrumScopeSource, QStringLiteral("spanHZ"),
                        [](const QJsonValue& value, QJsonValue* normalized)
                        { return intStringValue(value, 1, std::numeric_limits<int>::max(), normalized); });

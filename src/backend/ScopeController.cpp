@@ -9,7 +9,6 @@
 
 namespace
 {
-constexpr int kScopeFlushIntervalMs = 16;
 constexpr qint64 kScopeFrameStallWarningMs = 500;
 } // namespace
 
@@ -17,8 +16,28 @@ ScopeController::ScopeController(QObject* parent) : QObject(parent)
 {
     m_flushTimer = new QTimer(this);
     m_flushTimer->setSingleShot(true);
-    m_flushTimer->setInterval(kScopeFlushIntervalMs);
+    m_flushTimer->setInterval(sdr9700::spectrumFrameIntervalMs(m_framesPerSecond));
     connect(m_flushTimer, &QTimer::timeout, this, &ScopeController::flushLatestFrame);
+    qInfo(logSpectrumScope()).noquote().nospace()
+        << "Spectrum frame pacing fps=" << m_framesPerSecond << " intervalMs=" << m_flushTimer->interval();
+}
+
+void ScopeController::setFramesPerSecond(int requestedFramesPerSecond)
+{
+    const int normalized = sdr9700::normalizedSpectrumFramesPerSecond(requestedFramesPerSecond);
+    if (m_framesPerSecond == normalized)
+    {
+        return;
+    }
+
+    m_framesPerSecond = normalized;
+    m_flushTimer->setInterval(sdr9700::spectrumFrameIntervalMs(normalized));
+    qInfo(logSpectrumScope()).noquote().nospace()
+        << "Spectrum frame pacing fps=" << m_framesPerSecond << " intervalMs=" << m_flushTimer->interval();
+    if (m_flushTimer->isActive())
+    {
+        m_flushTimer->start();
+    }
 }
 
 void ScopeController::reset()

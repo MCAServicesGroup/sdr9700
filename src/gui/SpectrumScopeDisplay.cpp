@@ -118,7 +118,9 @@ SpectrumScopeDisplay::SpectrumScopeDisplay(QWidget* parent) : QWidget(parent)
             &SpectrumScopeDisplay::wheelStepRequested);
     m_waterfallCanvas->setWaterfallImageSource(&m_waterfallController->image());
     connect(m_waterfallController, &WaterfallController::imageChanged, m_waterfallCanvas,
-            QOverload<>::of(&WaterfallCanvas::update));
+            [this]() { m_waterfallCanvas->setWaterfallImageSource(&m_waterfallController->image()); });
+    connect(m_waterfallController, &WaterfallController::rowRendered, m_waterfallCanvas,
+            &WaterfallCanvas::setWaterfallRow);
     connect(m_panScrollBar, &QScrollBar::sliderPressed, m_waterfallController,
             [this]() { m_waterfallController->setPaused(true); });
     connect(m_panScrollBar, &QScrollBar::sliderReleased, m_waterfallController,
@@ -334,11 +336,6 @@ void SpectrumScopeDisplay::setInteractionLocked(bool locked)
 void SpectrumScopeDisplay::setInvertMouseWheel(bool invert)
 {
     m_spectrumScopeCanvas->setInvertMouseWheel(invert);
-}
-
-void SpectrumScopeDisplay::setPeakHoldDurationMs(int durationMs)
-{
-    m_spectrumScopeCanvas->setPeakHoldDurationMs(durationMs);
 }
 
 void SpectrumScopeDisplay::updateSpectrum(const QVector<float>& levels, bool outOfRange)

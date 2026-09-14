@@ -546,16 +546,13 @@ void StatusBarController::clearPersistentStatusMessage(const QString& expectedMe
 void StatusBarController::applyStatusMessage(const QString& message, MainWindow::StatusMessageKind kind)
 {
     const char* color = UiTheme::Color::TextStatusPrimary;
-    bool bold = false;
     if (kind == MainWindow::StatusMessageKind::Warning)
     {
         color = UiTheme::Color::Warning;
-        bold = true;
     }
     else if (kind == MainWindow::StatusMessageKind::Error)
     {
         color = UiTheme::Color::Danger;
-        bold = true;
     }
 
     const bool elided = message.size() > kMaximumStatusMessageCharacters;
@@ -563,7 +560,7 @@ void StatusBarController::applyStatusMessage(const QString& message, MainWindow:
         elided ? message.left(kMaximumStatusMessageCharacters - 1) + QChar(0x2026) : message;
     m_window->m_statusMessageLabel->setText(displayedMessage);
     m_window->m_statusMessageLabel->setToolTip(elided ? message : QString());
-    m_window->m_statusMessageLabel->setStyleSheet(statusLabelStyle(color, bold));
+    m_window->m_statusMessageLabel->setStyleSheet(statusLabelStyle(color));
 }
 
 void StatusBarController::updateNetworkQuality(int rttMs)

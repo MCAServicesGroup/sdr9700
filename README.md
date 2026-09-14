@@ -48,9 +48,11 @@ systems, and optional USB controllers is welcome.
 - Local AF gain and mute controls.
 - PTT control and LAN transmit audio support, including LAN MOD level control
   and transmit audio ramping.
-- Spectrum and waterfall display from IC-9700 scope data, with frequency-step
-  and span selectors, click-to-tune, recentering, and configurable peak hold of
-  0, 1, 2, or 5 seconds.
+- Spectrum and waterfall display from IC-9700 scope data, with frequency-step,
+  span, and frame-rate selectors, click-to-tune, and recentering. Apple Silicon
+  builds render the live spectrum and waterfall through Metal; Linux retains
+  the Qt raster renderer for compatibility with software-only and remote
+  desktops.
 - Receiver-aware scope and meter routing so MAIN/SUB activity follows the
   selected radio context without conflating the two receiver states.
 - Network and status indicators for radio connectivity, LAN quality, CPU use,

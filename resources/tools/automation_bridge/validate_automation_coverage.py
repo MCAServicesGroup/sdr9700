@@ -87,12 +87,12 @@ def classify_control(control):
         return "hardware-script"
     if name == "Application audio volume":
         return "local-or-lifecycle"
-    if object_name in {"spectrumStepSelector", "spectrumPeakHoldSelector", "spectrumRecenterButton"}:
+    if object_name in {"spectrumStepSelector", "spectrumFramesPerSecondSelector", "spectrumRecenterButton"}:
         return "coverage-gap"
     if name in {"MAIN VFO COMP control", "MAIN VFO OFFSET control", "SUB VFO OFFSET control",
                 "MAIN VFO TONE control", "SUB VFO TONE control", "MAIN VFO XFC control",
-                "Spectrum Scope pan", "Previous peak hold", "Next peak hold", "Previous span", "Next span",
-                "Previous step", "Next step", "Recenter spectrum"}:
+                "Spectrum Scope pan", "Previous fps", "Next fps", "Previous span", "Next span", "Previous step",
+                "Next step", "Recenter spectrum"}:
         return "coverage-gap"
     if name in {"MAIN VFO indicator", "SUB VFO indicator"}:
         return "status-only"

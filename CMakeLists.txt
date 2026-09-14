@@ -7,6 +7,9 @@ set(sdr9700_DISPLAY_VERSION "26.9.3-beta.2")
 option(sdr9700_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer instrumentation" OFF)
 option(sdr9700_THREAD_SANITIZE "Enable ThreadSanitizer instrumentation" OFF)
 option(sdr9700_ENABLE_HIDAPI "Build optional Icom RC-28 support when hidapi is available" ON)
+option(sdr9700_ENABLE_GPU_PANADAPTER "Render the panadapter through Qt RHI" ${APPLE})
+set(sdr9700_QT_PRIVATE_INCLUDE_ROOT "" CACHE PATH
+    "Optional Qt include root containing versioned QtGui private headers")
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -69,6 +72,72 @@ find_package(Qt6 6.2 REQUIRED COMPONENTS
 )
 if(BUILD_TESTING)
     find_package(Qt6 6.2 REQUIRED COMPONENTS Test)
+endif()
+
+if(sdr9700_ENABLE_GPU_PANADAPTER)
+    if(Qt6_VERSION VERSION_LESS 6.7)
+        message(FATAL_ERROR "The GPU panadapter requires Qt 6.7 or newer (found Qt ${Qt6_VERSION}).")
+    endif()
+
+    find_package(Qt6 REQUIRED COMPONENTS ShaderTools)
+    if(NOT sdr9700_QT_PRIVATE_INCLUDE_ROOT)
+        find_package(Qt6GuiPrivate QUIET)
+    endif()
+
+    if(sdr9700_QT_PRIVATE_INCLUDE_ROOT OR NOT TARGET Qt6::GuiPrivate)
+        set(sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS "")
+        if(sdr9700_QT_PRIVATE_INCLUDE_ROOT)
+            list(APPEND sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS
+                "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtGui/${Qt6_VERSION}"
+                "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtGui/${Qt6_VERSION}/QtGui"
+                "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtCore/${Qt6_VERSION}"
+                "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtCore/${Qt6_VERSION}/QtCore"
+            )
+        else()
+            get_target_property(sdr9700_QT_GUI_INCLUDE_DIRS Qt6::Gui INTERFACE_INCLUDE_DIRECTORIES)
+            get_target_property(sdr9700_QT_CORE_INCLUDE_DIRS Qt6::Core INTERFACE_INCLUDE_DIRECTORIES)
+            foreach(sdr9700_QT_GUI_INCLUDE_DIR IN LISTS sdr9700_QT_GUI_INCLUDE_DIRS)
+                if(EXISTS "${sdr9700_QT_GUI_INCLUDE_DIR}/${Qt6_VERSION}/QtGui/rhi/qrhi.h")
+                    list(APPEND sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS
+                        "${sdr9700_QT_GUI_INCLUDE_DIR}/${Qt6_VERSION}"
+                        "${sdr9700_QT_GUI_INCLUDE_DIR}/${Qt6_VERSION}/QtGui"
+                    )
+                    break()
+                endif()
+            endforeach()
+            foreach(sdr9700_QT_CORE_INCLUDE_DIR IN LISTS sdr9700_QT_CORE_INCLUDE_DIRS)
+                if(EXISTS "${sdr9700_QT_CORE_INCLUDE_DIR}/${Qt6_VERSION}/QtCore/private/qglobal_p.h")
+                    list(APPEND sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS
+                        "${sdr9700_QT_CORE_INCLUDE_DIR}/${Qt6_VERSION}"
+                        "${sdr9700_QT_CORE_INCLUDE_DIR}/${Qt6_VERSION}/QtCore"
+                    )
+                    break()
+                endif()
+            endforeach()
+        endif()
+
+        set(sdr9700_QT_GUI_PRIVATE_HEADERS_FOUND OFF)
+        set(sdr9700_QT_CORE_PRIVATE_HEADERS_FOUND OFF)
+        foreach(sdr9700_QT_PRIVATE_INCLUDE_DIR IN LISTS sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS)
+            if(EXISTS "${sdr9700_QT_PRIVATE_INCLUDE_DIR}/QtGui/rhi/qrhi.h")
+                set(sdr9700_QT_GUI_PRIVATE_HEADERS_FOUND ON)
+            endif()
+            if(EXISTS "${sdr9700_QT_PRIVATE_INCLUDE_DIR}/QtCore/private/qglobal_p.h")
+                set(sdr9700_QT_CORE_PRIVATE_HEADERS_FOUND ON)
+            endif()
+        endforeach()
+        if(NOT sdr9700_QT_GUI_PRIVATE_HEADERS_FOUND OR NOT sdr9700_QT_CORE_PRIVATE_HEADERS_FOUND)
+            message(FATAL_ERROR
+                "The GPU panadapter requires QtGui and QtCore private headers. Install qt6-base-private-dev "
+                "or provide sdr9700_QT_PRIVATE_INCLUDE_ROOT.")
+        endif()
+    endif()
+
+    if(APPLE)
+        message(STATUS "sdr9700 GPU panadapter enabled with the Metal backend")
+    else()
+        message(STATUS "sdr9700 GPU panadapter enabled for build verification")
+    endif()
 endif()
 
 add_subdirectory(src)

@@ -13,6 +13,7 @@ class WaterfallScopeTest : public QObject
     void convertsAndClampsRawScopeBytes();
     void rejectsInvalidScopeFrames();
     void coalescesScopeFrames();
+    void limitsScopeFrameRate();
     void resetDropsPendingScopeFrame();
     void rebuildsAndClearsWaterfall();
     void rendersAndScrollsWaterfallRows();
@@ -74,6 +75,34 @@ void WaterfallScopeTest::coalescesScopeFrames()
     QCOMPARE(arguments.at(3).toBool(), true);
 }
 
+void WaterfallScopeTest::limitsScopeFrameRate()
+{
+    ScopeController controller;
+    QCOMPARE(controller.framesPerSecond(), 30);
+    QCOMPARE(sdr9700::spectrumFrameIntervalMs(controller.framesPerSecond()), 34);
+
+    controller.setFramesPerSecond(10);
+    QCOMPARE(controller.framesPerSecond(), 10);
+    QCOMPARE(sdr9700::spectrumFrameIntervalMs(controller.framesPerSecond()), 100);
+
+    QSignalSpy dataSpy(&controller, &ScopeController::spectrumDataReady);
+    ScopeData frame;
+    frame.valid = true;
+    frame.data = QByteArray::fromHex("01");
+    controller.acceptScopeData(frame);
+    QTest::qWait(50);
+    QCOMPARE(dataSpy.count(), 0);
+
+    frame.data = QByteArray::fromHex("02");
+    controller.acceptScopeData(frame);
+    QTRY_COMPARE(dataSpy.count(), 1);
+    QCOMPARE(dataSpy.constFirst().constFirst().value<QVector<float>>(), QVector<float>({2.0f}));
+
+    controller.setFramesPerSecond(12);
+    QCOMPARE(controller.framesPerSecond(), 30);
+    QCOMPARE(sdr9700::spectrumFrameIntervalMs(30), 34);
+}
+
 void WaterfallScopeTest::resetDropsPendingScopeFrame()
 {
     ScopeController controller;
@@ -114,15 +143,20 @@ void WaterfallScopeTest::rendersAndScrollsWaterfallRows()
     controller.setFrequencyRange(144.0, 146.0);
     controller.setDataFrequencyRange(144.0, 146.0);
 
+    auto visiblePixel = [&controller](int x, int y)
+    {
+        const int physicalRow = (controller.firstVisibleRow() + y) % controller.image().height();
+        return controller.image().pixel(x, physicalRow);
+    };
+
     controller.updateSpectrum({0.0f, 80.0f, 160.0f});
-    QTRY_VERIFY(controller.image().pixel(0, 0) != controller.image().pixel(2, 0));
-    const QVector<QRgb> firstRow = {controller.image().pixel(0, 0), controller.image().pixel(1, 0),
-                                    controller.image().pixel(2, 0)};
+    QTRY_VERIFY(visiblePixel(0, 0) != visiblePixel(2, 0));
+    const QVector<QRgb> firstRow = {visiblePixel(0, 0), visiblePixel(1, 0), visiblePixel(2, 0)};
 
     controller.updateSpectrum({160.0f, 80.0f, 0.0f});
-    QTRY_COMPARE(controller.image().pixel(0, 1), firstRow.at(0));
-    QCOMPARE(controller.image().pixel(1, 1), firstRow.at(1));
-    QCOMPARE(controller.image().pixel(2, 1), firstRow.at(2));
+    QTRY_COMPARE(visiblePixel(0, 1), firstRow.at(0));
+    QCOMPARE(visiblePixel(1, 1), firstRow.at(1));
+    QCOMPARE(visiblePixel(2, 1), firstRow.at(2));
 }
 
 void WaterfallScopeTest::mapsPartialDataRangeToIdlePixels()

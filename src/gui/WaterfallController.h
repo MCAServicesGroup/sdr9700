@@ -14,6 +14,7 @@ class WaterfallController : public QObject
   public:
     explicit WaterfallController(QObject* parent = nullptr);
     const QImage& image() const { return m_waterfall; }
+    int firstVisibleRow() const { return m_firstVisibleRow; }
 
   public slots:
     void setCanvasSize(const QSize& size);
@@ -25,6 +26,7 @@ class WaterfallController : public QObject
 
   signals:
     void imageChanged();
+    void rowRendered(int physicalRow, int firstVisibleRow);
 
   private:
     double xToFreq(int x) const;
@@ -47,4 +49,5 @@ class WaterfallController : public QObject
     float m_maxLevel{160.0f};
     bool m_paused{false};
     bool m_hasPendingLevels{false};
+    int m_firstVisibleRow{0};
 };

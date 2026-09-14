@@ -443,6 +443,7 @@ int main(int argc, char* argv[])
     configureMacWindowRestoration(app);
 #endif
     app.setApplicationName("sdr9700");
+    app.setApplicationDisplayName(QString::fromLatin1(APP_DISPLAY_NAME));
     app.setOrganizationName("sdr9700");
     app.setApplicationVersion(APP_VERSION);
 #if defined(Q_OS_LINUX)

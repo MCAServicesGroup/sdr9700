@@ -209,6 +209,8 @@ void GuiSmokeTest::audioSettingsChangesAreForwarded()
     auto* channels = dialog.findChild<QComboBox*>(QStringLiteral("audioOutputChannels"));
     QVERIFY(channels != nullptr);
     QCOMPARE(channels->count(), 2);
+    QCOMPARE(channels->itemText(0), QStringLiteral("Mono mix (MAIN + SUB)"));
+    QCOMPARE(channels->itemText(1), QStringLiteral("Stereo (MAIN left, SUB right)"));
     channels->setCurrentIndex(channels->currentIndex() == 0 ? 1 : 0);
     QCOMPARE(changedSpy.count(), 1);
 }
@@ -273,7 +275,7 @@ void GuiSmokeTest::codecNoticeKeepsLayoutStable()
     int codecLabelCount = 0;
     for (QLabel* label : dialog.findChildren<QLabel*>())
     {
-        if (label->text() == QStringLiteral("Codec:"))
+        if (label->text() == QStringLiteral("Playback:"))
         {
             codecLabel = label;
             ++codecLabelCount;

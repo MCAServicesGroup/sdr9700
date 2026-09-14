@@ -2,6 +2,7 @@
 #include "SpectrumTuningPolicy.h"
 
 #include "AppSettings.h"
+#include "SpectrumFrameRate.h"
 #include "SpectrumScopeDisplay.h"
 #include "LogCategories.h"
 #include "MainWindow.h"
@@ -447,42 +448,42 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
     spanSelector->setParent(spectrumToolbar);
     spanSelector->hide();
 
-    auto* peakHoldSelector = new QComboBox(spectrumToolbar);
-    peakHoldSelector->setObjectName(QStringLiteral("spectrumPeakHoldSelector"));
-    peakHoldSelector->setAccessibleName(QStringLiteral("Spectrum peak hold duration"));
-    peakHoldSelector->hide();
-    for (const int seconds : {0, 1, 2, 5})
+    auto* framesPerSecondSelector = new QComboBox(spectrumToolbar);
+    framesPerSecondSelector->setObjectName(QStringLiteral("spectrumFramesPerSecondSelector"));
+    framesPerSecondSelector->setAccessibleName(QStringLiteral("Spectrum frame rate"));
+    framesPerSecondSelector->hide();
+    for (const int framesPerSecond : sdr9700::kSpectrumFramesPerSecondPresets)
     {
-        peakHoldSelector->addItem(QStringLiteral("%1 s").arg(seconds), seconds);
+        framesPerSecondSelector->addItem(QString::number(framesPerSecond), framesPerSecond);
     }
-    const int storedPeakHoldSeconds =
-        AppSettings::instance()
-            .value(QString::fromLatin1(kSpectrumScopePeakHoldSecondsSettingsKey), kDefaultSpectrumScopePeakHoldSeconds)
-            .toInt();
-    int peakHoldIndex = peakHoldSelector->findData(storedPeakHoldSeconds);
-    if (peakHoldIndex < 0)
+    const int storedFramesPerSecond = AppSettings::instance()
+                                          .value(QString::fromLatin1(kSpectrumScopeFramesPerSecondSettingsKey),
+                                                 sdr9700::kDefaultSpectrumFramesPerSecond)
+                                          .toInt();
+    framesPerSecondSelector->setCurrentIndex(
+        framesPerSecondSelector->findData(sdr9700::normalizedSpectrumFramesPerSecond(storedFramesPerSecond)));
+    if (auto* backend = m_window->m_model ? m_window->m_model->backend() : nullptr)
     {
-        peakHoldIndex = peakHoldSelector->findData(kDefaultSpectrumScopePeakHoldSeconds);
+        backend->setSpectrumFramesPerSecond(framesPerSecondSelector->currentData().toInt());
     }
-    peakHoldSelector->setCurrentIndex(peakHoldIndex);
-    m_window->m_spectrumScopeDisplay->setPeakHoldDurationMs(peakHoldSelector->currentData().toInt() * 1000);
-    connect(peakHoldSelector, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this, peakHoldSelector](int index)
+    connect(framesPerSecondSelector, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this, framesPerSecondSelector](int index)
             {
                 if (index < 0)
                 {
                     return;
                 }
-                const int seconds = peakHoldSelector->itemData(index).toInt();
-                AppSettings::instance().setValue(QString::fromLatin1(kSpectrumScopePeakHoldSecondsSettingsKey),
-                                                 seconds);
-                m_window->m_spectrumScopeDisplay->setPeakHoldDurationMs(seconds * 1000);
+                const int framesPerSecond = framesPerSecondSelector->itemData(index).toInt();
+                AppSettings::instance().setValue(QString::fromLatin1(kSpectrumScopeFramesPerSecondSettingsKey),
+                                                 framesPerSecond);
+                if (auto* backend = m_window->m_model ? m_window->m_model->backend() : nullptr)
+                {
+                    backend->setSpectrumFramesPerSecond(framesPerSecond);
+                }
             });
 
     constexpr int kInlineSelectorTextSpacing = 4;
-    constexpr int kPeakHoldChevronSpacing = 4;
-    const auto makeInlineSelector =
-        [spectrumToolbar](const QString& name, QComboBox* selector, const int trailingChevronSpacing = 0)
+    const auto makeInlineSelector = [spectrumToolbar](const QString& name, QComboBox* selector)
     {
         auto* control = new QWidget(spectrumToolbar);
         control->setFixedHeight(22);
@@ -512,7 +513,7 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
         label->setAlignment(Qt::AlignCenter);
         // Match the value cell to its rendered text. A fixed maximum-width
         // field leaves invisible padding before the right chevron whenever a
-        // shorter STEP, SPAN, or PEAK HOLD value is selected.
+        // shorter STEP, SPAN, or FPS value is selected.
         value->setAlignment(Qt::AlignCenter);
         value->setStyleSheet(
             QStringLiteral("color: %1; font-size: 10px; font-weight: bold;").arg(UiTheme::Color::TextBright));
@@ -538,13 +539,6 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
         layout->addWidget(label);
         layout->addSpacing(kInlineSelectorTextSpacing);
         layout->addWidget(value);
-        // The fixed-width chevron button normally supplies enough visual inset
-        // by itself. The long PEAK HOLD label beside its short value is the one
-        // optical exception; its caller requests a small balancing gap here.
-        if (trailingChevronSpacing > 0)
-        {
-            layout->addSpacing(trailingChevronSpacing);
-        }
         layout->addWidget(next);
         updateControl();
         return control;
@@ -552,7 +546,7 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
 
     auto* stepControl = makeInlineSelector(QStringLiteral("STEP"), m_tuningStepSelector);
     auto* spanControl = makeInlineSelector(QStringLiteral("SPAN"), spanSelector);
-    auto* peakHoldControl = makeInlineSelector(QStringLiteral("PEAK HOLD"), peakHoldSelector, kPeakHoldChevronSpacing);
+    auto* framesPerSecondControl = makeInlineSelector(QStringLiteral("FPS"), framesPerSecondSelector);
 
     auto* recenterButton = new QToolButton(spectrumToolbar);
     recenterButton->setObjectName(QStringLiteral("spectrumRecenterButton"));
@@ -570,7 +564,7 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
     connect(recenterButton, &QToolButton::clicked, this, [this]() { recenterActiveVfo(true); });
     recenterButton->adjustSize();
     spectrumToolbar->setCenteredControl(recenterButton);
-    spectrumToolbar->setLeadingControls({stepControl, spanControl, peakHoldControl});
+    spectrumToolbar->setLeadingControls({stepControl, spanControl, framesPerSecondControl});
     spectrumToolbar->setAnchorXProvider(
         [this, spectrumToolbar]()
         {

@@ -1,5 +1,6 @@
 // QtTest invokes private slots through the generated meta-object.
 #include "AudioConverter.h"
+#include "AudioHandlerQtOutput.h"
 #include "TxAudioMonitoringPolicy.h"
 #include "TxAudioPacing.h"
 
@@ -27,6 +28,8 @@ class AudioConverterTest : public QObject
     void rejectsPartialStereoFrame();
     void catchesUpTxAudioPacingWithoutBursting();
     void monitorsMicrophoneBeforePttWithoutQueuingTransmitAudio();
+    void addsOneFrameOfOutputPrefillHeadroom();
+    void measuresStereoOutputChannelsIndependently();
 };
 
 namespace
@@ -276,6 +279,35 @@ void AudioConverterTest::monitorsMicrophoneBeforePttWithoutQueuingTransmitAudio(
     QVERIFY(!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(false, true));
     QVERIFY(!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(true, true));
     QVERIFY(sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(true, false));
+}
+
+void AudioConverterTest::addsOneFrameOfOutputPrefillHeadroom()
+{
+    const QAudioFormat format = audioFormat(2, QAudioFormat::Int16);
+    const int bufferBytes = static_cast<int>(format.bytesForDuration(80000));
+    const int expectedPrefillBytes = static_cast<int>(format.bytesForDuration(60000));
+    const int shortBufferBytes = static_cast<int>(format.bytesForDuration(60000));
+    const int shortBufferPrefillBytes = static_cast<int>(format.bytesForDuration(40000));
+
+    QCOMPARE(sdr9700::audio::outputBufferDurationMs(80), 120);
+    QCOMPARE(sdr9700::audio::outputPrefillBytes(format, bufferBytes, 80), expectedPrefillBytes);
+    QCOMPARE(sdr9700::audio::outputPrefillBytes(format, shortBufferBytes, 80), shortBufferPrefillBytes);
+    QCOMPARE(sdr9700::audio::outputPrefillBytes(format, 0, 80), 0);
+    QCOMPARE(sdr9700::audio::outputPrefillBytes(format, bufferBytes, 0), 0);
+}
+
+void AudioConverterTest::measuresStereoOutputChannelsIndependently()
+{
+    const qint16 samples[] = {0, 1000, -32767, 0};
+    QByteArray data(sizeof(samples), Qt::Uninitialized);
+    std::memcpy(data.data(), samples, sizeof(samples));
+
+    const sdr9700::audio::StereoChannelPeaks peaks = sdr9700::audio::stereoChannelPeaks(data, QAudioFormat::Int16);
+    QVERIFY(peaks.valid);
+    QCOMPARE(peaks.channel0, 1.0F);
+    QVERIFY(peaks.channel1 > 0.03F);
+    QVERIFY(peaks.channel1 < 0.031F);
+    QVERIFY(!sdr9700::audio::stereoChannelPeaks(QByteArray(3, '\0'), QAudioFormat::Int16).valid);
 }
 
 QTEST_GUILESS_MAIN(AudioConverterTest)
