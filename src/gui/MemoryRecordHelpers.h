@@ -100,7 +100,7 @@ inline bool radioMemoryIsStored(const MemoryType& memory)
 inline MemoryType radioMemoryWithLocalNameFallback(MemoryType memory)
 {
     // The IC-9700 permits an occupied memory channel to have an empty name.
-    // SDR9700 still needs a stable, useful label for that record in its local
+    // sdr9700 still needs a stable, useful label for that record in its local
     // database, table, editor, and CSV output. Normalize a copy at the radio
     // ingest boundary so every local consumer sees the same value. This
     // normalization does not itself issue a radio write; a later explicit edit

@@ -1,6 +1,6 @@
 # IC-9700 Radio Disconnect Process
 
-This document records SDR9700's verified disconnect and shutdown sequence for
+This document records sdr9700's verified disconnect and shutdown sequence for
 an authenticated IC-9700 LAN session. Treat the ordering below as a protocol
 invariant. Changes to it require an IC-9700 log or packet capture and a
 close/reopen stress test.
@@ -16,7 +16,7 @@ The IC-9700 maintains state for three UDP endpoints:
 Closing local sockets does not tell the radio that these sessions have ended.
 If the client omits the control-port departure, the radio can retain a stale
 session and ignore a new client's discovery packets until its internal timeout
-expires. During the original defect this made SDR9700 appear unable to reconnect
+expires. During the original defect this made sdr9700 appear unable to reconnect
 for roughly 70–80 seconds after an otherwise clean application exit.
 
 ## Required sequence
@@ -26,7 +26,7 @@ audio stream ports to this process. A successful login response and its token
 are negotiation state, not proof of session ownership: the radio can accept
 login and then reject the stream because another LAN client already owns it.
 
-When SDR9700 has not received a successful stream grant, shutdown must close
+When sdr9700 has not received a successful stream grant, shutdown must close
 only its local sockets, timers, reserved ports, and credential buffers. It must
 not send CI-V/audio stream departures, authentication token removal, or the
 control-port departure. Those packets can terminate the established session of
@@ -50,7 +50,7 @@ For an owned session, shutdown proceeds synchronously in this order:
 
 The token-removal response confirms that the radio accepted release of the
 authentication token. The IC-9700 did not emit a separate status packet with
-`disc=1` during verified client-initiated shutdowns, so SDR9700 does not wait for
+`disc=1` during verified client-initiated shutdowns, so sdr9700 does not wait for
 that packet. Such a status packet is still parsed independently when received.
 
 `UdpBase::sendDeparture()` is idempotent. Explicit shutdown invokes it while
@@ -90,7 +90,7 @@ close-and-immediate-reopen cycles produced:
   1–2 ms; and
 - no connection timeouts.
 
-For future regression testing, run SDR9700 with UDP, radio, and audio logging,
+For future regression testing, run sdr9700 with UDP, radio, and audio logging,
 then repeat rapid close/reopen cycles. Each authenticated shutdown must include
 these events in order:
 
@@ -107,7 +107,7 @@ The next process should receive `I am here` in response to its first `Are You
 There` probe.
 
 Rejected-session shutdown was additionally verified on August 31 and September
-2, 2026 with independent clients owning the IC-9700 LAN session. SDR9700 reports
+2, 2026 with independent clients owning the IC-9700 LAN session. sdr9700 reports
 the radio-supplied owner IP address, closes only its local resources, and does
 not automatically retry. The established client remains connected. The
 automated suite also exercises 10,000 rejected ownership lifecycles and 10,000

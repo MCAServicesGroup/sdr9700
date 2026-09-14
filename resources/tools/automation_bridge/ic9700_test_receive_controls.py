@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test every receive-side VFO control through SDR9700 automation."""
+"""Test every receive-side VFO control through sdr9700 automation."""
 
 import json
 import sys

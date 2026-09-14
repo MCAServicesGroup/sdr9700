@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           test "$(uname -m)" = "arm64"
-          version="$(sed -n 's/^set(SDR9700_DISPLAY_VERSION "\([^"]*\)").*/\1/p' CMakeLists.txt)"
+          version="$(sed -n 's/^set(sdr9700_DISPLAY_VERSION "\([^"]*\)").*/\1/p' CMakeLists.txt)"
           test -n "$version"
           if [[ -n "${{ steps.source.outputs.release_tag }}" ]]; then
             expected_tag="v${version}"
@@ -100,15 +100,15 @@ jobs:
 
       - name: Bundle, audit, sign, and create DMG
         env:
-          SDR9700_SIGN_IDENTITY: Developer ID Application
+          sdr9700_SIGN_IDENTITY: Developer ID Application
         run: |
           make release-dmg
           make verify-bundle
-          codesign --verify --deep --strict --verbose=2 src/build/bin/SDR9700.app
+          codesign --verify --deep --strict --verbose=2 src/build/bin/sdr9700.app
 
-          dmg_path="$(find src/build/package -maxdepth 1 -name 'SDR9700-*-macOS-apple-silicon.dmg' -print -quit)"
+          dmg_path="$(find src/build/package -maxdepth 1 -name 'sdr9700-*-macOS-apple-silicon.dmg' -print -quit)"
           test -n "$dmg_path"
-          echo "SDR9700_DMG=$dmg_path" >> "$GITHUB_ENV"
+          echo "sdr9700_DMG=$dmg_path" >> "$GITHUB_ENV"
 
       - name: Store notarization credentials
         env:
@@ -123,24 +123,24 @@ jobs:
 
       - name: Notarize and staple DMG
         env:
-          SDR9700_NOTARY_PROFILE: sdr9700-ci
+          sdr9700_NOTARY_PROFILE: sdr9700-ci
         run: |
-          make notarize DMG="$SDR9700_DMG"
-          xcrun stapler validate "$SDR9700_DMG"
+          make notarize DMG="$sdr9700_DMG"
+          xcrun stapler validate "$sdr9700_DMG"
           spctl --assess --type open \
             --context context:primary-signature \
             --verbose=4 \
-            "$SDR9700_DMG"
+            "$sdr9700_DMG"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: SDR9700-macOS-apple-silicon
-          path: ${{ env.SDR9700_DMG }}
+          name: sdr9700-macOS-apple-silicon
+          path: ${{ env.sdr9700_DMG }}
           if-no-files-found: error
 
       - name: Attach DMG to GitHub Release
         if: steps.source.outputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ steps.source.outputs.release_tag }}" "$SDR9700_DMG" --clobber
+        run: gh release upload "${{ steps.source.outputs.release_tag }}" "$sdr9700_DMG" --clobber

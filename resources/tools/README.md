@@ -1,17 +1,17 @@
-# SDR9700 Tools
+# sdr9700 Tools
 
 This directory contains hardware-integration utilities for an IC-9700. They are
 not unit tests and are not run by CTest. Every executable has a narrow purpose
 expressed by its filename.
 
-The tools use only the Python standard library. Run them from the SDR9700
+The tools use only the Python standard library. Run them from the sdr9700
 repository root.
 
 ## Tool summary
 
 | Tool | Purpose | Resulting radio state |
 | --- | --- | --- |
-| `automation_bridge/automation_client.py` | Sends one JSON request to an opted-in SDR9700 automation bridge. | Depends on the requested action. Transmit actions are always rejected. |
+| `automation_bridge/automation_client.py` | Sends one JSON request to an opted-in sdr9700 automation bridge. | Depends on the requested action. Transmit actions are always rejected. |
 | `automation_bridge/ic9700_vfo_hardware_stress.py` | Stress-tests VFO selection, bands, MAIN/SUB exchange, Dual Watch, and busy gates. | Finishes in a documented baseline. |
 | `automation_bridge/ic9700_test_receive_controls.py` | Tests frequencies and receive controls independently on MAIN and SUB. | Restores checked control values, but not the initial bands, frequencies, or modes. |
 | `automation_bridge/ic9700_shared_control_sweep.py` | Sweeps shared controls, including AF gain, LAN modulation, and TX power without transmitting. | Restores each swept value. |
@@ -23,18 +23,18 @@ repository root.
 The `ic9700_rsba1_shared.py` support module provides common IC-9700 RS-BA1
 functionality used by other scripts. It exits with an error if run directly.
 
-## SDR9700 automation bridge tools
+## sdr9700 automation bridge tools
 
-The scripts under `automation_bridge/` exercise a running SDR9700 instance
+The scripts under `automation_bridge/` exercise a running sdr9700 instance
 through its opt-in local automation bridge. Start a fully synchronized
 application explicitly with automation enabled:
 
 ```bash
-./src/build/bin/SDR9700 --enable-automation --log=radio,udp,ci-v
+./src/build/bin/sdr9700 --enable-automation --log=radio,udp,ci-v
 ```
 
 These tools discover the newest `sdr9700-automation-*.json` record beneath
-SDR9700's platform configuration directory. They skip missing socket endpoints
+sdr9700's platform configuration directory. They skip missing socket endpoints
 and require both the discovery record and application state to say transmit is
 unavailable. They never request PTT or DTMF Send, but they do retune the radio
 and change controls.
@@ -65,7 +65,7 @@ python3 resources/tools/automation_bridge/automation_client.py '{"action":"get_s
 Pass `--hold` to keep the connection open briefly after the response or
 `--match` to filter `ui_list` results by their control descriptions. Use
 `--discovery PATH` to select a particular running instance. All automation
-tools also honor `SDR9700_AUTOMATION_DISCOVERY=PATH`.
+tools also honor `sdr9700_AUTOMATION_DISCOVERY=PATH`.
 
 ### `automation_bridge/ic9700_vfo_hardware_stress.py`
 
@@ -108,7 +108,7 @@ into the other VFO. It:
   consolidated FILTERS panel on both receivers;
 - sweeps MAIN and SUB squelch and RF gain;
 - exercises FAST, MID, and SLOW AGC in USB before returning to FM; and
-- confirms every requested change from SDR9700's radio-derived state.
+- confirms every requested change from sdr9700's radio-derived state.
 
 Run it with:
 

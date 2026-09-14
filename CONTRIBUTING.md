@@ -1,6 +1,6 @@
-# Contributing to SDR9700
+# Contributing to sdr9700
 
-Thanks for helping with SDR9700. The most useful contributions are focused,
+Thanks for helping with sdr9700. The most useful contributions are focused,
 verifiable changes that improve everyday IC-9700 operation without making the
 radio-control path harder to understand or maintain.
 
@@ -14,7 +14,7 @@ radio-control path harder to understand or maintain.
 
 ## Good First Contributions
 
-- Remove stale references to other projects from active SDR9700 files.
+- Remove stale references to other projects from active sdr9700 files.
 - Replace copied documentation with IC-9700-specific documentation.
 - Fix build warnings or obvious memory/resource ownership issues.
 - Add narrow tests for protocol parsing or settings behavior.
@@ -24,7 +24,7 @@ radio-control path harder to understand or maintain.
 
 ```bash
 make release
-./src/build/bin/SDR9700
+./src/build/bin/sdr9700
 ```
 
 Use `src/build` for all local builds. Do not create agent-specific build
@@ -36,7 +36,7 @@ Use `make debug` for developer builds that need debug symbols. Runtime logging
 is controlled separately in release builds. Debug builds default to `--log=all`:
 
 ```bash
-./src/build/bin/SDR9700 --log=radio,udp,ci-v --log-file=/tmp/sdr9700.log
+./src/build/bin/sdr9700 --log=radio,udp,ci-v --log-file=/tmp/sdr9700.log
 ```
 
 Other CMake build types are rejected by CMake.
@@ -52,14 +52,14 @@ Other CMake build types are rejected by CMake.
 - Preserve user changes already present in the working tree.
 - Do not copy material from `resources/manuals/` into `src/`.
 - Do not promote imported material to active docs without rewriting it for
-  SDR9700 and the IC-9700.
+  sdr9700 and the IC-9700.
 - Do not add new app-owned `QSettings` usage. Use `AppSettings`.
 
 ## Bug Reports
 
 Useful bug reports include:
 
-- SDR9700 commit or version.
+- sdr9700 commit or version.
 - Linux distribution or Apple Silicon Mac model, macOS version, and Qt version.
 - IC-9700 firmware version.
 - Connection type and radio LAN settings.
@@ -75,6 +75,14 @@ Link an issue when one already exists. Small documentation and maintenance
 changes do not require a separate issue.
 
 Before opening a pull request, run the automated checks from the project root:
+
+```bash
+make check
+```
+
+This is the same entry point used by Linux CI. It verifies the required tool
+versions, checks formatting without modifying files, and runs cppcheck with
+the repository suppressions. The underlying commands are documented below.
 
 **clang-format** — apply in-place and confirm no files changed:
 ```bash

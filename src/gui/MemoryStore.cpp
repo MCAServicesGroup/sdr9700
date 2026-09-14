@@ -399,7 +399,7 @@ void validateMemoryRecord(const MemoryRecord& memory, const QStringList& row, co
         }
         break;
     default:
-        addError(QStringLiteral("toneMode is not supported by SDR9700 memory import"));
+        addError(QStringLiteral("toneMode is not supported by sdr9700 memory import"));
         break;
     }
 

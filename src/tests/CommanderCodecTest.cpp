@@ -1136,7 +1136,7 @@ void CommanderCodecTest::malformedReplyDoesNotConsumePendingReply()
 void CommanderCodecTest::selectedRepliesUsePendingReceiverIdentity()
 {
     // Commands 03h and 04h identify the currently selected side, not physical
-    // MAIN. During a receiver-scoped SUB read SDR9700 selects SUB first, so the
+    // MAIN. During a receiver-scoped SUB read sdr9700 selects SUB first, so the
     // outstanding request is the only reliable identity for the reply.
     m_commander.m_pendingReplies.clear();
     m_commander.m_replyFamilyDrains.clear();

@@ -71,8 +71,8 @@ AboutDialog::AboutDialog(QWidget* parent)
     projectLink->setAlignment(Qt::AlignCenter);
     projectLink->setOpenExternalLinks(true);
     projectLink->setTextInteractionFlags(Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);
-    projectLink->setAccessibleName(QStringLiteral("SDR9700 project page"));
-    projectLink->setAccessibleDescription(QStringLiteral("Open the SDR9700 project page on GitHub."));
+    projectLink->setAccessibleName(QStringLiteral("sdr9700 project page"));
+    projectLink->setAccessibleDescription(QStringLiteral("Open the sdr9700 project page on GitHub."));
     contentLayout->addWidget(projectLink);
 
     contentLayout->addStretch(1);

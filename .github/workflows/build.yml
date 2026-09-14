@@ -44,22 +44,8 @@ jobs:
           "$RUNNER_TEMP/cppcheck-build/bin/cppcheck" --version | grep -F "Cppcheck 2.21.0"
       - name: Build
         run: make release
-      - name: Verify formatting
-        run: >-
-          find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' \) -print0 |
-          xargs -0 clang-format-23 --dry-run --Werror
-      - name: Static analysis
-        run: |
-          # Keep source correctness categories enabled. These filters cover
-          # external include modeling limitations and analyzer status reports.
-          cppcheck --error-exitcode=1 --enable=all --inconclusive --std=c++20 \
-            --library=qt \
-            --suppress=missingIncludeSystem \
-            --suppress=missingInclude \
-            --suppress=normalCheckLevelMaxBranches \
-            --suppress=checkersReport \
-            --suppressions-list=.cppcheck_suppressions \
-            -I src -i src/build src
+      - name: Source checks
+        run: make check
       - name: Test
         run: ctest --test-dir src/build --output-on-failure
 

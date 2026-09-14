@@ -10,9 +10,9 @@
 #include "RadioIdentities.h"
 #include "CachingQueue.h"
 
-// CI-V address used by SDR9700 as the controller when talking to the IC-9700
+// CI-V address used by sdr9700 as the controller when talking to the IC-9700
 // over LAN. Radio replies addressed to this value are treated as responses to
-// SDR9700-originated commands.
+// sdr9700-originated commands.
 inline constexpr quint8 compCivAddr = 0xE1;
 
 class RadioCommander : public QObject
@@ -81,7 +81,7 @@ class RadioCommander : public QObject
 
     quint8 guid[GUIDLEN] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     // This is not an optimistic connection flag. It becomes true only after a
-    // syntactically valid CI-V reply addressed to SDR9700's controller address
+    // syntactically valid CI-V reply addressed to sdr9700's controller address
     // proves that the selected radio is processing commands.
     bool radioPoweredOn = false;
 

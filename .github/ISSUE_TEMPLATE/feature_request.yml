@@ -1,12 +1,12 @@
 name: Feature request
-description: Suggest an SDR9700 enhancement or workflow improvement.
+description: Suggest an sdr9700 enhancement or workflow improvement.
 title: "[Feature]: "
 labels: ["enhancement", "needs-triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        SDR9700 is focused on native Linux and Apple Silicon macOS control of the IC-9700 over its LAN interface. Please describe the operator workflow and the useful outcome rather than designing the implementation for us.
+        sdr9700 is focused on native Linux and Apple Silicon macOS control of the IC-9700 over its LAN interface. Please describe the operator workflow and the useful outcome rather than designing the implementation for us.
 
   - type: textarea
     id: problem
@@ -21,7 +21,7 @@ body:
     id: proposal
     attributes:
       label: Proposed behavior
-      description: What should SDR9700 add or change?
+      description: What should sdr9700 add or change?
     validations:
       required: true
 
@@ -62,5 +62,5 @@ body:
       options:
         - label: I searched existing issues and did not find a duplicate.
           required: true
-        - label: This request is specific to SDR9700 / IC-9700 operation.
+        - label: This request is specific to sdr9700 / IC-9700 operation.
           required: true

@@ -8,13 +8,13 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 dmg_path="${1:-}"
-notary_profile="${SDR9700_NOTARY_PROFILE:-}"
+notary_profile="${sdr9700_NOTARY_PROFILE:-}"
 if [ -z "${dmg_path}" ] || [ ! -f "${dmg_path}" ]; then
-    echo "Pass the signed SDR9700 DMG path as the first argument." >&2
+    echo "Pass the signed sdr9700 DMG path as the first argument." >&2
     exit 1
 fi
 if [ -z "${notary_profile}" ]; then
-    echo "Set SDR9700_NOTARY_PROFILE to a notarytool keychain profile." >&2
+    echo "Set sdr9700_NOTARY_PROFILE to a notarytool keychain profile." >&2
     exit 1
 fi
 

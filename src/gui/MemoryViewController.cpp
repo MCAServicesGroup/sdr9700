@@ -161,7 +161,7 @@ void MemoryViewController::buildMemoryWindow()
     syncLayout->setContentsMargins(kMemoryToolbarGroupMargins);
     syncLayout->setSpacing(kMemoryToolbarGroupSpacing);
     auto* syncButton = new QPushButton("Sync", panel);
-    syncButton->setToolTip("Immediately read radio memories into SDR9700.");
+    syncButton->setToolTip("Immediately read radio memories into sdr9700.");
     m_owner->m_window->m_memoryBandFilter->setFixedHeight(syncButton->sizeHint().height());
     syncLayout->addWidget(syncButton);
     toolbar->addWidget(syncGroup);
@@ -449,7 +449,7 @@ void MemoryViewController::rebuild()
             {
                 // Do not use QPalette::PlaceholderText here. On macOS that
                 // role can carry reduced alpha intended for text fields and
-                // becomes effectively invisible against SDR9700's explicitly
+                // becomes effectively invisible against sdr9700's explicitly
                 // styled dark table. Cached rows must look secondary without
                 // ever looking empty.
                 item->setForeground(QColor(QLatin1String(UiTheme::Color::TextMuted)));

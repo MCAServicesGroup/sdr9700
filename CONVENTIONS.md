@@ -1,13 +1,13 @@
-#SDR9700 Coding Conventions
+#sdr9700 Coding Conventions
 
-This file defines how SDR9700 code should be written. It applies to source,
+This file defines how sdr9700 code should be written. It applies to source,
 tests, build scripts, and documentation that describes implementation details.
 
 ## Core Principles
 
-- Build SDR9700 as an IC-9700 application. Do not preserve assumptions from
+- Build sdr9700 as an IC-9700 application. Do not preserve assumptions from
   other radio clients unless they are explicitly validated for the IC-9700 and
-  documented as SDR9700 behavior.
+  documented as sdr9700 behavior.
 - Keep attribution in project documentation and license files, not as branding
   or upstream project references inside active source comments.
 - Treat `resources/manuals/` as read-only research material.
@@ -43,7 +43,7 @@ the owning tool from finding the file. Current exceptions are `.clang-format`,
 `.clang-format` is the source of truth for C, C++, and Qt source formatting.
 Run it before submitting source changes.
 
-- Base style: LLVM with SDR9700 overrides.
+- Base style: LLVM with sdr9700 overrides.
 - Indentation: 4 spaces. Tabs are not used.
 - Column limit: 120.
 - Braces: Allman style for classes, enums, functions, namespaces, structs, and
@@ -104,9 +104,9 @@ Run it before submitting source changes.
 
 ## Settings
 
-- Use `AppSettings` for SDR9700 client settings.
+- Use `AppSettings` for sdr9700 client settings.
 - Store client settings below Qt's `QStandardPaths::GenericConfigLocation` in
-  `SDR9700/sdr9700.json`.
+  `sdr9700/sdr9700.json`.
 - Do not add new app-owned `QSettings` persistence.
 - Do not add configuration fallback paths, migration keys, or migration
   holdover code. Configuration import may clean and accept the current schema;
@@ -184,13 +184,13 @@ Run it before submitting source changes.
 
 ## Third-Party Code
 
-- Do not copy code from other projects into active SDR9700 source files without
+- Do not copy code from other projects into active sdr9700 source files without
   an explicit decision and license review.
 - Keep third-party attribution in `THIRD_PARTY_LICENSES.md`.
 
 ## Documentation
 
-- Root documentation must describe SDR9700 as it exists now.
+- Root documentation must describe sdr9700 as it exists now.
 - Future plans belong in issues or design notes until they are approved for the
   active project.
 - Do not ship user-facing docs that describe unavailable features.

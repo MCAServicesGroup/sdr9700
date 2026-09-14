@@ -1,4 +1,4 @@
-# SDR9700 CODEOWNERS
+# sdr9700 CODEOWNERS
 #
 # @w5jwp is currently the project's sole maintainer and code owner. This
 # repository-wide rule covers source, tests, documentation, build and release

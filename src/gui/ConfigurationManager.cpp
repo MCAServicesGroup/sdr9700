@@ -23,7 +23,7 @@
 
 namespace
 {
-constexpr auto kConfigFileFilter = "SDR9700 configuration (*.json);;JSON files (*.json);;All files (*)";
+constexpr auto kConfigFileFilter = "sdr9700 configuration (*.json);;JSON files (*.json);;All files (*)";
 
 bool writeFile(const QString& path, const QByteArray& data)
 {
@@ -383,8 +383,8 @@ bool restartApplication(QWidget* parent)
     if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments,
                                  QCoreApplication::applicationDirPath()))
     {
-        QMessageBox::warning(parent, QStringLiteral("Restart SDR9700"),
-                             QStringLiteral("Could not restart SDR9700. Close and reopen the application manually."));
+        QMessageBox::warning(parent, QStringLiteral("Restart sdr9700"),
+                             QStringLiteral("Could not restart sdr9700. Close and reopen the application manually."));
         return false;
     }
 
@@ -456,13 +456,13 @@ bool ConfigurationManager::restoreConfigurationAndRestart(QWidget* parent)
     {
         QMessageBox::warning(parent, QStringLiteral("Restore Configuration Failed"),
                              QStringLiteral("Configuration restore failed. The selected file does not look like an "
-                                            "SDR9700 configuration file."));
+                                            "sdr9700 configuration file."));
         return false;
     }
 
     if (!sdr9700::ui::confirmAction(
             parent, QStringLiteral("Restore Configuration"),
-            QStringLiteral("Restore this configuration backup and restart SDR9700? Current configuration will be "
+            QStringLiteral("Restore this configuration backup and restart sdr9700? Current configuration will be "
                            "replaced."),
             QStringLiteral("Restore"), true))
     {
@@ -480,7 +480,7 @@ bool ConfigurationManager::restoreConfigurationAndRestart(QWidget* parent)
     }
 
     QMessageBox::information(parent, QStringLiteral("Restore Configuration Successful"),
-                             QStringLiteral("Configuration restore successful.\n\nSDR9700 will restart now."));
+                             QStringLiteral("Configuration restore successful.\n\nsdr9700 will restart now."));
     return restartApplication(parent);
 }
 
@@ -488,7 +488,7 @@ bool ConfigurationManager::resetConfigurationAndRestart(QWidget* parent)
 {
     if (!sdr9700::ui::confirmAction(
             parent, QStringLiteral("Reset Configuration"),
-            QStringLiteral("Reset SDR9700 configuration and restart the application? This removes local settings "
+            QStringLiteral("Reset sdr9700 configuration and restart the application? This removes local settings "
                            "and radio profiles. Memories are stored separately."),
             QStringLiteral("Reset"), true))
     {
@@ -499,7 +499,7 @@ bool ConfigurationManager::resetConfigurationAndRestart(QWidget* parent)
     if (QFileInfo::exists(path) && !QFile::remove(path))
     {
         QMessageBox::warning(parent, QStringLiteral("Reset Configuration"),
-                             QStringLiteral("Could not remove the SDR9700 configuration file."));
+                             QStringLiteral("Could not remove the sdr9700 configuration file."));
         return false;
     }
 

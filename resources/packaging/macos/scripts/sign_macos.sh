@@ -7,16 +7,16 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-app_path="${1:-src/build/bin/SDR9700.app}"
-sign_identity="${SDR9700_SIGN_IDENTITY:-}"
-entitlements_path="resources/packaging/macos/SDR9700.entitlements"
+app_path="${1:-src/build/bin/sdr9700.app}"
+sign_identity="${sdr9700_SIGN_IDENTITY:-}"
+entitlements_path="resources/packaging/macos/sdr9700.entitlements"
 
 if [ -z "${sign_identity}" ]; then
-    echo "Set SDR9700_SIGN_IDENTITY to a Developer ID Application identity." >&2
+    echo "Set sdr9700_SIGN_IDENTITY to a Developer ID Application identity." >&2
     exit 1
 fi
 if [ ! -d "${app_path}" ]; then
-    echo "SDR9700 application bundle not found at ${app_path}" >&2
+    echo "sdr9700 application bundle not found at ${app_path}" >&2
     exit 1
 fi
 

@@ -36,7 +36,7 @@ QString boundedLatin1(const char* s, int maxLen)
 QString makeClientSessionName()
 {
     // The IC-9700 exposes this 16-byte computer name in later busy-status
-    // packets. A per-process suffix lets SDR9700 distinguish this process from
+    // packets. A per-process suffix lets sdr9700 distinguish this process from
     // a stale previous process while still keeping a recognizable app prefix.
     const quint32 code = QRandomGenerator::global()->generate() & 0x00ffffff;
     return QStringLiteral("%1-%2").arg(
@@ -1385,10 +1385,10 @@ void UdpHandler::dataReceived()
                     }
                     if (staleLocalSdr9700Session)
                     {
-                        // The IC-9700 can keep reporting busy by an SDR9700
+                        // The IC-9700 can keep reporting busy by an sdr9700
                         // process if that process died before stream/token
-                        // close completed. Recover only prior SDR9700 sessions
-                        // from this same IP; another station running SDR9700
+                        // close completed. Recover only prior sdr9700 sessions
+                        // from this same IP; another station running sdr9700
                         // still blocks and this process's grant is handled above.
                         if (requestRetainedSessionRecovery(inComputer))
                         {
@@ -1526,18 +1526,18 @@ bool UdpHandler::requestRetainedSessionRecovery(const QString& ownerName)
 
     if (m_staleSessionReclaimInProgress)
     {
-        qInfo(logUdp()).noquote() << "Stale SDR9700 session reclaim already in progress for" << ownerName;
+        qInfo(logUdp()).noquote() << "Stale sdr9700 session reclaim already in progress for" << ownerName;
         return true;
     }
 
     if (m_staleSessionReclaimAttempts >= kMaxStaleSessionReclaimAttempts)
     {
-        qWarning(logUdp()).noquote() << "Stale SDR9700 session reclaim limit reached for" << ownerName;
+        qWarning(logUdp()).noquote() << "Stale sdr9700 session reclaim limit reached for" << ownerName;
         return false;
     }
 
     // Recovery is authorized only by a journal whose recorded process is no
-    // longer alive. A same-host SDR9700 name alone is not proof of abandonment:
+    // longer alive. A same-host sdr9700 name alone is not proof of abandonment:
     // it may belong to another running instance of this application.
     const auto predecessor = sdr9700::RadioSessionRecoveryStore::loadRecoverable(radioIP.toString(), ownerName);
     if (!predecessor)
@@ -1547,7 +1547,7 @@ bool UdpHandler::requestRetainedSessionRecovery(const QString& ownerName)
 
     ++m_staleSessionReclaimAttempts;
     m_staleSessionReclaimInProgress = true;
-    qInfo(logUdp()).noquote().nospace() << "Recovering retained SDR9700 LAN session owner=" << ownerName
+    qInfo(logUdp()).noquote().nospace() << "Recovering retained sdr9700 LAN session owner=" << ownerName
                                         << " attempt=" << m_staleSessionReclaimAttempts << '/'
                                         << kMaxStaleSessionReclaimAttempts;
     if (tokenTimer)
@@ -1643,7 +1643,7 @@ void UdpHandler::reclaimPredecessorTransports(const sdr9700::RadioSessionRecover
     // Bind the predecessor's exact local endpoint and place its saved session
     // ID pair in an ordinary RS-BA1 departure packet. The radio therefore sees
     // the packet as belonging to the abandoned transport, even though a new
-    // SDR9700 process is sending it. Two copies match the protocol's defensive
+    // sdr9700 process is sending it. Two copies match the protocol's defensive
     // departure behavior without entering the replacement stream's tracked
     // retransmission window.
     const auto sendDeparture = [this](const sdr9700::RadioSessionTransportIdentity& identity, const char* role)

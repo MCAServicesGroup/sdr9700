@@ -51,7 +51,7 @@ void disableRestoration(QWidget* widget)
     [nativeWindow disableSnapshotRestoration];
 
     // AppKit injects toggleFullScreen: into a native View menu even when Qt's
-    // fullscreen button hint is disabled. SDR9700 has a fixed-size main
+    // fullscreen button hint is disabled. sdr9700 has a fixed-size main
     // window, so remove the inapplicable system command after menu creation.
     removeFullScreenMenuItems(NSApp.mainMenu);
 }
@@ -85,7 +85,7 @@ class MacWindowRestorationFilter final : public QObject
 
 void configureMacWindowRestoration(QApplication& app)
 {
-    // SDR9700 persists its own fixed-window positions through AppSettings.
+    // sdr9700 persists its own fixed-window positions through AppSettings.
     // AppKit's independent persistent-UI archive has repeatedly crashed while
     // encoding Qt-created NSColor state on macOS 26, so opt out rather than
     // maintaining two competing restoration systems.

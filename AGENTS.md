@@ -1,6 +1,6 @@
-#SDR9700 — Project Context for AI Agents
+#sdr9700 — Project Context for AI Agents
 
-SDR9700 is a Qt/C++ desktop GUI client for controlling an Icom IC-9700 amateur
+sdr9700 is a Qt/C++ desktop GUI client for controlling an Icom IC-9700 amateur
 radio transceiver over the radio's LAN interface on Linux and Apple Silicon
 macOS.
 
@@ -43,14 +43,14 @@ audio routing, and station workflows.
   not leave previously passing tests broken.
 - Keep IC-9700 protocol decisions grounded in logs, packet captures, or radio
   behavior; ask for captures when behavior is uncertain.
-- Use `AppSettings` for SDR9700 client settings. Do not add new app-owned
+- Use `AppSettings` for sdr9700 client settings. Do not add new app-owned
   `QSettings` persistence.
 - Radio capability definitions are compiled into the application; do not add
   runtime radio definition files.
-- Do not copy code from other projects into SDR9700 source files without an
+- Do not copy code from other projects into sdr9700 source files without an
   explicit decision and license review.
 - The `resources/manuals/` directory contains local copies of IC-9700 manuals
-  and related research material. Do not treat it as SDR9700 source code.
+  and related research material. Do not treat it as sdr9700 source code.
 - Do not remove or rewrite user changes from the working tree unless the user
   explicitly asks.
 
@@ -105,7 +105,7 @@ in the review report.
 
 Items to look for include, but are not limited to:
 
-- Adherence to SDR9700 principles, coding requirements, style, syntax practices,
+- Adherence to sdr9700 principles, coding requirements, style, syntax practices,
   and formatting rules.
 - Security risks, unsafe assumptions, input validation gaps, and resource
   handling problems.
@@ -126,7 +126,7 @@ here; update `CONVENTIONS.md` when a coding rule changes.
 ```bash
 make release
 ctest --test-dir src/build --output-on-failure
-./src/build/bin/SDR9700
+./src/build/bin/sdr9700
 ```
 
 Always use `src/build` for local builds. Do not create agent-specific build
@@ -142,12 +142,12 @@ Debug builds default to `--log=all` when no log option is supplied.
 ## Settings
 
 Client-side application settings are stored by `AppSettings` beneath Qt's
-`QStandardPaths::GenericConfigLocation`, in an `SDR9700` directory. Typical
+`QStandardPaths::GenericConfigLocation`, in an `sdr9700` directory. Typical
 locations are:
 
 ```text
-Linux: ~/.config/SDR9700/sdr9700.json
-macOS: ~/Library/Preferences/SDR9700/sdr9700.json
+Linux: ~/.config/sdr9700/sdr9700.json
+macOS: ~/Library/Preferences/sdr9700/sdr9700.json
 ```
 
 Memory records are synchronized with the IC-9700 and mirrored per radio profile

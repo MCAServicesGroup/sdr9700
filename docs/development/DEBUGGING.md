@@ -1,4 +1,4 @@
-# Debugging SDR9700
+# Debugging sdr9700
 
 Use the debug build when you need debug symbols or debugger-friendly behavior:
 
@@ -9,13 +9,13 @@ make debug
 Launch the debug executable directly on Linux:
 
 ```bash
-./src/build/bin/SDR9700
+./src/build/bin/sdr9700
 ```
 
 On macOS, the executable is inside the application bundle:
 
 ```bash
-./src/build/bin/SDR9700.app/Contents/MacOS/SDR9700
+./src/build/bin/sdr9700.app/Contents/MacOS/sdr9700
 ```
 
 `make debug` cleans and reconfigures `src/build` with CMake's `Debug` build
@@ -25,15 +25,15 @@ supplied.
 Runtime logging can also be enabled in release builds. On Linux:
 
 ```bash
-./src/build/bin/SDR9700 --log=radio,udp,ci-v
-./src/build/bin/SDR9700 --log=all --log-file=/tmp/sdr9700.log
+./src/build/bin/sdr9700 --log=radio,udp,ci-v
+./src/build/bin/sdr9700 --log=all --log-file=/tmp/sdr9700.log
 ```
 
 On macOS, use the corresponding bundled executable:
 
 ```bash
-./src/build/bin/SDR9700.app/Contents/MacOS/SDR9700 --log=radio,udp,ci-v
-./src/build/bin/SDR9700.app/Contents/MacOS/SDR9700 --log=all \
+./src/build/bin/sdr9700.app/Contents/MacOS/sdr9700 --log=radio,udp,ci-v
+./src/build/bin/sdr9700.app/Contents/MacOS/sdr9700 --log=all \
   --log-file=/tmp/sdr9700.log
 ```
 

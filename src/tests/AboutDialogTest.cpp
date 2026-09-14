@@ -34,7 +34,7 @@ class AboutDialogTest final : public QObject
         QVERIFY(projectLink->openExternalLinks());
         QVERIFY(projectLink->textInteractionFlags().testFlag(Qt::LinksAccessibleByMouse));
         QVERIFY(projectLink->textInteractionFlags().testFlag(Qt::LinksAccessibleByKeyboard));
-        QCOMPARE(projectLink->accessibleName(), QStringLiteral("SDR9700 project page"));
+        QCOMPARE(projectLink->accessibleName(), QStringLiteral("sdr9700 project page"));
         QVERIFY(projectLink->text().contains(QStringLiteral("href=\"https://github.com/w5jwp/sdr9700\"")));
     }
 };

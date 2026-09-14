@@ -240,7 +240,7 @@ bool AutomationServer::writeDiscoveryFile()
         m_discoveryFilePath.clear();
         return false;
     }
-    const QJsonObject discovery{{QStringLiteral("application"), QStringLiteral("SDR9700")},
+    const QJsonObject discovery{{QStringLiteral("application"), QStringLiteral("sdr9700")},
                                 {QStringLiteral("pid"), QCoreApplication::applicationPid()},
                                 {QStringLiteral("protocol"), 1},
                                 {QStringLiteral("socket"), m_server->fullServerName()},

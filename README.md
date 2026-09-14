@@ -1,10 +1,10 @@
-# SDR9700
+# sdr9700
 
 <p align="center">
-  <img src="resources/images/icons/sdr9700_app_icon.png" alt="SDR9700 application logo" width="256">
+  <img src="resources/images/icons/sdr9700_app_icon.png" alt="sdr9700 application logo" width="256">
 </p>
 
-SDR9700 is a native Qt GUI for controlling the Icom IC-9700 amateur radio
+sdr9700 is a native Qt GUI for controlling the Icom IC-9700 amateur radio
 transceiver over the radio's LAN interface. Supported operating systems
 include Linux and macOS (Apple Silicon).
 
@@ -17,11 +17,11 @@ Multimedia.
 
 ## Screenshots
 
-![SDR9700 Main Window with Dual VFO Controls, Spectrum Scope, and Waterfall](resources/images/screenshots/SDR9700_Screenshot1.png)
+![sdr9700 Main Window with Dual VFO Controls, Spectrum Scope, and Waterfall](resources/images/screenshots/sdr9700_Screenshot1.png)
 
 ## Status
 
-[SDR9700 26.9.2](https://github.com/w5jwp/sdr9700/releases/tag/v26.9.2) is the
+[sdr9700 26.9.2](https://github.com/w5jwp/sdr9700/releases/tag/v26.9.2) is the
 current stable release. The project remains under active development and
 provides an IC-9700-focused LAN control surface on Linux and Apple Silicon
 macOS, backed by automated protocol, scheduler, routing, model, and GUI tests.
@@ -106,13 +106,13 @@ systems, and optional USB controllers is welcome.
 
 ### macOS (Apple Silicon)
 
-Download the `SDR9700-<version>-macOS-apple-silicon.dmg` from the
-[latest SDR9700 release](https://github.com/w5jwp/sdr9700/releases/latest), open
-it, and drag SDR9700 into Applications.
+Download the `sdr9700-<version>-macOS-apple-silicon.dmg` from the
+[latest sdr9700 release](https://github.com/w5jwp/sdr9700/releases/latest), open
+it, and drag sdr9700 into Applications.
 
 The release application includes Qt and its other runtime libraries. Users do
 not need Homebrew, a separate Qt installation, or any other developer package
-to run SDR9700. macOS will request local-network and microphone access because
+to run sdr9700. macOS will request local-network and microphone access because
 the application communicates with the radio and can send transmit audio.
 
 ### Linux
@@ -175,13 +175,13 @@ ctest --test-dir src/build --output-on-failure
 The built application can also be launched with diagnostics enabled. On Linux:
 
 ```bash
-./src/build/bin/SDR9700 --log=radio,udp,ci-v
+./src/build/bin/sdr9700 --log=radio,udp,ci-v
 ```
 
 On macOS:
 
 ```bash
-./src/build/bin/SDR9700.app/Contents/MacOS/SDR9700 --log=radio,udp,ci-v
+./src/build/bin/sdr9700.app/Contents/MacOS/sdr9700 --log=radio,udp,ci-v
 ```
 
 ## Repository Layout
@@ -215,15 +215,15 @@ Repository-level policy and community documents remain at the project root:
 
 ## Acknowledgements
 
-SDR9700 benefited from the public work, operator experience, and hard-won
+sdr9700 benefited from the public work, operator experience, and hard-won
 lessons of the AetherSDR, wfview, and radio-webop projects. Their codebases and
 communities helped validate radio behavior, highlight practical implementation
-details, and provide useful points of comparison while SDR9700 was shaped into
+details, and provide useful points of comparison while sdr9700 was shaped into
 its own IC-9700-focused application.
 
 ## License
 
-SDR9700 is licensed under the GNU General Public License version 3. See
+sdr9700 is licensed under the GNU General Public License version 3. See
 `LICENSE` for the full license text.
 
 Third-party attribution is tracked in `THIRD_PARTY_LICENSES.md`.

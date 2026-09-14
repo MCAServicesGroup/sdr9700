@@ -4,5 +4,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/w5jwp/SDR9700/security/policy
+    url: https://github.com/w5jwp/sdr9700/security/policy
     about: Please report suspected vulnerabilities privately using SECURITY.md.

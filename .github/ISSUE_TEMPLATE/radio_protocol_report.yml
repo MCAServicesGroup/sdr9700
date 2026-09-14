@@ -13,7 +13,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SDR9700 version or commit
+      label: sdr9700 version or commit
       description: Use the title bar version, About dialog version, or `git rev-parse --short HEAD`.
       placeholder: "26.9.2 or 8970a7b"
     validations:
@@ -41,7 +41,7 @@ body:
     id: behavior
     attributes:
       label: Observed behavior
-      description: What did the radio or SDR9700 do?
+      description: What did the radio or sdr9700 do?
     validations:
       required: true
 
@@ -49,7 +49,7 @@ body:
     id: expected
     attributes:
       label: Expected behavior
-      description: What should the radio or SDR9700 have done?
+      description: What should the radio or sdr9700 have done?
     validations:
       required: true
 

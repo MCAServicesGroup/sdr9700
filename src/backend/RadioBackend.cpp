@@ -624,7 +624,7 @@ RadioBackend::RadioBackend(QObject* parent)
     /*
         IC-9700 LAN TX audio startup sequence
 
-        SDR9700 keeps the radio's LAN MOD Level as a persistent radio setting
+        sdr9700 keeps the radio's LAN MOD Level as a persistent radio setting
         through the IC-9700 CI-V command model. TX startup muting is handled in
         the audio path, not by forcing the radio menu value to zero. This keeps
         the radio front panel/menu in sync with the GUI LAN MOD control.

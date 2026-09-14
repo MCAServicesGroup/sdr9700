@@ -6,7 +6,7 @@ add_compile_options(-Wall -Wextra)
 
 pkg_check_modules(OPUS REQUIRED IMPORTED_TARGET opus)
 pkg_check_modules(SPEEXDSP REQUIRED IMPORTED_TARGET speexdsp)
-if(SDR9700_ENABLE_HIDAPI)
+if(sdr9700_ENABLE_HIDAPI)
     if(APPLE)
         pkg_check_modules(HIDAPI QUIET IMPORTED_TARGET hidapi)
     else()
@@ -24,10 +24,10 @@ find_path(EIGEN3_INCLUDE_DIR
     REQUIRED
 )
 
-# SDR9700_core: IC-9700 protocol stack
+# sdr9700_core: IC-9700 protocol stack
 # Headers listed explicitly so AUTOMOC processes Q_OBJECT classes whose
 # headers are not co-located with their .cpp files.
-set(SDR9700_MOC_HEADERS
+set(sdr9700_MOC_HEADERS
     audio/AudioConverter.h
     audio/AudioHandlerBase.h
     audio/AudioHandlerQtInput.h
@@ -40,8 +40,8 @@ set(SDR9700_MOC_HEADERS
     radio/RadioCommander.h
 )
 
-set(SDR9700_CORE_SOURCES
-    ${SDR9700_MOC_HEADERS}
+set(sdr9700_CORE_SOURCES
+    ${sdr9700_MOC_HEADERS}
 
     # Radio / CI-V protocol
     radio/UdpStatusMessages.h
@@ -94,7 +94,7 @@ set(SDR9700_CORE_SOURCES
 )
 
 if(HIDAPI_FOUND)
-    list(APPEND SDR9700_CORE_SOURCES
+    list(APPEND sdr9700_CORE_SOURCES
         core/IcomRC28Manager.h
         core/IcomRC28Manager.cpp
     )
@@ -103,11 +103,11 @@ endif()
 configure_file(core/AppInfo.h.in core/AppInfo.h @ONLY)
 configure_file(core/AppBuildConfig.h.in core/AppBuildConfig.h @ONLY)
 
-add_library(SDR9700_core STATIC ${SDR9700_CORE_SOURCES})
+add_library(sdr9700_core STATIC ${sdr9700_CORE_SOURCES})
 
 # All role subdirs exposed as include roots so flat #include "Foo.h" resolves
 # across the split layout without touching every file.
-target_include_directories(SDR9700_core PUBLIC
+target_include_directories(sdr9700_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/radio
     ${CMAKE_CURRENT_SOURCE_DIR}/audio
     ${CMAKE_CURRENT_SOURCE_DIR}/core
@@ -115,7 +115,7 @@ target_include_directories(SDR9700_core PUBLIC
     ${EIGEN3_INCLUDE_DIR}
 )
 
-target_link_libraries(SDR9700_core PUBLIC
+target_link_libraries(sdr9700_core PUBLIC
     Qt6::Core
     Qt6::Network
     Qt6::Multimedia
@@ -126,13 +126,13 @@ target_link_libraries(SDR9700_core PUBLIC
 )
 
 if(HIDAPI_FOUND)
-    target_link_libraries(SDR9700_core PUBLIC PkgConfig::HIDAPI)
-    target_compile_definitions(SDR9700_core PUBLIC HAVE_HIDAPI)
+    target_link_libraries(sdr9700_core PUBLIC PkgConfig::HIDAPI)
+    target_compile_definitions(sdr9700_core PUBLIC HAVE_HIDAPI)
 endif()
 
 
-# SDR9700 application implementation shared by the executable and GUI smoke tests.
-set(SDR9700_APP_SOURCES
+# sdr9700 application implementation shared by the executable and GUI smoke tests.
+set(sdr9700_APP_SOURCES
     backend/IRadioBackend.h
     backend/TransmitFrequencyPolicy.h
     backend/TransmitConfigurationPolicy.h
@@ -247,14 +247,14 @@ set(SDR9700_APP_SOURCES
 )
 
 if(APPLE)
-    set(SDR9700_MACOS_ICON "${CMAKE_SOURCE_DIR}/resources/images/icons/sdr9700_app_icon.png")
-    set_source_files_properties(${SDR9700_MACOS_ICON} PROPERTIES
+    set(sdr9700_MACOS_ICON "${CMAKE_SOURCE_DIR}/resources/images/icons/sdr9700_app_icon.png")
+    set_source_files_properties(${sdr9700_MACOS_ICON} PROPERTIES
         MACOSX_PACKAGE_LOCATION Resources
     )
 endif()
 
 if(HIDAPI_FOUND)
-    list(APPEND SDR9700_APP_SOURCES
+    list(APPEND sdr9700_APP_SOURCES
         gui/IcomRC28Controller.h
         gui/IcomRC28Controller.cpp
         gui/IcomRC28SettingsPanel.h
@@ -262,44 +262,44 @@ if(HIDAPI_FOUND)
     )
 endif()
 
-add_library(SDR9700_app_support STATIC ${SDR9700_APP_SOURCES})
-target_include_directories(SDR9700_app_support PUBLIC
+add_library(sdr9700_app_support STATIC ${sdr9700_APP_SOURCES})
+target_include_directories(sdr9700_app_support PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_link_libraries(SDR9700_app_support PUBLIC
-    SDR9700_core
+target_link_libraries(sdr9700_app_support PUBLIC
+    sdr9700_core
     Qt6::Core
     Qt6::Widgets
     Qt6::Network
     Qt6::Multimedia
 )
 if(HIDAPI_FOUND)
-    target_compile_definitions(SDR9700_app_support PUBLIC HAVE_HIDAPI)
+    target_compile_definitions(sdr9700_app_support PUBLIC HAVE_HIDAPI)
 endif()
 
-set(SDR9700_EXECUTABLE_SOURCES
+set(sdr9700_EXECUTABLE_SOURCES
     main.cpp
     ../resources/qt/resources.qrc
 )
 if(APPLE)
-    list(APPEND SDR9700_EXECUTABLE_SOURCES
-        ${SDR9700_MACOS_ICON}
+    list(APPEND sdr9700_EXECUTABLE_SOURCES
+        ${sdr9700_MACOS_ICON}
         platform/MacWindowRestoration.mm
     )
 endif()
 
 if(APPLE)
-    add_executable(SDR9700 MACOSX_BUNDLE ${SDR9700_EXECUTABLE_SOURCES})
+    add_executable(sdr9700 MACOSX_BUNDLE ${sdr9700_EXECUTABLE_SOURCES})
 else()
-    add_executable(SDR9700 ${SDR9700_EXECUTABLE_SOURCES})
+    add_executable(sdr9700 ${sdr9700_EXECUTABLE_SOURCES})
 endif()
 
-target_include_directories(SDR9700 PRIVATE
+target_include_directories(sdr9700 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(SDR9700 PRIVATE
-    SDR9700_app_support
+target_link_libraries(sdr9700 PRIVATE
+    sdr9700_app_support
     Qt6::Svg
 )
 
@@ -308,77 +308,77 @@ if(APPLE AND Qt6_VERSION VERSION_GREATER_EQUAL 6.5)
     # microphone backend explicitly so QMicrophonePermission can reach macOS
     # instead of falling back to Qt's "permission plugin not found" warning.
     include("${Qt6Core_DIR}/Qt6QDarwinMicrophonePermissionPluginConfig.cmake")
-    qt_import_plugins(SDR9700 INCLUDE Qt6::QDarwinMicrophonePermissionPlugin)
+    qt_import_plugins(sdr9700 INCLUDE Qt6::QDarwinMicrophonePermissionPlugin)
 endif()
 
-set_target_properties(SDR9700 PROPERTIES
+set_target_properties(sdr9700 PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
 if(APPLE)
-    set_target_properties(SDR9700 PROPERTIES
-        MACOSX_BUNDLE_BUNDLE_NAME "SDR9700"
+    set_target_properties(sdr9700 PROPERTIES
+        MACOSX_BUNDLE_BUNDLE_NAME "sdr9700"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT "Copyright SDR9700 contributors"
+        MACOSX_BUNDLE_COPYRIGHT "Copyright sdr9700 contributors"
         MACOSX_BUNDLE_GUI_IDENTIFIER "org.w5jwp.sdr9700"
         MACOSX_BUNDLE_ICON_FILE "sdr9700_app_icon.png"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/packaging/macos/Info.plist.in"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "${SDR9700_DISPLAY_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${sdr9700_DISPLAY_VERSION}"
     )
 endif()
 
 if(BUILD_TESTING)
     add_executable(AboutDialogTest tests/AboutDialogTest.cpp)
     target_include_directories(AboutDialogTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(AboutDialogTest PRIVATE SDR9700_app_support Qt6::Test)
+    target_link_libraries(AboutDialogTest PRIVATE sdr9700_app_support Qt6::Test)
     add_test(NAME AboutDialogTest COMMAND AboutDialogTest)
     set_tests_properties(AboutDialogTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(Ax25DecoderTest tests/Ax25DecoderTest.cpp)
-    target_link_libraries(Ax25DecoderTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(Ax25DecoderTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME Ax25DecoderTest COMMAND Ax25DecoderTest)
 
     add_executable(ApplicationLogTest tests/ApplicationLogTest.cpp)
-    target_link_libraries(ApplicationLogTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(ApplicationLogTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME ApplicationLogTest COMMAND ApplicationLogTest)
 
     add_executable(ApplicationLogDialogTest tests/ApplicationLogDialogTest.cpp)
     target_include_directories(ApplicationLogDialogTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(ApplicationLogDialogTest PRIVATE SDR9700_app_support Qt6::Test)
+    target_link_libraries(ApplicationLogDialogTest PRIVATE sdr9700_app_support Qt6::Test)
     add_test(NAME ApplicationLogDialogTest COMMAND ApplicationLogDialogTest)
     set_tests_properties(ApplicationLogDialogTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(DataDecoderDialogTest tests/DataDecoderDialogTest.cpp)
     target_include_directories(DataDecoderDialogTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(DataDecoderDialogTest PRIVATE SDR9700_app_support Qt6::Test)
+    target_link_libraries(DataDecoderDialogTest PRIVATE sdr9700_app_support Qt6::Test)
     add_test(NAME DataDecoderDialogTest COMMAND DataDecoderDialogTest)
     set_tests_properties(DataDecoderDialogTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-    add_library(SDR9700_memory_test_support STATIC
+    add_library(sdr9700_memory_test_support STATIC
         gui/MemoryStore.cpp
         gui/MainWindowHelpers.cpp
     )
-    target_include_directories(SDR9700_memory_test_support PUBLIC
+    target_include_directories(sdr9700_memory_test_support PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
-    target_link_libraries(SDR9700_memory_test_support PUBLIC
-        SDR9700_core
+    target_link_libraries(sdr9700_memory_test_support PUBLIC
+        sdr9700_core
         Qt6::Widgets
     )
 
-    add_library(SDR9700_dtmf_dialog_test_support STATIC gui/DtmfDialog.cpp)
-    target_include_directories(SDR9700_dtmf_dialog_test_support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(SDR9700_dtmf_dialog_test_support PUBLIC SDR9700_core Qt6::Widgets)
+    add_library(sdr9700_dtmf_dialog_test_support STATIC gui/DtmfDialog.cpp)
+    target_include_directories(sdr9700_dtmf_dialog_test_support PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/gui)
+    target_link_libraries(sdr9700_dtmf_dialog_test_support PUBLIC sdr9700_core Qt6::Widgets)
 
     if(HIDAPI_FOUND)
         add_executable(IcomRC28ManagerTest tests/IcomRC28ManagerTest.cpp)
-        target_link_libraries(IcomRC28ManagerTest PRIVATE SDR9700_core Qt6::Test)
+        target_link_libraries(IcomRC28ManagerTest PRIVATE sdr9700_core Qt6::Test)
         add_test(NAME IcomRC28ManagerTest COMMAND IcomRC28ManagerTest)
     endif()
 
     add_executable(AudioConverterTest tests/AudioConverterTest.cpp)
-    target_link_libraries(AudioConverterTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(AudioConverterTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME AudioConverterTest COMMAND AudioConverterTest)
 
     add_executable(MemoryStoreTest
@@ -389,13 +389,13 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
     target_link_libraries(MemoryStoreTest PRIVATE
-        SDR9700_memory_test_support
+        sdr9700_memory_test_support
         Qt6::Test
     )
     add_test(NAME MemoryStoreTest COMMAND MemoryStoreTest)
 
     add_executable(MemoryDatabaseTest tests/MemoryDatabaseTest.cpp)
-    target_link_libraries(MemoryDatabaseTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(MemoryDatabaseTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME MemoryDatabaseTest COMMAND MemoryDatabaseTest)
 
     add_executable(MainWindowHelpersTest
@@ -406,7 +406,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
     target_link_libraries(MainWindowHelpersTest PRIVATE
-        SDR9700_memory_test_support
+        sdr9700_memory_test_support
         Qt6::Test
     )
     add_test(NAME MainWindowHelpersTest COMMAND MainWindowHelpersTest)
@@ -419,7 +419,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/models
     )
-    target_link_libraries(VfoModelTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(VfoModelTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME VfoModelTest COMMAND VfoModelTest)
 
     add_executable(SpectrumScopeModelTest
@@ -430,11 +430,11 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/models
     )
-    target_link_libraries(SpectrumScopeModelTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(SpectrumScopeModelTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME SpectrumScopeModelTest COMMAND SpectrumScopeModelTest)
 
     add_executable(RadioCapabilitiesTest tests/RadioCapabilitiesTest.cpp)
-    target_link_libraries(RadioCapabilitiesTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(RadioCapabilitiesTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME RadioCapabilitiesTest COMMAND RadioCapabilitiesTest)
 
     add_executable(MeterControllerTest
@@ -445,31 +445,31 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/models
     )
-    target_link_libraries(MeterControllerTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(MeterControllerTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME MeterControllerTest COMMAND MeterControllerTest)
 
     add_executable(SettingsProfileTest tests/SettingsProfileTest.cpp)
-    target_link_libraries(SettingsProfileTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(SettingsProfileTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME SettingsProfileTest COMMAND SettingsProfileTest)
 
     add_executable(SettingsProcessTest tests/SettingsProcessTest.cpp)
-    target_link_libraries(SettingsProcessTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(SettingsProcessTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME SettingsProcessTest COMMAND SettingsProcessTest)
 
     add_executable(CachingQueueTest tests/CachingQueueTest.cpp)
-    target_link_libraries(CachingQueueTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(CachingQueueTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME CachingQueueTest COMMAND CachingQueueTest)
 
     add_executable(UdpBaseTest tests/UdpBaseTest.cpp)
-    target_link_libraries(UdpBaseTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(UdpBaseTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME UdpBaseTest COMMAND UdpBaseTest)
 
     add_executable(CivSequenceGateTest tests/CivSequenceGateTest.cpp)
-    target_link_libraries(CivSequenceGateTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(CivSequenceGateTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME CivSequenceGateTest COMMAND CivSequenceGateTest)
 
     add_executable(RadioSessionWatchdogTest tests/RadioSessionWatchdogTest.cpp)
-    target_link_libraries(RadioSessionWatchdogTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(RadioSessionWatchdogTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME RadioSessionWatchdogTest COMMAND RadioSessionWatchdogTest)
 
     add_executable(WaterfallScopeTest
@@ -481,7 +481,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/backend
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
-    target_link_libraries(WaterfallScopeTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(WaterfallScopeTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME WaterfallScopeTest COMMAND WaterfallScopeTest)
 
     add_executable(RadioRouterTest
@@ -489,15 +489,15 @@ if(BUILD_TESTING)
         backend/RadioRouter.cpp
     )
     target_include_directories(RadioRouterTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/backend)
-    target_link_libraries(RadioRouterTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(RadioRouterTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME RadioRouterTest COMMAND RadioRouterTest)
 
     add_executable(CommanderCodecTest tests/CommanderCodecTest.cpp)
-    target_link_libraries(CommanderCodecTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(CommanderCodecTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME CommanderCodecTest COMMAND CommanderCodecTest)
 
     add_executable(PacketLayoutTest tests/PacketLayoutTest.cpp)
-    target_link_libraries(PacketLayoutTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(PacketLayoutTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME PacketLayoutTest COMMAND PacketLayoutTest)
 
     add_executable(OfflinePoliciesTest tests/OfflinePoliciesTest.cpp)
@@ -505,18 +505,18 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/backend
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
-    target_link_libraries(OfflinePoliciesTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(OfflinePoliciesTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME OfflinePoliciesTest COMMAND OfflinePoliciesTest)
 
     add_executable(DtmfGeneratorTest tests/DtmfGeneratorTest.cpp)
-    target_link_libraries(DtmfGeneratorTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(DtmfGeneratorTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME DtmfGeneratorTest COMMAND DtmfGeneratorTest)
 
     add_executable(DtmfDialogTest
         tests/DtmfDialogTest.cpp
     )
     target_include_directories(DtmfDialogTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(DtmfDialogTest PRIVATE SDR9700_dtmf_dialog_test_support Qt6::Test)
+    target_link_libraries(DtmfDialogTest PRIVATE sdr9700_dtmf_dialog_test_support Qt6::Test)
     add_test(NAME DtmfDialogTest COMMAND DtmfDialogTest)
     set_tests_properties(DtmfDialogTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -528,7 +528,7 @@ if(BUILD_TESTING)
         gui/WaterfallController.cpp
     )
     target_include_directories(SpectrumCanvasTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(SpectrumCanvasTest PRIVATE SDR9700_core Qt6::Test Qt6::Widgets)
+    target_link_libraries(SpectrumCanvasTest PRIVATE sdr9700_core Qt6::Test Qt6::Widgets)
     add_test(NAME SpectrumCanvasTest COMMAND SpectrumCanvasTest)
     set_tests_properties(SpectrumCanvasTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -537,7 +537,7 @@ if(BUILD_TESTING)
         gui/MetersDialog.cpp
     )
     target_include_directories(PanelAccessibilityTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(PanelAccessibilityTest PRIVATE SDR9700_dtmf_dialog_test_support Qt6::Test)
+    target_link_libraries(PanelAccessibilityTest PRIVATE sdr9700_dtmf_dialog_test_support Qt6::Test)
     add_test(NAME PanelAccessibilityTest COMMAND PanelAccessibilityTest)
     set_tests_properties(PanelAccessibilityTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -556,7 +556,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
-    target_link_libraries(VfoDisplayTest PRIVATE SDR9700_core Qt6::Test Qt6::Widgets)
+    target_link_libraries(VfoDisplayTest PRIVATE sdr9700_core Qt6::Test Qt6::Widgets)
     add_test(NAME VfoDisplayTest COMMAND VfoDisplayTest)
     set_tests_properties(VfoDisplayTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -578,13 +578,13 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
         ${CMAKE_CURRENT_SOURCE_DIR}/models
     )
-    target_link_libraries(VfoBackendTest PRIVATE SDR9700_core Qt6::Test Qt6::Widgets)
+    target_link_libraries(VfoBackendTest PRIVATE sdr9700_core Qt6::Test Qt6::Widgets)
     add_test(NAME VfoBackendTest COMMAND VfoBackendTest)
     set_tests_properties(VfoBackendTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(UdpStatusMessagesTest tests/UdpStatusMessagesTest.cpp)
     target_include_directories(UdpStatusMessagesTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(UdpStatusMessagesTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(UdpStatusMessagesTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME UdpStatusMessagesTest COMMAND UdpStatusMessagesTest)
 
     set(GUI_SMOKE_TEST_SOURCES
@@ -605,7 +605,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
     target_link_libraries(GuiSmokeTest PRIVATE
-        SDR9700_memory_test_support
+        sdr9700_memory_test_support
         Qt6::Test
     )
     add_test(NAME GuiSmokeTest COMMAND GuiSmokeTest)
@@ -620,18 +620,18 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
     target_link_libraries(MemoryManagerSmokeTest PRIVATE
-        SDR9700_app_support
+        sdr9700_app_support
         Qt6::Test
     )
     add_test(NAME MemoryManagerSmokeTest COMMAND MemoryManagerSmokeTest)
     set_tests_properties(MemoryManagerSmokeTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(SystemStatsTest tests/SystemStatsTest.cpp)
-    target_link_libraries(SystemStatsTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(SystemStatsTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME SystemStatsTest COMMAND SystemStatsTest)
 
     add_executable(AutomationServerTest tests/AutomationServerTest.cpp)
-    target_link_libraries(AutomationServerTest PRIVATE SDR9700_core Qt6::Test)
+    target_link_libraries(AutomationServerTest PRIVATE sdr9700_core Qt6::Test)
     add_test(NAME AutomationServerTest COMMAND AutomationServerTest)
 
     add_executable(AutomationControllerTest tests/AutomationControllerTest.cpp)
@@ -639,7 +639,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/gui
     )
-    target_link_libraries(AutomationControllerTest PRIVATE SDR9700_app_support Qt6::Test)
+    target_link_libraries(AutomationControllerTest PRIVATE sdr9700_app_support Qt6::Test)
     add_test(NAME AutomationControllerTest COMMAND AutomationControllerTest)
     set_tests_properties(AutomationControllerTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

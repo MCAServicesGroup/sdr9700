@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <numeric>
 
 using namespace sdr9700::ui::main_window;
 
@@ -48,7 +49,7 @@ class SpectrumToolbar : public QWidget
         positionControls();
     }
 
-    void setLeadingControls(QVector<QWidget*> controls)
+    void setLeadingControls(const QVector<QWidget*>& controls)
     {
         m_leadingControls = controls;
         positionControls();
@@ -82,14 +83,9 @@ class SpectrumToolbar : public QWidget
         m_centeredControl->move(x, y);
         m_centeredControl->raise();
 
-        int controlsWidth = 0;
-        for (QWidget* control : m_leadingControls)
-        {
-            if (control)
-            {
-                controlsWidth += control->width();
-            }
-        }
+        const int controlsWidth =
+            std::accumulate(m_leadingControls.cbegin(), m_leadingControls.cend(), 0,
+                            [](int width, const QWidget* control) { return width + (control ? control->width() : 0); });
         const int availableWidth = x - bounds.x();
         const int gap = qMax(0, (availableWidth - controlsWidth) / (m_leadingControls.size() + 1));
         int controlX = bounds.x() + gap;

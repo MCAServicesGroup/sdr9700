@@ -111,7 +111,7 @@ void MemoryCsvController::importRadioMemories()
     if (!sdr9700::ui::confirmAction(
             m_owner->popupParent(), QStringLiteral("Import Memories"),
             QStringLiteral("Import these memories to the radio?\n\n"
-                           "SDR9700 will first sync with the radio, then clear occupied user memory channels "
+                           "sdr9700 will first sync with the radio, then clear occupied user memory channels "
                            "on 2M, 70CM, and 23CM."),
             QStringLiteral("Import"), true))
     {

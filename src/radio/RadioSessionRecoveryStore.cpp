@@ -81,7 +81,7 @@ QString RadioSessionRecoveryStore::filePath()
     {
         root = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
     }
-    return QDir(root).filePath(QStringLiteral("SDR9700/radio-session-recovery.json"));
+    return QDir(root).filePath(QStringLiteral("sdr9700/radio-session-recovery.json"));
 }
 
 bool RadioSessionRecoveryStore::save(const RadioSessionRecoveryRecord& record)
@@ -179,7 +179,7 @@ std::optional<RadioSessionRecoveryRecord> RadioSessionRecoveryStore::loadRecover
                                                                                      const QString& ownerName)
 {
 #if !defined(Q_OS_UNIX)
-    // SDR9700 currently supports Linux and macOS. Refuse recovery on any
+    // sdr9700 currently supports Linux and macOS. Refuse recovery on any
     // future platform until it has an equivalent side-effect-free process
     // liveness check; guessing here could tear down another live client.
     Q_UNUSED(radioAddress);

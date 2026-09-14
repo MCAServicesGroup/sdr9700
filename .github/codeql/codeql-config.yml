@@ -1,6 +1,6 @@
-name: SDR9700 CodeQL configuration
+name: sdr9700 CodeQL configuration
 
-# Restrict analysis to SDR9700's own first-party C++ sources.  Vendored
+# Restrict analysis to sdr9700's own first-party C++ sources.  Vendored
 # upstream deps and build-time-extracted source trees are out of scope —
 # their security posture is the responsibility of upstream, and scanning
 # them inflates alert noise that masks signal in our own code.

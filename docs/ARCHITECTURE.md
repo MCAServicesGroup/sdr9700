@@ -1,6 +1,6 @@
-# SDR9700 Architecture
+# sdr9700 Architecture
 
-SDR9700 is a Qt 6 desktop application for controlling an Icom IC-9700 over the
+sdr9700 is a Qt 6 desktop application for controlling an Icom IC-9700 over the
 radio LAN interface.
 
 ## High-Level Flow
@@ -71,8 +71,8 @@ src/gui/          MainWindow, dialogs, VFO display, spectrum, and waterfall
 - `IcomRC28Manager` (optional, HAVE_HIDAPI): HID driver for the Icom RC-28 rotary
   controller; emits tuning step and button events, and accepts LED state.
 - `AppSettings`: JSON-backed client settings at
-  `~/.config/SDR9700/sdr9700.json` on Linux and
-  `~/Library/Preferences/SDR9700/sdr9700.json` on macOS.
+  `~/.config/sdr9700/sdr9700.json` on Linux and
+  `~/Library/Preferences/sdr9700/sdr9700.json` on macOS.
 
 ## Threading
 
@@ -94,7 +94,7 @@ The IC-9700 capability definition is a compiled C++ capability table used by
 the radio commander. Startup does not depend on a runtime `radios/` directory
 or external radio definition files.
 
-SDR9700 client settings use `AppSettings`; do not add app-owned `QSettings`
+sdr9700 client settings use `AppSettings`; do not add app-owned `QSettings`
 persistence.
 
 ## Spectrum Data
@@ -116,6 +116,6 @@ display geometry; they are not calibrated dBm measurements.
   and SUB receiver state. Receiver-less CI-V replies require serialized
   receiver-context operations because the radio does not identify MAIN/SUB in
   those payloads.
-- Imported design documents may describe features that do not exist in SDR9700.
+- Imported design documents may describe features that do not exist in sdr9700.
   They are not architecture until they are validated and promoted.
 - `resources/manuals/` is research material only.

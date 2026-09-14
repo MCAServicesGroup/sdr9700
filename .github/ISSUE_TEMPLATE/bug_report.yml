@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a problem or regression in SDR9700.
+description: Report a problem or regression in sdr9700.
 title: "[Bug]: "
 labels: ["bug", "needs-triage"]
 body:
@@ -13,7 +13,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SDR9700 version or commit
+      label: sdr9700 version or commit
       description: Use the title bar version, About dialog version, or `git rev-parse --short HEAD`.
       placeholder: "26.9.2 or 8970a7b"
     validations:
@@ -44,7 +44,7 @@ body:
     attributes:
       label: What happened?
       description: Describe the problem, including any visible error or unexpected radio behavior.
-      placeholder: "When I..., SDR9700..."
+      placeholder: "When I..., sdr9700..."
     validations:
       required: true
 

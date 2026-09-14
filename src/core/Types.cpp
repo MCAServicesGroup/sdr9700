@@ -111,7 +111,7 @@ const QString funcString[funcLastFunc]{
 
     "+<Response Codes>", "Command Error FA", "Command OK FB",
 
-    // SDR9700 internal function entries.
+    // sdr9700 internal function entries.
     "-Select VFO", "-Separator", "-LCD Waterfall", "-LCD Spectrum", "-LCD Nothing", "-Page Up", "-Page Down",
     "-VFO Frequency", "-VFO Mode", "-Radio Control Function", "-Radio Control Level", "-Radio Control Param",
     "-RX Audio Data", "-TX Audio Data"};

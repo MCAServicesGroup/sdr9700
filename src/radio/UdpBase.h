@@ -184,7 +184,7 @@ class UdpBase : public QObject
     int badSyncCount = 0;
 
     // Per-UDP-stream sync state used to compare radio ping timestamps against
-    // SDR9700 monotonic time. Keep these per-instance because control, CI-V, and
+    // sdr9700 monotonic time. Keep these per-instance because control, CI-V, and
     // audio sockets may be active at the same time.
     bool pingHaveSync = false;
     int pingRadioBase = 0;
