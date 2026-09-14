@@ -1,5 +1,6 @@
 #include "UdpAudio.h"
 #include "LogCategories.h"
+#include "TxAudioMonitoringPolicy.h"
 #include "TxAudioPacing.h"
 #include <algorithm>
 #include <cstring>
@@ -155,12 +156,7 @@ void UdpAudio::receiveAudioData(audioPacket audio)
         }
 
         // DTMF timer owns the audio path; mic frames are suppressed entirely.
-        if (m_dtmfTimerActive)
-        {
-            return;
-        }
-
-        if (!m_txActive.load())
+        if (!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(m_txActive.load(), m_dtmfTimerActive))
         {
             m_txAudioQueue.clear();
             return;
@@ -431,7 +427,11 @@ void UdpAudio::enableAudio()
     {
         startAudio();
     }
-    if (m_txActive.load())
+    // Keep local microphone capture active while connected so its peak/RMS
+    // levels remain available in receive. receiveAudioData() still discards
+    // every microphone frame until PTT enables transmit, so monitoring never
+    // sends audio to the radio.
+    if (sdr9700::audio::shouldCaptureTxAudio(m_audioReady, enableTx, !txSetup.port.isNull()))
     {
         startTxAudio();
     }
@@ -460,7 +460,7 @@ void UdpAudio::setTxAudioDevice(const QAudioDevice& device)
     }
 
     txSetup.port = device;
-    const bool restart = m_txActive.load();
+    const bool restart = sdr9700::audio::shouldCaptureTxAudio(m_audioReady, enableTx, !txSetup.port.isNull());
     stopTxAudio();
     if (restart && m_audioReady)
     {
@@ -524,7 +524,8 @@ void UdpAudio::startAudio()
 
 void UdpAudio::startTxAudio()
 {
-    if (!enableTx || txAudioThread != nullptr || txSetup.port.isNull())
+    if (!sdr9700::audio::shouldCaptureTxAudio(m_audioReady, enableTx, !txSetup.port.isNull()) ||
+        txAudioThread != nullptr)
     {
         return;
     }
@@ -535,10 +536,10 @@ void UdpAudio::startTxAudio()
         return;
     }
 
-    // Opening an idle microphone at connection time needlessly holds the
-    // capture device and makes rapid application shutdown race CoreAudio
-    // initialization on macOS. Create it only when transmission first needs
-    // local audio, then retain it for the connection.
+    // Keep the selected microphone open throughout the connected session so
+    // the operator can verify local transmit level before pressing PTT. The
+    // send path remains gated by m_txActive, and stopLocalAudio() tears the
+    // capture device down during disconnect.
     txaudio = new AudioHandlerQtInput();
     txAudioThread = new QThread(this);
     txAudioThread->setObjectName("txAudio()");
@@ -582,11 +583,6 @@ void UdpAudio::setTxActive(bool active)
         m_dtmfPcm.clear();
         m_dtmfFrame.clear();
         m_dtmfPcmOffset = 0;
-        // QAudioSource teardown has crashed inside CoreAudio when deferred
-        // until the rest of the application is shutting down on macOS. The
-        // input is only needed while keyed, so release it promptly after the
-        // radio leaves transmit and recreate it for the next transmission.
-        stopTxAudio();
     }
     else if (txAudioTimer && !txAudioTimer->isActive())
     {
