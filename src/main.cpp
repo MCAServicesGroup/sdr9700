@@ -14,6 +14,7 @@
 #include <QMutexLocker>
 #include <QSocketNotifier>
 #include <QSet>
+#include <QThread>
 #include <QTimer>
 #if defined(Q_OS_MAC) && QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
 #include <QPermissions>
@@ -52,6 +53,7 @@ bool consoleLogEnabled{false};
 bool allConsoleCategoriesEnabled{false};
 QSet<QString> consoleLogCategories;
 bool logFileFailureReported{false};
+constexpr int kLogFlushIntervalMs = 250;
 
 bool writeBufferedLog()
 {
@@ -185,12 +187,12 @@ void consoleMessageHandler(QtMsgType type, const QMessageLogContext& context, co
     }
     if (logFile && logFile->isOpen() && fileCategoryEnabled)
     {
-        // Radio traffic can produce thousands of lines per second. Buffer
-        // routine records so logging does not serialize the radio/audio threads
-        // on a filesystem flush; warnings remain immediately durable.
+        // Radio traffic can produce thousands of lines per second. Buffer all
+        // non-fatal records so logging does not serialize radio/audio threads
+        // on a filesystem flush. The main-thread timer flushes within 250 ms.
         logFileBuffer.append(encoded);
         logFileBuffer.append('\n');
-        if (logFileBuffer.size() >= 256 * 1024 || type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg)
+        if (type == QtFatalMsg)
         {
             flushBufferedLog();
         }
@@ -485,11 +487,9 @@ int main(int argc, char* argv[])
     consoleLogCategories = QSet<QString>(requestedCategories.begin(), requestedCategories.end());
     LoggingConfiguration::applyBaseRules(loggingRulesForOptions(loggingOptions));
 
-    auto* logFlushTimer = new QTimer(&app);
-    logFlushTimer->setInterval(1000);
-    QObject::connect(logFlushTimer, &QTimer::timeout, &app, &flushLogOutput);
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, &flushLogOutput);
-    logFlushTimer->start();
+    QThread logFlushThread;
+    QTimer logFlushTimer;
+    logFlushTimer.setInterval(kLogFlushIntervalMs);
 
     app.setStyle("Fusion");
     QPalette dark;
@@ -553,6 +553,41 @@ int main(int argc, char* argv[])
                     []() { QCoreApplication::exit(128 + int(shutdownSignalNumber ? shutdownSignalNumber : SIGTERM)); });
             });
     }
+
+    const bool periodicLogFlushRequired = consoleLogEnabled || (logFile && logFile->isOpen());
+    const auto stopLogFlushThread = [&]()
+    {
+        if (!logFlushThread.isRunning())
+        {
+            flushLogOutput();
+            return;
+        }
+
+        QThread* const applicationThread = app.thread();
+        const bool stopped = QMetaObject::invokeMethod(
+            &logFlushTimer,
+            [&logFlushTimer, applicationThread]()
+            {
+                logFlushTimer.stop();
+                flushLogOutput();
+                logFlushTimer.moveToThread(applicationThread);
+            },
+            Qt::BlockingQueuedConnection);
+        logFlushThread.quit();
+        logFlushThread.wait();
+        if (!stopped)
+        {
+            flushLogOutput();
+        }
+    };
+    if (periodicLogFlushRequired)
+    {
+        logFlushTimer.moveToThread(&logFlushThread);
+        QObject::connect(&logFlushThread, &QThread::started, &logFlushTimer, qOverload<>(&QTimer::start));
+        QObject::connect(&logFlushTimer, &QTimer::timeout, &logFlushTimer, &flushLogOutput);
+        QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, stopLogFlushThread);
+        logFlushThread.start();
+    }
     window->show();
     QTimer::singleShot(0, window.get(), [context = window.get()]() { requestMacMicrophonePermission(context); });
 
@@ -563,6 +598,7 @@ int main(int argc, char* argv[])
     window.reset();
     model.reset();
     CachingQueue::shutdownInstance();
+    stopLogFlushThread();
     flushLogOutput();
 
     // Qt can emit messages while QApplication and its plugin loaders are

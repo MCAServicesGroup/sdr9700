@@ -37,7 +37,7 @@ StereoChannelPeaks stereoChannelPeaks(const QByteArray& data, QAudioFormat::Samp
         return stereoPeaks<qint16>(data, [](qint16 sample) { return qMin(1.0F, std::abs(float(sample)) / 32767.0F); });
     case QAudioFormat::Int32:
         return stereoPeaks<qint32>(data,
-                                   [](qint32 sample) { return qMin(1.0F, std::abs(double(sample)) / 2147483647.0); });
+                                   [](qint32 sample) { return qMin(1.0F, std::abs(float(sample)) / 2147483647.0F); });
     case QAudioFormat::Float:
         return stereoPeaks<float>(data, [](float sample) { return qMin(1.0F, std::abs(sample)); });
     case QAudioFormat::UInt8:
@@ -234,7 +234,7 @@ void AudioHandlerQtOutput::drainPendingOutput()
         m_pendingOutputOffset += written;
     }
 
-    m_pendingOutput.clear();
+    m_pendingOutput.resize(0);
     m_pendingOutputOffset = 0;
     isOverrun.store(false, std::memory_order_relaxed);
 }

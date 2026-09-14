@@ -4,6 +4,7 @@
 
 #include <QSignalSpy>
 #include <QTest>
+#include <QTimer>
 
 class WaterfallScopeTest : public QObject
 {
@@ -14,6 +15,7 @@ class WaterfallScopeTest : public QObject
     void rejectsInvalidScopeFrames();
     void coalescesScopeFrames();
     void limitsScopeFrameRate();
+    void sustainsSelectedFrameRate();
     void resetDropsPendingScopeFrame();
     void rebuildsAndClearsWaterfall();
     void rendersAndScrollsWaterfallRows();
@@ -90,17 +92,48 @@ void WaterfallScopeTest::limitsScopeFrameRate()
     frame.valid = true;
     frame.data = QByteArray::fromHex("01");
     controller.acceptScopeData(frame);
-    QTest::qWait(50);
-    QCOMPARE(dataSpy.count(), 0);
+    QTRY_COMPARE(dataSpy.count(), 1);
 
     frame.data = QByteArray::fromHex("02");
     controller.acceptScopeData(frame);
-    QTRY_COMPARE(dataSpy.count(), 1);
-    QCOMPARE(dataSpy.constFirst().constFirst().value<QVector<float>>(), QVector<float>({2.0f}));
+    QTest::qWait(50);
+    QCOMPARE(dataSpy.count(), 1);
+    QTRY_COMPARE(dataSpy.count(), 2);
+    QCOMPARE(dataSpy.constLast().constFirst().value<QVector<float>>(), QVector<float>({2.0f}));
 
     controller.setFramesPerSecond(12);
     QCOMPARE(controller.framesPerSecond(), 30);
     QCOMPARE(sdr9700::spectrumFrameIntervalMs(30), 34);
+}
+
+void WaterfallScopeTest::sustainsSelectedFrameRate()
+{
+    ScopeController controller;
+    controller.setFramesPerSecond(30);
+    QSignalSpy dataSpy(&controller, &ScopeController::spectrumDataReady);
+
+    ScopeData frame;
+    frame.valid = true;
+    frame.data = QByteArray::fromHex("01");
+    QTimer sourceTimer;
+    sourceTimer.setTimerType(Qt::PreciseTimer);
+    sourceTimer.setInterval(33);
+    connect(&sourceTimer, &QTimer::timeout, &controller,
+            [&controller, &frame]()
+            {
+                frame.data[0] = char(uchar(frame.data[0]) + 1);
+                controller.acceptScopeData(frame);
+            });
+
+    sourceTimer.start();
+    QTest::qWait(2000);
+    sourceTimer.stop();
+
+    // A 30 Hz source must not collapse toward the old ~18 Hz behavior. Leave
+    // scheduling headroom for shared CI runners while still rejecting a timer
+    // that waits a complete extra source period after every emission.
+    QVERIFY2(dataSpy.count() >= 50, qPrintable(QStringLiteral("emitted %1 frames").arg(dataSpy.count())));
+    QVERIFY(dataSpy.count() <= 62);
 }
 
 void WaterfallScopeTest::resetDropsPendingScopeFrame()

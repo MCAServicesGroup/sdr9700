@@ -3,6 +3,7 @@
 
 #include <QImage>
 #include <QSet>
+#include <QString>
 #include <memory>
 
 #ifdef SDR9700_GPU_PANADAPTER
@@ -15,10 +16,14 @@ using WaterfallCanvasBase = QWidget;
 #endif
 
 class QPainter;
+class QResizeEvent;
 
 class WaterfallCanvas : public WaterfallCanvasBase
 {
     Q_OBJECT
+#ifdef SDR9700_GPU_PANADAPTER
+    friend class GpuPanadapterRenderTest;
+#endif
 
   public:
     explicit WaterfallCanvas(QWidget* parent = nullptr);
@@ -29,6 +34,7 @@ class WaterfallCanvas : public WaterfallCanvasBase
 
   protected:
     void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* ev) override;
 #ifdef SDR9700_GPU_PANADAPTER
     void initialize(QRhiCommandBuffer* commandBuffer) override;
     void render(QRhiCommandBuffer* commandBuffer) override;
@@ -37,6 +43,10 @@ class WaterfallCanvas : public WaterfallCanvasBase
 
   private:
     void paintShelf(QPainter* painter) const;
+    void paintRaster(QPainter* painter) const;
+#ifdef SDR9700_GPU_PANADAPTER
+    void requestRasterFallback(const QString& reason);
+#endif
     // WaterfallController owns this image and outlives the canvas within
     // SpectrumScopeDisplay. Keeping a non-owning source avoids QImage
     // copy-on-write detaching the complete waterfall on every rendered row.
@@ -47,6 +57,8 @@ class WaterfallCanvas : public WaterfallCanvasBase
     std::unique_ptr<GpuState> m_gpuState;
     QImage m_gpuShelfLayer;
     QSet<int> m_changedPhysicalRows;
+    QWidget* m_rasterFallbackOverlay{nullptr};
+    bool m_rasterFallbackRequested{false};
     bool m_fullTextureUploadPending{true};
     bool m_shelfUploadPending{true};
 #endif

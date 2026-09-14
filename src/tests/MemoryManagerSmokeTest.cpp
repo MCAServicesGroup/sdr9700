@@ -713,7 +713,7 @@ void MemoryManagerSmokeTest::spectrumFrameRateSelectorDefaultsAndPersists()
 
     const auto buttons = window.findChildren<QToolButton*>();
     const auto previous = std::find_if(buttons.cbegin(), buttons.cend(), [](const QToolButton* button)
-                                       { return button->accessibleName() == QStringLiteral("Previous fps"); });
+                                       { return button->accessibleName() == QStringLiteral("Previous FPS"); });
     QVERIFY(previous != buttons.cend());
     (*previous)->click();
     QCOMPARE(selector->currentData().toInt(), 25);

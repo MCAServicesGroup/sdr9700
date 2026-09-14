@@ -2,17 +2,56 @@
 #include "LogCategories.h"
 
 #include <QElapsedTimer>
-#include <QTimer>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iterator>
 #include <limits>
 
 namespace
 {
-constexpr int kWaterfallRenderIntervalMs = 33;
 constexpr double kMinFrequencyRangeMhz = 0.001;
+constexpr int kWaterfallPaletteResolution = 4096;
 const QRgb kWaterfallIdleColor = qRgb(0x02, 0x0c, 0x14);
+
+QRgb interpolatedWaterfallColor(float normalizedLevel)
+{
+    static constexpr struct
+    {
+        float pos;
+        int r, g, b;
+    } kStops[] = {
+        {0.00f, 0, 20, 120},  {0.18f, 0, 58, 205},  {0.34f, 0, 150, 255}, {0.50f, 0, 220, 105},
+        {0.66f, 165, 245, 0}, {0.78f, 255, 230, 0}, {0.90f, 255, 92, 0},  {1.00f, 255, 255, 210},
+    };
+    for (std::size_t index = 1; index < std::size(kStops); ++index)
+    {
+        if (normalizedLevel <= kStops[index].pos)
+        {
+            const float fraction =
+                (normalizedLevel - kStops[index - 1].pos) / (kStops[index].pos - kStops[index - 1].pos);
+            const int red = int(kStops[index - 1].r + fraction * (kStops[index].r - kStops[index - 1].r));
+            const int green = int(kStops[index - 1].g + fraction * (kStops[index].g - kStops[index - 1].g));
+            const int blue = int(kStops[index - 1].b + fraction * (kStops[index].b - kStops[index - 1].b));
+            return qRgb(red, green, blue);
+        }
+    }
+    return qRgb(kStops[std::size(kStops) - 1].r, kStops[std::size(kStops) - 1].g, kStops[std::size(kStops) - 1].b);
+}
+
+const std::array<QRgb, kWaterfallPaletteResolution + 1>& waterfallPalette()
+{
+    static const auto kPalette = []()
+    {
+        std::array<QRgb, kWaterfallPaletteResolution + 1> palette{};
+        for (int index = 0; index <= kWaterfallPaletteResolution; ++index)
+        {
+            palette[std::size_t(index)] = interpolatedWaterfallColor(float(index) / float(kWaterfallPaletteResolution));
+        }
+        return palette;
+    }();
+    return kPalette;
+}
 
 bool normalizeFrequencyRange(double* startMhz, double* endMhz)
 {
@@ -38,13 +77,7 @@ double highFrequencyMhz(double startMhz, double endMhz)
 }
 } // namespace
 
-WaterfallController::WaterfallController(QObject* parent) : QObject(parent)
-{
-    m_renderTimer = new QTimer(this);
-    m_renderTimer->setSingleShot(true);
-    m_renderTimer->setInterval(kWaterfallRenderIntervalMs);
-    connect(m_renderTimer, &QTimer::timeout, this, &WaterfallController::renderPendingRow);
-}
+WaterfallController::WaterfallController(QObject* parent) : QObject(parent) {}
 
 void WaterfallController::setCanvasSize(const QSize& size)
 {
@@ -98,31 +131,31 @@ int WaterfallController::binForDisplayX(int x, int binCount) const
 
 QRgb WaterfallController::levelToColor(float level) const
 {
-    static const struct
-    {
-        float pos;
-        int r, g, b;
-    } stops[] = {
-        {0.00f, 0, 20, 120},  {0.18f, 0, 58, 205},  {0.34f, 0, 150, 255}, {0.50f, 0, 220, 105},
-        {0.66f, 165, 245, 0}, {0.78f, 255, 230, 0}, {0.90f, 255, 92, 0},  {1.00f, 255, 255, 210},
-    };
-    static constexpr int N = static_cast<int>(std::size(stops));
+    const float normalized = std::clamp((level - m_minLevel) / (m_maxLevel - m_minLevel), 0.0f, 1.0f);
+    const int index =
+        qBound(0, int(std::lround(normalized * kWaterfallPaletteResolution)), kWaterfallPaletteResolution);
+    return waterfallPalette()[std::size_t(index)];
+}
 
-    float t = (level - m_minLevel) / (m_maxLevel - m_minLevel);
-    t = std::max(0.0f, std::min(1.0f, t));
+void WaterfallController::invalidateBinMap()
+{
+    m_binMap.clear();
+    m_binMapBinCount = 0;
+}
 
-    for (int i = 1; i < N; ++i)
+void WaterfallController::ensureBinMap(int binCount)
+{
+    if (binCount == m_binMapBinCount && m_binMap.size() == m_waterfall.width())
     {
-        if (t <= stops[i].pos)
-        {
-            const float f = (t - stops[i - 1].pos) / (stops[i].pos - stops[i - 1].pos);
-            const int r = int(stops[i - 1].r + f * (stops[i].r - stops[i - 1].r));
-            const int g = int(stops[i - 1].g + f * (stops[i].g - stops[i - 1].g));
-            const int b = int(stops[i - 1].b + f * (stops[i].b - stops[i - 1].b));
-            return qRgb(r, g, b);
-        }
+        return;
     }
-    Q_UNREACHABLE();
+
+    m_binMap.resize(m_waterfall.width());
+    for (int x = 0; x < m_binMap.size(); ++x)
+    {
+        m_binMap[x] = binForDisplayX(x, binCount);
+    }
+    m_binMapBinCount = binCount;
 }
 
 void WaterfallController::setFrequencyRange(double startMhz, double endMhz)
@@ -137,6 +170,7 @@ void WaterfallController::setFrequencyRange(double startMhz, double endMhz)
     }
     m_startMhz = startMhz;
     m_endMhz = endMhz;
+    invalidateBinMap();
     rebuildImage();
 }
 
@@ -152,6 +186,7 @@ void WaterfallController::setDataFrequencyRange(double startMhz, double endMhz)
     }
     m_dataStartMhz = startMhz;
     m_dataEndMhz = endMhz;
+    invalidateBinMap();
 }
 
 void WaterfallController::setPaused(bool paused)
@@ -166,23 +201,11 @@ void WaterfallController::updateSpectrum(const QVector<float>& levels)
         return;
     }
 
-    // The waterfall intentionally stores only the newest frame between render
-    // ticks. Reuse the backing vector so the handoff from the model's
-    // signal-owned frame does not allocate on every scope update.
-    m_pendingLevels.resize(levels.size());
-    std::copy(levels.cbegin(), levels.cend(), m_pendingLevels.begin());
-    m_hasPendingLevels = true;
-    scheduleRender();
+    renderRow(levels);
 }
 
 void WaterfallController::clearDisplay()
 {
-    m_pendingLevels.clear();
-    m_hasPendingLevels = false;
-    if (m_renderTimer)
-    {
-        m_renderTimer->stop();
-    }
     if (!m_waterfall.isNull())
     {
         m_waterfall.fill(kWaterfallIdleColor);
@@ -200,26 +223,16 @@ void WaterfallController::rebuildImage()
     m_waterfall = QImage(m_canvasSize, QImage::Format_RGB32);
     m_waterfall.fill(kWaterfallIdleColor);
     m_firstVisibleRow = 0;
+    invalidateBinMap();
     emit imageChanged();
 }
 
-void WaterfallController::scheduleRender()
+void WaterfallController::renderRow(const QVector<float>& levels)
 {
-    if (m_renderTimer && !m_renderTimer->isActive())
-    {
-        m_renderTimer->start();
-    }
-}
-
-void WaterfallController::renderPendingRow()
-{
-    if (!m_hasPendingLevels || m_paused || m_waterfall.isNull() || m_waterfall.height() == 0)
+    if (m_paused || m_waterfall.isNull() || m_waterfall.height() == 0)
     {
         return;
     }
-
-    m_hasPendingLevels = false;
-    const QVector<float> levels = std::move(m_pendingLevels);
 
     const int w = m_waterfall.width();
     const int h = m_waterfall.height();
@@ -263,9 +276,10 @@ void WaterfallController::renderPendingRow()
         }
     }
 
+    ensureBinMap(levels.size());
     for (int x = 0; x < w; ++x)
     {
-        const int bin = binForDisplayX(x, levels.size());
+        const int bin = m_binMap[x];
         row[x] = bin >= 0 ? levelToColor(levels[bin]) : kWaterfallIdleColor;
     }
     emit rowRendered(m_firstVisibleRow, m_firstVisibleRow);

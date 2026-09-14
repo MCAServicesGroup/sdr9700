@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QtGlobal>
 #include <array>
 
 namespace sdr9700
@@ -28,5 +29,10 @@ inline constexpr int spectrumFrameIntervalMs(int framesPerSecond)
 {
     const int normalized = normalizedSpectrumFramesPerSecond(framesPerSecond);
     return (1000 + normalized - 1) / normalized;
+}
+
+inline constexpr qint64 spectrumFrameIntervalNanoseconds(int framesPerSecond)
+{
+    return 1'000'000'000LL / normalizedSpectrumFramesPerSecond(framesPerSecond);
 }
 } // namespace sdr9700

@@ -43,6 +43,7 @@ unusedFunction:src/tests/SystemStatsTest.cpp
 unusedFunction:src/tests/UdpBaseTest.cpp
 functionStatic:src/tests/UdpBaseTest.cpp
 unusedFunction:src/tests/WaterfallScopeTest.cpp
+unusedFunction:src/tests/GpuPanadapterRenderTest.cpp
 unusedFunction:src/tests/OfflinePoliciesTest.cpp
 functionConst:src/tests/OfflinePoliciesTest.cpp
 unusedFunction:src/tests/VfoBackendTest.cpp

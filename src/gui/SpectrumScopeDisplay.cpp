@@ -67,6 +67,12 @@ SpectrumScopeDisplay::SpectrumScopeDisplay(QWidget* parent) : QWidget(parent)
     m_waterfallController = new WaterfallController(this);
     m_spanCombo = new QComboBox(this);
 
+    m_spectrumScopeCanvas->setAccessibleName(QStringLiteral("Spectrum scope"));
+    m_spectrumScopeCanvas->setAccessibleDescription(
+        QStringLiteral("Live received spectrum. Click or use the mouse wheel to tune when controls are unlocked."));
+    m_waterfallCanvas->setAccessibleName(QStringLiteral("Spectrum waterfall"));
+    m_waterfallCanvas->setAccessibleDescription(QStringLiteral("Recent received spectrum history."));
+
     m_panScrollBar->setFixedHeight(panScrollBarHeight());
     m_panScrollBar->setTracking(true);
     m_panScrollBar->setEnabled(false);

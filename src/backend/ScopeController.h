@@ -37,5 +37,7 @@ class ScopeController : public QObject
     QVector<float> m_levelsScratch;
     bool m_hasPendingFrame{false};
     QElapsedTimer m_frameArrivalClock;
+    QElapsedTimer m_pacingClock;
+    qint64 m_nextEmissionDeadlineNs{0};
     int m_framesPerSecond{sdr9700::kDefaultSpectrumFramesPerSecond};
 };

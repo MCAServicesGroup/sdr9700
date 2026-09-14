@@ -9,6 +9,7 @@
 #include <QPainter>
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <utility>
 
 #ifdef SDR9700_GPU_PANADAPTER
@@ -22,6 +23,29 @@ constexpr int kControlShelfShadowHeightPx = 8;
 
 #ifdef SDR9700_GPU_PANADAPTER
 using TextureVertex = std::array<float, 4>;
+
+class RasterFallbackOverlay final : public QWidget
+{
+  public:
+    RasterFallbackOverlay(QWidget* parent, std::function<void(QPainter*)> paint)
+        : QWidget(parent), m_paint(std::move(paint))
+    {
+        setAttribute(Qt::WA_OpaquePaintEvent);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setFocusPolicy(Qt::NoFocus);
+    }
+
+  protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        Q_UNUSED(event)
+        QPainter painter(this);
+        m_paint(&painter);
+    }
+
+  private:
+    std::function<void(QPainter*)> m_paint;
+};
 
 struct alignas(16) TextureUniforms
 {
@@ -53,9 +77,11 @@ QRhiGraphicsPipeline::TargetBlend alphaBlend()
 struct WaterfallCanvas::GpuState
 {
     QRhi* rhi{nullptr};
+    const QRhiTexture* outputTexture{nullptr};
     QRhiRenderPassDescriptor* renderPassDescriptor{nullptr};
     QSize outputSize;
     QSize waterfallTextureSize;
+    bool valid{false};
     std::unique_ptr<QRhiBuffer> quadBuffer;
     std::unique_ptr<QRhiBuffer> waterfallUniformBuffer;
     std::unique_ptr<QRhiBuffer> shelfUniformBuffer;
@@ -83,6 +109,8 @@ struct WaterfallCanvas::GpuState
         quadBuffer.reset();
         waterfallTextureSize = {};
         outputSize = {};
+        valid = false;
+        outputTexture = nullptr;
         renderPassDescriptor = nullptr;
         rhi = nullptr;
     }
@@ -103,8 +131,11 @@ WaterfallCanvas::WaterfallCanvas(QWidget* parent) : WaterfallCanvasBase(parent)
     }
 #endif
     m_gpuState = std::make_unique<GpuState>();
+    connect(this, &QRhiWidget::renderFailed, this,
+            [this]() { requestRasterFallback(QStringLiteral("Qt reported that QRhi waterfall rendering failed")); });
 #endif
     setAutoFillBackground(false);
+    setAttribute(Qt::WA_OpaquePaintEvent);
 }
 
 WaterfallCanvas::~WaterfallCanvas() = default;
@@ -116,6 +147,13 @@ void WaterfallCanvas::setWaterfallImageSource(const QImage* image)
 #ifdef SDR9700_GPU_PANADAPTER
     m_changedPhysicalRows.clear();
     m_fullTextureUploadPending = true;
+#endif
+#ifdef SDR9700_GPU_PANADAPTER
+    if (m_rasterFallbackOverlay)
+    {
+        m_rasterFallbackOverlay->update();
+        return;
+    }
 #endif
     update();
 }
@@ -134,6 +172,13 @@ void WaterfallCanvas::setWaterfallRow(int physicalRow, int firstVisibleRow)
     }
 #else
     Q_UNUSED(physicalRow)
+#endif
+#ifdef SDR9700_GPU_PANADAPTER
+    if (m_rasterFallbackOverlay)
+    {
+        m_rasterFallbackOverlay->update();
+        return;
+    }
 #endif
     update();
 }
@@ -164,24 +209,64 @@ void WaterfallCanvas::paintEvent(QPaintEvent* event)
     Q_UNUSED(event)
 
     QPainter painter(this);
-    painter.fillRect(rect(), kWaterfallBg);
+    paintRaster(&painter);
+}
+
+void WaterfallCanvas::paintRaster(QPainter* painter) const
+{
+    if (!painter)
+    {
+        return;
+    }
+
+    painter->fillRect(rect(), kWaterfallBg);
     if (m_waterfall && !m_waterfall->isNull())
     {
         const int sourceHeight = qMin(height(), m_waterfall->height());
         const int firstPartHeight = qMin(sourceHeight, m_waterfall->height() - m_firstVisibleRow);
-        painter.drawImage(QRect(0, 0, width(), firstPartHeight), *m_waterfall,
-                          QRect(0, m_firstVisibleRow, m_waterfall->width(), firstPartHeight));
+        painter->drawImage(QRect(0, 0, width(), firstPartHeight), *m_waterfall,
+                           QRect(0, m_firstVisibleRow, m_waterfall->width(), firstPartHeight));
         if (firstPartHeight < sourceHeight)
         {
             const int secondPartHeight = sourceHeight - firstPartHeight;
-            painter.drawImage(QRect(0, firstPartHeight, width(), secondPartHeight), *m_waterfall,
-                              QRect(0, 0, m_waterfall->width(), secondPartHeight));
+            painter->drawImage(QRect(0, firstPartHeight, width(), secondPartHeight), *m_waterfall,
+                               QRect(0, 0, m_waterfall->width(), secondPartHeight));
         }
     }
-    paintShelf(&painter);
+    paintShelf(painter);
 }
 
 #ifdef SDR9700_GPU_PANADAPTER
+void WaterfallCanvas::requestRasterFallback(const QString& reason)
+{
+    if (api() == QRhiWidget::Api::Null || m_rasterFallbackRequested)
+    {
+        return;
+    }
+    m_rasterFallbackRequested = true;
+    qCritical(logWaterfall()).noquote() << reason << "- switching the waterfall to raster rendering";
+    if (m_gpuState)
+    {
+        m_gpuState->valid = false;
+    }
+    QMetaObject::invokeMethod(
+        this,
+        [this]()
+        {
+            if (m_rasterFallbackOverlay)
+            {
+                return;
+            }
+            m_rasterFallbackOverlay =
+                new RasterFallbackOverlay(this, [this](QPainter* painter) { paintRaster(painter); });
+            m_rasterFallbackOverlay->setGeometry(rect());
+            m_rasterFallbackOverlay->show();
+            m_rasterFallbackOverlay->raise();
+            m_rasterFallbackOverlay->update();
+        },
+        Qt::QueuedConnection);
+}
+
 void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
 {
     if (!m_gpuState)
@@ -191,20 +276,35 @@ void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
 
     QRhi* currentRhi = rhi();
     QRhiRenderTarget* currentTarget = renderTarget();
+    const QRhiTexture* currentOutputTexture = colorTexture();
     const QSize outputSize = currentTarget ? currentTarget->pixelSize() : QSize();
-    if (!currentRhi || !currentTarget || outputSize.isEmpty())
+    if (!currentRhi || !currentTarget || !currentOutputTexture || outputSize.isEmpty())
     {
         return;
     }
-    if (m_gpuState->rhi == currentRhi && m_gpuState->outputSize == outputSize &&
-        m_gpuState->renderPassDescriptor == currentTarget->renderPassDescriptor())
+    const bool sameRenderer = m_gpuState->rhi == currentRhi && m_gpuState->outputTexture == currentOutputTexture &&
+                              m_gpuState->renderPassDescriptor == currentTarget->renderPassDescriptor();
+    if (sameRenderer && m_gpuState->outputSize == outputSize)
     {
+        return;
+    }
+    if (sameRenderer && m_gpuState->valid)
+    {
+        m_gpuState->shelfTexture->setPixelSize(outputSize);
+        if (!m_gpuState->shelfTexture->create())
+        {
+            requestRasterFallback(QStringLiteral("Could not resize GPU waterfall shelf texture"));
+            return;
+        }
+        m_gpuState->outputSize = outputSize;
+        m_shelfUploadPending = true;
         return;
     }
 
     m_gpuState->release();
     GpuState& state = *m_gpuState;
     state.rhi = currentRhi;
+    state.outputTexture = currentOutputTexture;
     state.outputSize = outputSize;
     state.renderPassDescriptor = currentTarget->renderPassDescriptor();
     state.waterfallTextureSize = m_waterfall && !m_waterfall->isNull() ? m_waterfall->size() : QSize(1, 1);
@@ -233,8 +333,8 @@ void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
                                   state.shelfSampler->create();
     if (!resourcesCreated)
     {
-        qCritical(logWaterfall()) << "Could not create GPU waterfall resources";
         state.release();
+        requestRasterFallback(QStringLiteral("Could not create GPU waterfall resources"));
         return;
     }
 
@@ -244,20 +344,29 @@ void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
         bindings->setBindings(
             {QRhiShaderResourceBinding::uniformBuffer(0, QRhiShaderResourceBinding::VertexStage, uniformBuffer),
              QRhiShaderResourceBinding::sampledTexture(1, QRhiShaderResourceBinding::FragmentStage, texture, sampler)});
-        bindings->create();
+        if (!bindings->create())
+        {
+            return std::unique_ptr<QRhiShaderResourceBindings>();
+        }
         return bindings;
     };
     state.waterfallBindings =
         createBindings(state.waterfallUniformBuffer.get(), state.waterfallTexture.get(), state.waterfallSampler.get());
     state.shelfBindings =
         createBindings(state.shelfUniformBuffer.get(), state.shelfTexture.get(), state.shelfSampler.get());
+    if (!state.waterfallBindings || !state.shelfBindings)
+    {
+        state.release();
+        requestRasterFallback(QStringLiteral("Could not create GPU waterfall texture bindings"));
+        return;
+    }
 
     const QShader vertexShader = loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_texture.vert.qsb"));
     const QShader fragmentShader = loadShader(QStringLiteral(":/shaders/gui/shaders/panadapter_texture.frag.qsb"));
     if (!vertexShader.isValid() || !fragmentShader.isValid())
     {
-        qCritical(logWaterfall()) << "Could not load GPU waterfall shaders";
         state.release();
+        requestRasterFallback(QStringLiteral("Could not load GPU waterfall shaders"));
         return;
     }
 
@@ -279,42 +388,68 @@ void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
         {
             pipeline->setTargetBlends({alphaBlend()});
         }
-        pipeline->create();
+        if (!pipeline->create())
+        {
+            return std::unique_ptr<QRhiGraphicsPipeline>();
+        }
         return pipeline;
     };
     state.waterfallPipeline = createPipeline(state.waterfallBindings.get(), false);
     state.shelfPipeline = createPipeline(state.shelfBindings.get(), true);
+    if (!state.waterfallPipeline || !state.shelfPipeline)
+    {
+        state.release();
+        requestRasterFallback(QStringLiteral("Could not create GPU waterfall pipelines"));
+        return;
+    }
 
     QRhiResourceUpdateBatch* updates = state.rhi->nextResourceUpdateBatch();
     updates->uploadStaticBuffer(state.quadBuffer.get(), kQuadVertices);
     commandBuffer->resourceUpdate(updates);
+    state.valid = true;
     m_fullTextureUploadPending = true;
     m_shelfUploadPending = true;
 }
 
 void WaterfallCanvas::render(QRhiCommandBuffer* commandBuffer)
 {
-    if (!m_gpuState || !m_gpuState->rhi || !renderTarget())
+    QRhiRenderTarget* currentTarget = renderTarget();
+    const QRhiTexture* currentOutputTexture = colorTexture();
+    if (!m_gpuState || !currentTarget || !currentOutputTexture)
+    {
+        return;
+    }
+    if (m_gpuState->rhi != rhi() || m_gpuState->outputTexture != currentOutputTexture ||
+        m_gpuState->renderPassDescriptor != currentTarget->renderPassDescriptor() ||
+        m_gpuState->outputSize != currentTarget->pixelSize())
+    {
+        initialize(commandBuffer);
+    }
+    if (!m_gpuState->valid)
     {
         return;
     }
     GpuState& state = *m_gpuState;
     if (m_waterfall && !m_waterfall->isNull() && state.waterfallTextureSize != m_waterfall->size())
     {
-        state.waterfallTextureSize = m_waterfall->size();
-        state.waterfallTexture->setPixelSize(state.waterfallTextureSize);
+        const QSize requestedSize = m_waterfall->size();
+        state.waterfallTexture->setPixelSize(requestedSize);
         if (!state.waterfallTexture->create())
         {
-            qCritical(logWaterfall()) << "Could not resize GPU waterfall texture";
+            requestRasterFallback(QStringLiteral("Could not resize GPU waterfall texture"));
             return;
         }
+        state.waterfallTextureSize = requestedSize;
         m_fullTextureUploadPending = true;
     }
 
     const qreal devicePixelRatio = devicePixelRatioF();
     if (m_shelfUploadPending || m_gpuShelfLayer.size() != state.outputSize)
     {
-        m_gpuShelfLayer = QImage(state.outputSize, QImage::Format_RGBA8888);
+        if (m_gpuShelfLayer.size() != state.outputSize || m_gpuShelfLayer.format() != QImage::Format_RGBA8888)
+        {
+            m_gpuShelfLayer = QImage(state.outputSize, QImage::Format_RGBA8888);
+        }
         m_gpuShelfLayer.setDevicePixelRatio(devicePixelRatio);
         m_gpuShelfLayer.fill(Qt::transparent);
         QPainter painter(&m_gpuShelfLayer);
@@ -395,3 +530,14 @@ void WaterfallCanvas::releaseResources()
     }
 }
 #endif
+
+void WaterfallCanvas::resizeEvent(QResizeEvent* ev)
+{
+    WaterfallCanvasBase::resizeEvent(ev);
+#ifdef SDR9700_GPU_PANADAPTER
+    if (m_rasterFallbackOverlay)
+    {
+        m_rasterFallbackOverlay->setGeometry(rect());
+    }
+#endif
+}

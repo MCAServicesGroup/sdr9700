@@ -373,7 +373,7 @@ void UdpAudio::dataReceived()
                         << " header=" << QString::fromLatin1(r.left(0x18).toHex(' '));
                 }
 
-                if (rxAudioThread == nullptr && m_audioReady)
+                if (m_rxAudioStartPolicy.shouldStart(m_audioReady, rxAudioThread != nullptr, !rxSetup.port.isNull()))
                 {
                     startAudio();
                 }
@@ -423,7 +423,7 @@ void UdpAudio::dataReceived()
 void UdpAudio::enableAudio()
 {
     m_audioReady = true;
-    if (rxAudioThread == nullptr)
+    if (m_rxAudioStartPolicy.shouldStart(m_audioReady, rxAudioThread != nullptr, !rxSetup.port.isNull()))
     {
         startAudio();
     }
@@ -439,14 +439,19 @@ void UdpAudio::enableAudio()
 
 void UdpAudio::setRxAudioDevice(const QAudioDevice& device)
 {
-    if (rxSetup.port == device)
+    const bool deviceChanged = rxSetup.port != device;
+    if (!deviceChanged && !m_rxAudioStartPolicy.initializationBlocked())
     {
         return;
     }
 
     rxSetup.port = device;
-    stopAudioWorker(rxaudio, rxAudioThread, "rxAudioThread");
-    if (m_audioReady)
+    m_rxAudioStartPolicy.deviceRefreshed();
+    if (deviceChanged)
+    {
+        stopAudioWorker(rxaudio, rxAudioThread, "rxAudioThread");
+    }
+    if (m_rxAudioStartPolicy.shouldStart(m_audioReady, rxAudioThread != nullptr, !rxSetup.port.isNull()))
     {
         startAudio();
     }
@@ -471,13 +476,14 @@ void UdpAudio::setTxAudioDevice(const QAudioDevice& device)
 void UdpAudio::stopLocalAudio()
 {
     m_audioReady = false;
+    m_rxAudioStartPolicy.reset();
     stopAudioWorker(rxaudio, rxAudioThread, "rxAudioThread");
     stopAudioWorker(txaudio, txAudioThread, "txAudioThread");
 }
 
 void UdpAudio::startAudio()
 {
-    if (rxSetup.port.isNull())
+    if (!m_rxAudioStartPolicy.shouldStart(m_audioReady, rxAudioThread != nullptr, !rxSetup.port.isNull()))
     {
         return;
     }
@@ -595,12 +601,13 @@ void UdpAudio::setTxActive(bool active)
 void UdpAudio::onRxAudioInitFailed()
 {
     qWarning(logAudio()).noquote() << "RX Audio Initialization failed. Cleaning up.";
+    m_rxAudioStartPolicy.initializationFailed();
     if (rxAudioThread)
     {
         rxAudioThread->quit();
         // Detach from parent and wire self-delete so the thread cleans up
-        // asynchronously. Null the member so dataReceived() can call startAudio()
-        // again if a new stream arrives.
+        // asynchronously. A device refresh explicitly clears the failure latch;
+        // ordinary audio packets must not create a replacement thread every 20 ms.
         rxAudioThread->setParent(nullptr);
         connect(rxAudioThread, &QThread::finished, rxAudioThread, &QObject::deleteLater, Qt::DirectConnection);
         rxAudioThread = nullptr;

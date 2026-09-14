@@ -71,6 +71,8 @@ jobs:
         run: |
           make release
           grep -Fq 'sdr9700_ENABLE_GPU_PANADAPTER:BOOL=ON' src/build/CMakeCache.txt
+          nm src/build/bin/sdr9700.app/Contents/MacOS/sdr9700 \
+            | grep -F 'qInitResources_sdr9700_panadapter_shaders' >/dev/null
           ctest --test-dir src/build --output-on-failure
 
       - name: Import Developer ID certificate

@@ -6,8 +6,9 @@
 #include <QImage>
 #include <QPixmap>
 #include <QPoint>
+#include <QPolygonF>
 #include <QSize>
-#include <QTimer>
+#include <QString>
 #include <QVector>
 #include <memory>
 
@@ -21,11 +22,16 @@ using SpectrumScopeCanvasBase = QWidget;
 #endif
 
 class QPainter;
+class QKeyEvent;
+class QResizeEvent;
 
 class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
 {
     Q_OBJECT
     friend class SpectrumCanvasTest;
+#ifdef SDR9700_GPU_PANADAPTER
+    friend class GpuPanadapterRenderTest;
+#endif
 
   public:
     explicit SpectrumScopeCanvas(QWidget* parent = nullptr);
@@ -62,6 +68,8 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     void mousePressEvent(QMouseEvent* ev) override;
     void mouseReleaseEvent(QMouseEvent* ev) override;
     void wheelEvent(QWheelEvent* ev) override;
+    void keyPressEvent(QKeyEvent* ev) override;
+    void resizeEvent(QResizeEvent* ev) override;
 
   private:
     int plotHeight() const;
@@ -73,17 +81,20 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     double gridLevelToY(float level, int topY, int h) const;
     double sourcePositionForDisplayX(double x, int binCount) const;
     static float interpolatedLevel(const QVector<float>& levels, double sourcePosition);
-    static QVector<float> spatiallySmoothedBins(const QVector<float>& bins);
+    static void spatiallySmoothBins(const QVector<float>& bins, QVector<float>* smoothedBins);
     bool isSpectrumClickArea(const QPoint& pos) const;
     void invalidateStaticLayer();
     void ensureStaticLayer();
     void renderStaticLayer(QPainter* painter) const;
     void renderDynamicLayer(QPainter* painter) const;
+    void paintRaster(QPainter* painter);
+    void buildTraceSamples(QVector<QPointF>* points, QVector<float>* levels) const;
     void scheduleRepaint();
 #ifdef SDR9700_GPU_PANADAPTER
     void ensureGpuLayers();
     void rebuildGpuTrace();
     void invalidateGpuOverlay();
+    void requestRasterFallback(const QString& reason);
     struct GpuState;
 #endif
 
@@ -114,6 +125,10 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
 
     QVector<float> m_spectrumBins;
     QVector<float> m_displaySpectrumBins;
+    QVector<QPointF> m_tracePointsScratch;
+    QVector<float> m_traceLevelsScratch;
+    QPolygonF m_tracePolygonScratch;
+    QPolygonF m_traceSegmentScratch;
     QPixmap m_staticLayer;
     QSize m_staticLayerSize;
     qreal m_staticLayerDevicePixelRatio{0.0};
@@ -125,12 +140,13 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     QByteArray m_gpuFillVertices;
     QByteArray m_gpuFeatherVertices;
     QByteArray m_gpuLineVertices;
+    QVector<QColor> m_gpuTraceColorsScratch;
+    QWidget* m_rasterFallbackOverlay{nullptr};
+    bool m_rasterFallbackRequested{false};
     QSize m_gpuTraceSize;
     bool m_gpuBackgroundDirty{true};
     bool m_gpuOverlayDirty{true};
     bool m_gpuOverlayTextureDirty{true};
     bool m_gpuTraceDirty{true};
 #endif
-
-    QTimer m_repaintTimer;
 };

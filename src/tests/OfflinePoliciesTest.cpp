@@ -9,6 +9,7 @@
 #include "RadioSessionCorrelation.h"
 #include "RadioSessionRecoveryStore.h"
 #include "RetainedSessionRemovalPolicy.h"
+#include "RxAudioStartPolicy.h"
 #include "SpectrumTuningPolicy.h"
 #include "StandbyWakePolicy.h"
 #include "TransmitSafetyPolicy.h"
@@ -26,6 +27,7 @@ class OfflinePoliciesTest : public QObject
 
   private slots:
     void selectsAudioDevicesAcrossDefaultChangesAndHotplug();
+    void latchesRxAudioInitializationFailureUntilDeviceRefresh();
     void clampsMemoryPollingInterval();
     void tracksMemorySynchronization();
     void retriesIncompleteOperationSynchronization();
@@ -76,6 +78,22 @@ void OfflinePoliciesTest::selectsAudioDevicesAcrossDefaultChangesAndHotplug()
     QCOMPARE(selectAudioDevice(both, headphones.id(), speakers).id(), headphones.id());
     QVERIFY(selectAudioDevice(QList<Device>{}, headphones.id(), none).id().isEmpty());
     QCOMPARE(selectAudioDevice(both, headphones.id(), speakers).id(), headphones.id());
+}
+
+void OfflinePoliciesTest::latchesRxAudioInitializationFailureUntilDeviceRefresh()
+{
+    sdr9700::audio::RxAudioStartPolicy policy;
+    QVERIFY(!policy.shouldStart(false, false, true));
+    QVERIFY(!policy.shouldStart(true, true, true));
+    QVERIFY(!policy.shouldStart(true, false, false));
+    QVERIFY(policy.shouldStart(true, false, true));
+
+    policy.initializationFailed();
+    QVERIFY(policy.initializationBlocked());
+    QVERIFY(!policy.shouldStart(true, false, true));
+    policy.deviceRefreshed();
+    QVERIFY(!policy.initializationBlocked());
+    QVERIFY(policy.shouldStart(true, false, true));
 }
 
 void OfflinePoliciesTest::expiresMeterPollDeadlinesConservatively()

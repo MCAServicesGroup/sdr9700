@@ -41,6 +41,7 @@ class UdpBaseTest : public QObject
     void encodesLoginTextDeterministically();
     void parsesNullTerminatedPacketText();
     void tracksMissingAndDuplicatePackets();
+    void boundsLargeSequenceGaps();
     void clearsTransmitWindowAtSequenceRollover();
     void sendsDepartureOnlyOnce();
     void suppressesDepartureWithoutSessionOwnership();
@@ -126,6 +127,24 @@ void UdpBaseTest::tracksMissingAndDuplicatePackets()
     stream.dataReceived(packetForSequence(2));
     QVERIFY(stream.missingSequences().isEmpty());
     stream.dataReceived(packetForSequence(2));
+    QVERIFY(stream.missingSequences().isEmpty());
+}
+
+void UdpBaseTest::boundsLargeSequenceGaps()
+{
+    TestUdpBase stream;
+    auto packetForSequence = [](quint16 sequence)
+    {
+        control_packet packet{};
+        packet.len = CONTROL_SIZE;
+        packet.type = 0;
+        packet.seq = sequence;
+        return QByteArray(packet.packet, CONTROL_SIZE);
+    };
+
+    stream.dataReceived(packetForSequence(1));
+    stream.dataReceived(packetForSequence(0x9000));
+    QCOMPARE(stream.receivedSequences(), QList<quint16>({0x9000}));
     QVERIFY(stream.missingSequences().isEmpty());
 }
 

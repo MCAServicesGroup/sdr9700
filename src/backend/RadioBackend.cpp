@@ -1083,8 +1083,12 @@ void RadioBackend::refreshRxAudioDevice()
 {
     const QByteArray savedID =
         QByteArray::fromBase64(AppSettings::instance().value("audioOutputDeviceID").toString().toLatin1());
-    setRxAudioDevice(
-        sdr9700::selectAudioDevice(QMediaDevices::audioOutputs(), savedID, QMediaDevices::defaultAudioOutput()));
+    const QAudioDevice selected =
+        sdr9700::selectAudioDevice(QMediaDevices::audioOutputs(), savedID, QMediaDevices::defaultAudioOutput());
+    m_rxDevice = selected;
+    // Forward every device-list refresh, even when Qt reports the same device
+    // ID. UdpAudio uses this event to clear a previous device-open failure latch.
+    invokeOnCurrentCommander([selected](Commander* commander) { commander->setRxAudioDevice(selected); });
 }
 
 void RadioBackend::refreshTxAudioDevice()
@@ -1869,7 +1873,7 @@ void RadioBackend::setVfoPreampLevel(Vfo vfo, int level)
 void RadioBackend::setVfoRfGain(Vfo vfo, int level)
 {
     const ushort value = static_cast<ushort>(qBound(0, level, 255));
-    qInfo(logRadio()).noquote().nospace()
+    qDebug(logRadio()).noquote().nospace()
         << "Receiver level request control=RFG vfo=" << (vfo == Vfo::Main ? "MAIN" : "SUB")
         << " receiver=" << int(sdr9700::backend::receiverForVfo(vfo)) << " raw=" << value;
     scheduleVfoReceiverCommand(vfo, funcRfGain,
@@ -1884,7 +1888,7 @@ void RadioBackend::setVfoRfGain(Vfo vfo, int level)
 void RadioBackend::setVfoSquelch(Vfo vfo, int level)
 {
     const ushort value = static_cast<ushort>(qBound(0, level, 255));
-    qInfo(logRadio()).noquote().nospace()
+    qDebug(logRadio()).noquote().nospace()
         << "Receiver level request control=SQL vfo=" << (vfo == Vfo::Main ? "MAIN" : "SUB")
         << " receiver=" << int(sdr9700::backend::receiverForVfo(vfo)) << " raw=" << value;
     scheduleVfoReceiverCommand(vfo, funcSquelch,

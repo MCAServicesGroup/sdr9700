@@ -87,6 +87,7 @@ set(sdr9700_CORE_SOURCES
     # Audio - Qt Multimedia handlers only
     audio/AudioConverter.cpp
     audio/DtmfGenerator.cpp
+    audio/RxAudioStartPolicy.h
     audio/TxAudioMonitoringPolicy.h
     audio/TxAudioPacing.h
     audio/AudioHandlerBase.cpp
@@ -276,7 +277,7 @@ target_link_libraries(sdr9700_app_support PUBLIC
 )
 if(sdr9700_ENABLE_GPU_PANADAPTER)
     target_compile_definitions(sdr9700_app_support PUBLIC SDR9700_GPU_PANADAPTER)
-    if(TARGET Qt6::GuiPrivate AND NOT sdr9700_QT_PRIVATE_INCLUDE_ROOT)
+    if(sdr9700_QT_GUI_PRIVATE_TARGET_USABLE)
         target_link_libraries(sdr9700_app_support PRIVATE Qt6::GuiPrivate)
     else()
         target_include_directories(sdr9700_app_support PRIVATE ${sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS})
@@ -550,6 +551,14 @@ if(BUILD_TESTING)
     target_link_libraries(SpectrumCanvasTest PRIVATE sdr9700_core Qt6::Test Qt6::Widgets)
     add_test(NAME SpectrumCanvasTest COMMAND SpectrumCanvasTest)
     set_tests_properties(SpectrumCanvasTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    if(sdr9700_ENABLE_GPU_PANADAPTER)
+        add_executable(GpuPanadapterRenderTest tests/GpuPanadapterRenderTest.cpp)
+        target_include_directories(GpuPanadapterRenderTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
+        target_link_libraries(GpuPanadapterRenderTest PRIVATE sdr9700_app_support Qt6::Test)
+        add_test(NAME GpuPanadapterRenderTest COMMAND GpuPanadapterRenderTest)
+        set_tests_properties(GpuPanadapterRenderTest PROPERTIES TIMEOUT 30 LABELS "gpu")
+    endif()
 
     add_executable(PanelAccessibilityTest
         tests/PanelAccessibilityTest.cpp

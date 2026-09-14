@@ -484,7 +484,7 @@ void VfoController::applyReceiverLevelConfirmation(Funcs func, const QVariant& v
     const char* const control = func == funcRfGain ? "RFG" : "SQL";
     if (pending.has_value() && level != *pending)
     {
-        qInfo(logRadio()).noquote().nospace()
+        qDebug(logRadio()).noquote().nospace()
             << "Receiver level stale readback ignored control=" << control
             << " vfo=" << (m_vfo == Vfo::Main ? "MAIN" : "SUB") << " receiver=" << int(receiver)
             << " pendingRaw=" << *pending << " readbackRaw=" << level;
@@ -505,7 +505,7 @@ void VfoController::applyReceiverLevelConfirmation(Funcs func, const QVariant& v
     {
         m_squelch = level;
     }
-    qInfo(logRadio()).noquote().nospace()
+    qDebug(logRadio()).noquote().nospace()
         << "Receiver level applied control=" << control << " vfo=" << (m_vfo == Vfo::Main ? "MAIN" : "SUB")
         << " receiver=" << int(receiver) << " raw=" << level
         << " percent=" << sdr9700::ui::main_window::radioLevelPercent(level);

@@ -325,8 +325,10 @@ void UdpBase::dataReceived(const QByteArray& r)
         }
         else
         {
-            if (in.seq < rxSeqBuf.firstKey() ||
-                static_cast<qint16>(in.seq - rxSeqBuf.lastKey()) > static_cast<qint16>(MAX_MISSING))
+            const quint16 previousHighest = rxSeqBuf.lastKey();
+            const quint32 forwardGap =
+                in.seq >= previousHighest ? quint32(in.seq) - quint32(previousHighest) : quint32(MAX_MISSING) + 1U;
+            if (in.seq < rxSeqBuf.firstKey() || forwardGap > quint32(MAX_MISSING))
             {
                 qDebug(logUdp()).noquote()
                     << this->metaObject()->className() << "Large seq number gap detected, previous highest: "

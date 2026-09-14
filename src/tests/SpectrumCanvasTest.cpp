@@ -7,6 +7,7 @@
 #include <QSet>
 #include <QTest>
 #include <QWheelEvent>
+#include <algorithm>
 #include <cmath>
 
 class SpectrumCanvasTest : public QObject
@@ -21,12 +22,14 @@ class SpectrumCanvasTest : public QObject
     void emitsFrequencyForClickWithoutDrag();
     void ignoresClicksOutsidePlotAndWhileLocked();
     void emitsWheelStepsAndHonorsInversion();
+    void supportsKeyboardTuningWhenUnlocked();
     void paintsEmptyAndPopulatedData();
     void keepsMaximumScopeLevelBelowTopEdge();
     void mapsObservedS8ScopePeakToMeterFraction();
     void keepsHorizontalGridDivisionsEven();
     void smoothsSuccessiveFramesAndResetsAcrossRanges();
     void interpolatesSparseBinsIntoContinuousTrace();
+    void preservesNarrowPeaksAcrossRasterWidths();
     void colorsTraceBySignalIntensity();
     void paintsNeutralShelfEdges();
 };
@@ -126,6 +129,22 @@ void SpectrumCanvasTest::emitsWheelStepsAndHonorsInversion()
                          Qt::NoModifier, Qt::NoScrollPhase, false);
     QCoreApplication::sendEvent(&canvas, &inverted);
     QCOMPARE(wheelSpy.takeFirst().at(0).toInt(), -1);
+}
+
+void SpectrumCanvasTest::supportsKeyboardTuningWhenUnlocked()
+{
+    SpectrumScopeCanvas canvas;
+    QSignalSpy stepSpy(&canvas, &SpectrumScopeCanvas::wheelStepRequested);
+
+    QTest::keyClick(&canvas, Qt::Key_Right);
+    QCOMPARE(stepSpy.count(), 1);
+    QCOMPARE(stepSpy.takeFirst().constFirst().toInt(), 1);
+    QTest::keyClick(&canvas, Qt::Key_Down);
+    QCOMPARE(stepSpy.takeFirst().constFirst().toInt(), -1);
+
+    canvas.setInteractionLocked(true);
+    QTest::keyClick(&canvas, Qt::Key_Left);
+    QCOMPARE(stepSpy.count(), 0);
 }
 
 void SpectrumCanvasTest::paintsEmptyAndPopulatedData()
@@ -252,6 +271,37 @@ void SpectrumCanvasTest::interpolatesSparseBinsIntoContinuousTrace()
     // Nearest-bin plotting produces only two long plateaus with a near-vertical
     // join. Subpixel Catmull-Rom sampling must populate many intermediate rows.
     QVERIFY(traceRows.size() > 20);
+}
+
+void SpectrumCanvasTest::preservesNarrowPeaksAcrossRasterWidths()
+{
+    for (const int width : {400, 800, 1600, 2560})
+    {
+        SpectrumScopeCanvas canvas;
+        canvas.resize(width, 240);
+        canvas.setFrequencyRange(144.0, 145.0);
+        canvas.setDataFrequencyRange(144.0, 145.0);
+        QVector<float> bins(475, 10.0f);
+        bins[bins.size() / 2] = 150.0f;
+        canvas.updateSpectrum(bins, false);
+
+        QVector<QPointF> points;
+        QVector<float> levels;
+        canvas.buildTraceSamples(&points, &levels);
+        QVERIFY(!points.isEmpty());
+        QVERIFY(!levels.isEmpty());
+        QCOMPARE(*std::max_element(levels.cbegin(), levels.cend()), 150.0f);
+    }
+
+    SpectrumScopeCanvas compressedCanvas;
+    compressedCanvas.resize(400, 240);
+    QVector<float> denseBins(1600, 10.0f);
+    denseBins[777] = 150.0f;
+    compressedCanvas.updateSpectrum(denseBins, false);
+    QVector<QPointF> compressedPoints;
+    QVector<float> compressedLevels;
+    compressedCanvas.buildTraceSamples(&compressedPoints, &compressedLevels);
+    QCOMPARE(*std::max_element(compressedLevels.cbegin(), compressedLevels.cend()), 150.0f);
 }
 
 void SpectrumCanvasTest::colorsTraceBySignalIntensity()

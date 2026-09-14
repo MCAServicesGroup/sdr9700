@@ -25,6 +25,7 @@
 #include "UdpBase.h"
 
 #include "AudioHandler.h"
+#include "RxAudioStartPolicy.h"
 
 class UdpAudio : public UdpBase
 {
@@ -107,6 +108,7 @@ class UdpAudio : public UdpBase
     int m_txSilencePacketBytes = 640; // 20 ms, 16 kHz, mono 16-bit PCM.
 
     bool m_audioReady = false;
+    sdr9700::audio::RxAudioStartPolicy m_rxAudioStartPolicy;
     bool m_transportReadyEmitted = false;
 
     QElapsedTimer audioClock;

@@ -71,6 +71,7 @@ class FakeRadioBackend : public IRadioBackend
     void setScopeMode(int) override {}
     void setScopeVfo(Vfo) override {}
     void setScopeFixedRangeHz(quint64, quint64) override {}
+    void setSpectrumFramesPerSecond(int) override {}
     bool setPtt(bool value) override
     {
         ptt = value;

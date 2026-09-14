@@ -497,8 +497,8 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
         auto* next = new QToolButton(control);
         previous->setText(QStringLiteral("‹"));
         next->setText(QStringLiteral("›"));
-        previous->setAccessibleName(QStringLiteral("Previous %1").arg(name.toLower()));
-        next->setAccessibleName(QStringLiteral("Next %1").arg(name.toLower()));
+        previous->setAccessibleName(QStringLiteral("Previous %1").arg(name));
+        next->setAccessibleName(QStringLiteral("Next %1").arg(name));
         for (QToolButton* button : {previous, next})
         {
             button->setFixedSize(16, 22);

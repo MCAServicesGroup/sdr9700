@@ -12,6 +12,6 @@ layout(std140, binding = 0) uniform Transform
 
 void main()
 {
-    vertexTextureCoordinate = vec2(textureCoordinate.x, fract(textureCoordinate.y + rowOffset));
+    vertexTextureCoordinate = vec2(textureCoordinate.x, textureCoordinate.y + rowOffset);
     gl_Position = matrix * vec4(position, 0.0, 1.0);
 }

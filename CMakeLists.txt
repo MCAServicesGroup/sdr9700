@@ -84,18 +84,28 @@ if(sdr9700_ENABLE_GPU_PANADAPTER)
         find_package(Qt6GuiPrivate QUIET)
     endif()
 
-    if(sdr9700_QT_PRIVATE_INCLUDE_ROOT OR NOT TARGET Qt6::GuiPrivate)
+    set(sdr9700_QT_GUI_PRIVATE_TARGET_USABLE OFF)
+    if(TARGET Qt6::GuiPrivate AND NOT sdr9700_QT_PRIVATE_INCLUDE_ROOT)
+        set(sdr9700_QT_GUI_PRIVATE_TARGET_USABLE ON)
+        get_target_property(sdr9700_QT_GUI_PRIVATE_TARGET_INCLUDES Qt6::GuiPrivate INTERFACE_INCLUDE_DIRECTORIES)
+        foreach(sdr9700_QT_GUI_PRIVATE_TARGET_INCLUDE IN LISTS sdr9700_QT_GUI_PRIVATE_TARGET_INCLUDES)
+            if(IS_ABSOLUTE "${sdr9700_QT_GUI_PRIVATE_TARGET_INCLUDE}" AND
+               NOT EXISTS "${sdr9700_QT_GUI_PRIVATE_TARGET_INCLUDE}")
+                set(sdr9700_QT_GUI_PRIVATE_TARGET_USABLE OFF)
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    if(NOT sdr9700_QT_GUI_PRIVATE_TARGET_USABLE)
         set(sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS "")
         if(sdr9700_QT_PRIVATE_INCLUDE_ROOT)
             list(APPEND sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS
                 "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtGui/${Qt6_VERSION}"
                 "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtGui/${Qt6_VERSION}/QtGui"
-                "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtCore/${Qt6_VERSION}"
-                "${sdr9700_QT_PRIVATE_INCLUDE_ROOT}/QtCore/${Qt6_VERSION}/QtCore"
             )
         else()
             get_target_property(sdr9700_QT_GUI_INCLUDE_DIRS Qt6::Gui INTERFACE_INCLUDE_DIRECTORIES)
-            get_target_property(sdr9700_QT_CORE_INCLUDE_DIRS Qt6::Core INTERFACE_INCLUDE_DIRECTORIES)
             foreach(sdr9700_QT_GUI_INCLUDE_DIR IN LISTS sdr9700_QT_GUI_INCLUDE_DIRS)
                 if(EXISTS "${sdr9700_QT_GUI_INCLUDE_DIR}/${Qt6_VERSION}/QtGui/rhi/qrhi.h")
                     list(APPEND sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS
@@ -105,31 +115,18 @@ if(sdr9700_ENABLE_GPU_PANADAPTER)
                     break()
                 endif()
             endforeach()
-            foreach(sdr9700_QT_CORE_INCLUDE_DIR IN LISTS sdr9700_QT_CORE_INCLUDE_DIRS)
-                if(EXISTS "${sdr9700_QT_CORE_INCLUDE_DIR}/${Qt6_VERSION}/QtCore/private/qglobal_p.h")
-                    list(APPEND sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS
-                        "${sdr9700_QT_CORE_INCLUDE_DIR}/${Qt6_VERSION}"
-                        "${sdr9700_QT_CORE_INCLUDE_DIR}/${Qt6_VERSION}/QtCore"
-                    )
-                    break()
-                endif()
-            endforeach()
         endif()
 
         set(sdr9700_QT_GUI_PRIVATE_HEADERS_FOUND OFF)
-        set(sdr9700_QT_CORE_PRIVATE_HEADERS_FOUND OFF)
         foreach(sdr9700_QT_PRIVATE_INCLUDE_DIR IN LISTS sdr9700_QT_GUI_PRIVATE_INCLUDE_DIRS)
             if(EXISTS "${sdr9700_QT_PRIVATE_INCLUDE_DIR}/QtGui/rhi/qrhi.h")
                 set(sdr9700_QT_GUI_PRIVATE_HEADERS_FOUND ON)
             endif()
-            if(EXISTS "${sdr9700_QT_PRIVATE_INCLUDE_DIR}/QtCore/private/qglobal_p.h")
-                set(sdr9700_QT_CORE_PRIVATE_HEADERS_FOUND ON)
-            endif()
         endforeach()
-        if(NOT sdr9700_QT_GUI_PRIVATE_HEADERS_FOUND OR NOT sdr9700_QT_CORE_PRIVATE_HEADERS_FOUND)
+        if(NOT sdr9700_QT_GUI_PRIVATE_HEADERS_FOUND)
             message(FATAL_ERROR
-                "The GPU panadapter requires QtGui and QtCore private headers. Install qt6-base-private-dev "
-                "or provide sdr9700_QT_PRIVATE_INCLUDE_ROOT.")
+                "The GPU panadapter requires QtGui's version-matched RHI headers. Install the Qt private "
+                "development headers for this Qt version or provide sdr9700_QT_PRIVATE_INCLUDE_ROOT.")
         endif()
     endif()
 

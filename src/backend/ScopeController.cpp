@@ -16,6 +16,7 @@ ScopeController::ScopeController(QObject* parent) : QObject(parent)
 {
     m_flushTimer = new QTimer(this);
     m_flushTimer->setSingleShot(true);
+    m_flushTimer->setTimerType(Qt::PreciseTimer);
     m_flushTimer->setInterval(sdr9700::spectrumFrameIntervalMs(m_framesPerSecond));
     connect(m_flushTimer, &QTimer::timeout, this, &ScopeController::flushLatestFrame);
     qInfo(logSpectrumScope()).noquote().nospace()
@@ -36,8 +37,14 @@ void ScopeController::setFramesPerSecond(int requestedFramesPerSecond)
         << "Spectrum frame pacing fps=" << m_framesPerSecond << " intervalMs=" << m_flushTimer->interval();
     if (m_flushTimer->isActive())
     {
-        m_flushTimer->start();
+        m_flushTimer->stop();
     }
+    if (m_pacingClock.isValid())
+    {
+        m_nextEmissionDeadlineNs =
+            m_pacingClock.nsecsElapsed() + sdr9700::spectrumFrameIntervalNanoseconds(m_framesPerSecond);
+    }
+    scheduleFlush();
 }
 
 void ScopeController::reset()
@@ -49,6 +56,8 @@ void ScopeController::reset()
     m_pendingFrame = {};
     m_hasPendingFrame = false;
     m_frameArrivalClock.invalidate();
+    m_pacingClock.invalidate();
+    m_nextEmissionDeadlineNs = 0;
 }
 
 void ScopeController::acceptScopeData(const ScopeData& data)
@@ -76,10 +85,30 @@ void ScopeController::acceptScopeData(const ScopeData& data)
 
 void ScopeController::scheduleFlush()
 {
-    if (m_flushTimer && !m_flushTimer->isActive())
+    if (!m_flushTimer || m_flushTimer->isActive() || !m_hasPendingFrame)
     {
-        m_flushTimer->start();
+        return;
     }
+
+    if (!m_pacingClock.isValid())
+    {
+        m_pacingClock.start();
+        m_nextEmissionDeadlineNs = 0;
+        // Queue the first frame at zero delay so additional frames delivered
+        // in the same event-loop turn still coalesce to the newest one.
+        m_flushTimer->start(0);
+        return;
+    }
+
+    const qint64 remainingNs = m_nextEmissionDeadlineNs - m_pacingClock.nsecsElapsed();
+    if (remainingNs <= 0)
+    {
+        m_flushTimer->start(0);
+        return;
+    }
+    constexpr qint64 kNanosecondsPerMillisecond = 1'000'000;
+    const qint64 remainingMs = (remainingNs + kNanosecondsPerMillisecond - 1) / kNanosecondsPerMillisecond;
+    m_flushTimer->start(int(qMin<qint64>(remainingMs, std::numeric_limits<int>::max())));
 }
 
 void ScopeController::flushLatestFrame()
@@ -98,6 +127,20 @@ void ScopeController::flushLatestFrame()
     const ScopeData frame = std::move(m_pendingFrame);
     m_pendingFrame = {};
     m_hasPendingFrame = false;
+    const qint64 nowNs = m_pacingClock.nsecsElapsed();
+    const qint64 intervalNs = sdr9700::spectrumFrameIntervalNanoseconds(m_framesPerSecond);
+    if (m_nextEmissionDeadlineNs <= 0)
+    {
+        m_nextEmissionDeadlineNs = nowNs + intervalNs;
+    }
+    else
+    {
+        m_nextEmissionDeadlineNs += intervalNs;
+        if (m_nextEmissionDeadlineNs <= nowNs)
+        {
+            m_nextEmissionDeadlineNs = nowNs + intervalNs;
+        }
+    }
     emit scopeDataReceived();
 
     // Reuse the conversion buffer between frames. The queued signal delivery

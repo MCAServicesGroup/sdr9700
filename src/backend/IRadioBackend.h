@@ -71,7 +71,7 @@ class IRadioBackend : public QObject
     virtual void setScopeMode(int mode) = 0; // 0=center, 1=fixed
     virtual void setScopeVfo(Vfo vfo) = 0;
     virtual void setScopeFixedRangeHz(quint64 startHz, quint64 endHz) = 0;
-    virtual void setSpectrumFramesPerSecond(int framesPerSecond) { Q_UNUSED(framesPerSecond) }
+    virtual void setSpectrumFramesPerSecond(int framesPerSecond) = 0;
 
     virtual bool setPtt(bool on) = 0;
     virtual void setTxPower(int level) = 0; // 0-255
