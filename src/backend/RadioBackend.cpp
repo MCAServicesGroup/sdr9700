@@ -1,7 +1,7 @@
 #include "RadioBackend.h"
 
 #include "MainSubExchangeConfirmationPolicy.h"
-#include "ReceiverAudioReadinessPolicy.h"
+#include "ReceiverReadinessPolicy.h"
 #include "VfoReceiverCommandRoute.h"
 
 #include "Commander.h"
@@ -297,6 +297,7 @@ RadioBackend::RadioBackend(QObject* parent)
                     m_smeterPollQueuedClock.invalidate();
                     m_smeterPollPendingClock.invalidate();
                 }
+                updateReadyState();
                 updateAudioReadyState();
                 emit radioValueUpdated(func, value, receiver);
             });
@@ -1285,6 +1286,7 @@ void RadioBackend::shutdownConnection(bool emitDisconnectedSignal, bool emitDisc
     m_initialSubModeReceived = false;
     m_audioReady = false;
     m_initialStateRequested = false;
+    m_postReadyStateRequested = false;
     m_currentBandKey = -1;
     m_currentMainFrequencyHz = 0;
     m_currentSubFrequencyHz = 0;
@@ -2794,14 +2796,35 @@ void RadioBackend::requestPostReadyRadioState()
 void RadioBackend::updateReadyState()
 {
     const bool mainControlReady = m_initialMainFrequencyReceived && m_initialMainModeReceived;
-    // Do not gate radio control readiness on Spectrum Scope packets. The IC-9700
-    // can accept CI-V commands and memory reads before the UDP scope stream
-    // starts, and blocking here leaves the GUI stuck in "syncing" with no way
-    // for MemoryController to begin its required startup sync. Backout point:
-    // if scope data must become a hard startup gate again, restore the previous
-    // `(m_scopeDataReceived || m_scopeSyncDegraded)` condition and revisit the
-    // watchdog path below.
-    const bool ready = mainControlReady;
+    if (mainControlReady && !m_postReadyStateRequested)
+    {
+        m_postReadyStateRequested = true;
+        if (m_initialStateRetryTimer)
+        {
+            m_initialStateRetryTimer->stop();
+        }
+        const quint64 session = m_sessionId.load(std::memory_order_relaxed);
+        Commander* commandSession = m_commander;
+        // Keep the broad post-MAIN snapshot behind the existing stability
+        // delay, but do not publish readiness until its targeted SUB frequency
+        // and mode reads have completed. MemoryController starts its initial
+        // sweep only from that full-ready signal, so memory traffic cannot
+        // contend with either receiver's bootstrap.
+        QTimer::singleShot(3000, this,
+                           [this, session, commandSession]()
+                           {
+                               if (isCurrentSession(session, commandSession) && m_initialMainFrequencyReceived &&
+                                   m_initialMainModeReceived)
+                               {
+                                   requestPostReadyRadioState();
+                               }
+                           });
+    }
+
+    // Spectrum data and memory synchronization are background activities. The
+    // radio becomes operable only after both receiver identities are known.
+    const bool ready = sdr9700::backend::receiverStateReady(m_initialMainFrequencyReceived, m_initialMainModeReceived,
+                                                            m_initialSubFrequencyReceived, m_initialSubModeReceived);
     if (m_radioReady == ready)
     {
         return;
@@ -2811,8 +2834,9 @@ void RadioBackend::updateReadyState()
     qInfo(logRadio()).noquote().nospace()
         << "Radio backend readiness changed ready=" << ready
         << " mainFrequencyReceived=" << m_initialMainFrequencyReceived
-        << " mainModeReceived=" << m_initialMainModeReceived << " scopeReceived=" << m_scopeDataReceived
-        << " scopeDegraded=" << m_scopeSyncDegraded;
+        << " mainModeReceived=" << m_initialMainModeReceived
+        << " subFrequencyReceived=" << m_initialSubFrequencyReceived << " subModeReceived=" << m_initialSubModeReceived
+        << " scopeReceived=" << m_scopeDataReceived << " scopeDegraded=" << m_scopeSyncDegraded;
     emit readyChanged(ready);
     if (ready)
     {
@@ -2835,19 +2859,7 @@ void RadioBackend::updateReadyState()
         {
             m_vfoStatePollTimer->start();
         }
-        // Give a newly opened or recovered CI-V stream time to demonstrate
-        // useful spectrum traffic before the broader status snapshot joins
-        // startup. MemoryController applies the same recovery window before
-        // beginning its separately paced 420-slot sweep.
-        QTimer::singleShot(3000, this,
-                           [this]()
-                           {
-                               if (m_radioReady && m_commander)
-                               {
-                                   requestPostReadyRadioState();
-                               }
-                           });
-        emit connectionStageChanged(ConnectionStage::SyncingRadioState, QStringLiteral("Synchronizing memories"));
+        emit connectionStageChanged(ConnectionStage::Ready, {});
         updateAudioReadyState();
     }
 }
@@ -2855,7 +2867,7 @@ void RadioBackend::updateReadyState()
 void RadioBackend::updateAudioReadyState()
 {
     if (m_audioReady || !m_commander ||
-        !sdr9700::backend::receiverAudioReady(m_initialMainFrequencyReceived, m_initialMainModeReceived,
+        !sdr9700::backend::receiverStateReady(m_initialMainFrequencyReceived, m_initialMainModeReceived,
                                               m_initialSubFrequencyReceived, m_initialSubModeReceived))
     {
         return;
@@ -2886,7 +2898,9 @@ void RadioBackend::restartAfterSyncTimeout()
     {
         return;
     }
-    if (m_initialMainFrequencyReceived && m_initialMainModeReceived && !m_scopeDataReceived)
+    if (sdr9700::backend::receiverStateReady(m_initialMainFrequencyReceived, m_initialMainModeReceived,
+                                             m_initialSubFrequencyReceived, m_initialSubModeReceived) &&
+        !m_scopeDataReceived)
     {
         // The normal readiness path no longer waits on Spectrum Scope data, so
         // reaching this branch means a queued readiness update was delayed. Keep
@@ -2911,7 +2925,8 @@ void RadioBackend::restartAfterSyncTimeout()
     qWarning(logRadio()).noquote().nospace()
         << "Radio sync did not complete timeoutMs=" << kSyncWatchdogTimeoutMs
         << " scopeReceived=" << m_scopeDataReceived << " mainFrequencyReceived=" << m_initialMainFrequencyReceived
-        << " mainModeReceived=" << m_initialMainModeReceived;
+        << " mainModeReceived=" << m_initialMainModeReceived
+        << " subFrequencyReceived=" << m_initialSubFrequencyReceived << " subModeReceived=" << m_initialSubModeReceived;
     if (m_syncReconnectAttempts >= kMaxSyncReconnectAttempts)
     {
         // A repeated failure here means LAN control authenticated but the CI-V
@@ -3058,6 +3073,7 @@ void RadioBackend::onLanReady()
     m_initialSubModeReceived = false;
     m_audioReady = false;
     m_initialStateRequested = false;
+    m_postReadyStateRequested = false;
     m_txMeterPollTick = 0;
     m_smeterPollTick = 0;
     emit readyChanged(false);

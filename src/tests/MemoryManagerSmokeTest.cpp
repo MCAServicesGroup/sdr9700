@@ -67,6 +67,8 @@ class MemoryManagerSmokeTest : public QObject
     void selectorButtonsAvoidDynamicStyleSheets();
     void compressorMenuReflectsConfirmedLevel();
     void utilityWindowIsDestroyedWithHost();
+    void backendReadinessWaitsForBothVfos();
+    void radioControlsDoNotWaitForInitialMemorySync();
     void quitActionDefersWindowClose();
     void persistentStatusMessageCanBeClearedByOwner();
     void automationIndicatorReflectsClientCount();
@@ -868,6 +870,49 @@ void MemoryManagerSmokeTest::quitActionDefersWindowClose()
     QCloseEvent repeatedClose;
     QCoreApplication::sendEvent(&window, &repeatedClose);
     QVERIFY(repeatedClose.isAccepted());
+}
+
+void MemoryManagerSmokeTest::radioControlsDoNotWaitForInitialMemorySync()
+{
+    RadioModel model;
+    MainWindow window(&model, nullptr, false);
+    QCoreApplication::removePostedEvents(&window, QEvent::MetaCall);
+    auto* memoryController = window.findChild<MemoryController*>();
+    auto* speakerButton = window.findChild<QWidget*>(QStringLiteral("titleSpeakerMuteButton"));
+    QVERIFY(memoryController != nullptr);
+    QVERIFY(speakerButton != nullptr);
+    QVERIFY(!memoryController->initialMemorySyncComplete());
+    QVERIFY(!speakerButton->isEnabled());
+
+    QVERIFY(QMetaObject::invokeMethod(&model, "onBackendConnected"));
+    QVERIFY(QMetaObject::invokeMethod(&model, "onBackendReadyChanged", Q_ARG(bool, true)));
+    QCoreApplication::sendPostedEvents(&window, QEvent::MetaCall);
+
+    QVERIFY(!memoryController->initialMemorySyncComplete());
+    QVERIFY(speakerButton->isEnabled());
+}
+
+void MemoryManagerSmokeTest::backendReadinessWaitsForBothVfos()
+{
+    RadioBackend backend;
+    QSignalSpy readySpy(&backend, &IRadioBackend::readyChanged);
+
+    backend.m_initialMainFrequencyReceived = true;
+    backend.m_initialMainModeReceived = true;
+    backend.updateReadyState();
+    QVERIFY(!backend.m_radioReady);
+    QVERIFY(readySpy.isEmpty());
+
+    backend.m_initialSubFrequencyReceived = true;
+    backend.updateReadyState();
+    QVERIFY(!backend.m_radioReady);
+    QVERIFY(readySpy.isEmpty());
+
+    backend.m_initialSubModeReceived = true;
+    backend.updateReadyState();
+    QVERIFY(backend.m_radioReady);
+    QCOMPARE(readySpy.count(), 1);
+    QCOMPARE(readySpy.constFirst().constFirst().toBool(), true);
 }
 
 void MemoryManagerSmokeTest::persistentStatusMessageCanBeClearedByOwner()

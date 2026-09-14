@@ -202,6 +202,7 @@ class RadioBackend : public IRadioBackend
     bool m_initialSubFrequencyReceived{false};
     bool m_initialSubModeReceived{false};
     bool m_initialStateRequested{false};
+    bool m_postReadyStateRequested{false};
     bool m_radioReady{false};
     bool m_audioReady{false};
     int m_syncReconnectAttempts{0};

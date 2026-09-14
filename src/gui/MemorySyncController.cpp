@@ -130,9 +130,9 @@ void MemorySyncController::handleRadioReadyChanged(bool ready)
         m_startupScopeFrameCount = 0;
         m_startupStabilityTimer->stop();
         m_startupFallbackTimer->start();
-        // This brief stability gate is part of radio synchronization, not a
-        // separate operator-facing lifecycle stage. Leave the current
-        // connection status message in place until memory polling actually begins.
+        // Memory verification is background work after receiver readiness.
+        // Its stability gate and progress belong to Memory Manager rather than
+        // the operator-facing radio connection lifecycle.
         if (m_memoryPollIntervalSeconds > 0)
         {
             m_periodicRefreshTimer->start();
@@ -187,7 +187,6 @@ void MemorySyncController::startInitialRadioMemoryRefresh()
     m_startupFallbackTimer->stop();
     qInfo(logGui()).nospace() << "Initial memory sync stability gate satisfied scope_frames="
                               << m_startupScopeFrameCount;
-    m_owner->m_window->showStatusMessage(QStringLiteral("Synchronizing memories"), 0);
     requestRadioMemoryRefresh();
 }
 

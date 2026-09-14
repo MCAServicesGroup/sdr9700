@@ -3,7 +3,7 @@
 namespace sdr9700::backend
 {
 
-inline bool receiverAudioReady(bool mainFrequencyReceived, bool mainModeReceived, bool subFrequencyReceived,
+inline bool receiverStateReady(bool mainFrequencyReceived, bool mainModeReceived, bool subFrequencyReceived,
                                bool subModeReceived)
 {
     return mainFrequencyReceived && mainModeReceived && subFrequencyReceived && subModeReceived;

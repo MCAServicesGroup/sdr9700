@@ -4,7 +4,7 @@
 #include "MemorySyncPolicy.h"
 #include "MainSubExchangePolicy.h"
 #include "PttConfirmationPolicy.h"
-#include "ReceiverAudioReadinessPolicy.h"
+#include "ReceiverReadinessPolicy.h"
 #include "RadioSessionOwnership.h"
 #include "RadioSessionCorrelation.h"
 #include "RadioSessionRecoveryStore.h"
@@ -50,7 +50,7 @@ class OfflinePoliciesTest : public QObject
     void waitsForRetainedTokenRemovalBeforeReplacementLogin();
     void refusesRecoveryWhileJournalOwnerIsAlive();
     void expiresMeterPollDeadlinesConservatively();
-    void waitsForBothReceiverIdentitiesBeforeAudio();
+    void waitsForBothReceiverIdentitiesBeforeReadiness();
 };
 
 void OfflinePoliciesTest::selectsAudioDevicesAcrossDefaultChangesAndHotplug()
@@ -87,13 +87,13 @@ void OfflinePoliciesTest::expiresMeterPollDeadlinesConservatively()
     QVERIFY(meterPollDeadlineExpired(true, 301, 300));
 }
 
-void OfflinePoliciesTest::waitsForBothReceiverIdentitiesBeforeAudio()
+void OfflinePoliciesTest::waitsForBothReceiverIdentitiesBeforeReadiness()
 {
-    using sdr9700::backend::receiverAudioReady;
-    QVERIFY(!receiverAudioReady(false, false, false, false));
-    QVERIFY(!receiverAudioReady(true, true, false, false));
-    QVERIFY(!receiverAudioReady(true, true, true, false));
-    QVERIFY(receiverAudioReady(true, true, true, true));
+    using sdr9700::backend::receiverStateReady;
+    QVERIFY(!receiverStateReady(false, false, false, false));
+    QVERIFY(!receiverStateReady(true, true, false, false));
+    QVERIFY(!receiverStateReady(true, true, true, false));
+    QVERIFY(receiverStateReady(true, true, true, true));
 }
 
 void OfflinePoliciesTest::refusesRecoveryWhileJournalOwnerIsAlive()

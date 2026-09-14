@@ -170,9 +170,6 @@ MainWindow::MainWindow(RadioModel* model, QWidget* parent, bool quitApplicationO
     connect(m_model, &RadioModel::sessionHeartbeat, m_titleBar, &MainTitleBar::pulseRadioHeartbeat);
     connect(m_model->radioState(), &sdr9700::RadioState::sharedStateChanged, this,
             &MainWindow::syncControlLockFromRadioState);
-    connect(m_memoryController, &MemoryController::initialMemorySyncChanged, this,
-            [this](bool) { onRadioReadyChanged(m_model && m_model->isReady()); });
-
     connect(m_vfo, &VfoModel::frequencyChanged, this, &MainWindow::onFrequencyChanged);
     connect(m_vfo, &VfoModel::modeChanged, this, &MainWindow::onModeChanged);
     connect(m_vfo, &VfoModel::duplexModeChanged, this, &MainWindow::onDuplexModeChanged);
@@ -959,8 +956,7 @@ void MainWindow::setRadioControlsEnabled(bool enabled)
 
 bool MainWindow::radioUiReady() const
 {
-    return m_model && m_model->isConnected() && m_model->isReady() && m_memoryController &&
-           m_memoryController->initialMemorySyncComplete();
+    return m_model && m_model->isConnected() && m_model->isReady();
 }
 
 void MainWindow::resetRadioOwnedControlsForSync()
@@ -1395,7 +1391,7 @@ void MainWindow::onConnectionChanged(bool connected)
 void MainWindow::onRadioReadyChanged(bool ready)
 {
     const bool connected = m_model->isConnected();
-    const bool uiReady = connected && ready && m_memoryController && m_memoryController->initialMemorySyncComplete();
+    const bool uiReady = connected && ready;
     const bool notifyReady = uiReady && !m_spectrumScopeStillSyncingAfterReady && !m_radioUiReadyNotified;
     m_radioUiReadyNotified = uiReady;
     setRadioControlsEnabled(uiReady);
@@ -1424,10 +1420,9 @@ void MainWindow::onRadioReadyChanged(bool ready)
             QStringLiteral("<span style='color:%1'>Connected</span>").arg(UiTheme::Color::Success));
         if (notifyReady)
         {
-            // Backend readiness means initial CI-V frequency and mode reads
-            // reached a usable point, but MainWindow waits for both the first
-            // memory poll and the spectrum scope before presenting the final
-            // operator-facing ready state.
+            // Backend readiness means both receivers have confirmed frequency
+            // and mode. Memory synchronization continues independently after
+            // controls become available.
             clearPersistentStatusMessage(m_connectionStatusMessage);
             m_connectionStatusMessage.clear();
             showStatusMessage(QStringLiteral("Radio ready"), 5000);
@@ -1639,8 +1634,8 @@ void MainWindow::onConnectionStageChanged(ConnectionStage stage, const QString& 
         break;
     case ConnectionStage::SyncingRadioState:
     case ConnectionStage::Ready:
-        // Backend Ready means CI-V state is usable. The operator-facing ready
-        // state remains gated on MemoryController's first complete poll.
+        // Backend Ready means both receiver identities are usable. Spectrum
+        // and memory synchronization continue without holding this state.
         m_connStateName = radioUiReady() ? QStringLiteral("Connected") : QStringLiteral("Syncing");
         color = radioUiReady() ? UiTheme::Color::Success : UiTheme::Color::Warning;
         break;
