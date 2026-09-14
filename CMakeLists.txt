@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
-project(SDR9700 VERSION 26.9.1 LANGUAGES C CXX)
+project(SDR9700 VERSION 26.9.2 LANGUAGES C CXX)
 
 include(CTest)
 
-set(SDR9700_DISPLAY_VERSION "26.9.1")
+set(SDR9700_DISPLAY_VERSION "26.9.2")
 option(SDR9700_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer instrumentation" OFF)
 option(SDR9700_THREAD_SANITIZE "Enable ThreadSanitizer instrumentation" OFF)
 option(SDR9700_ENABLE_HIDAPI "Build optional Icom RC-28 support when hidapi is available" ON)
