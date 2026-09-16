@@ -78,6 +78,18 @@ if [ ! -e "${frameworks_path}/QtPdf.framework" ]; then
     rm -f "${plugins_path}/imageformats/libqpdf.dylib"
 fi
 
+# macdeployqt copies every SQL driver from the Qt installation. SDR9700 uses
+# only SQLite; the other drivers can retain load commands for database client
+# libraries that are neither required nor bundled.
+if [ -d "${plugins_path}/sqldrivers" ]; then
+    for sql_driver in "${plugins_path}/sqldrivers"/*; do
+        [ -e "${sql_driver}" ] || continue
+        if [ "$(basename "${sql_driver}")" != "libqsqlite.dylib" ]; then
+            rm -f "${sql_driver}"
+        fi
+    done
+fi
+
 # Copied Homebrew binaries can arrive with signatures and build-machine rpaths.
 # Let install_name_tool invalidate those signatures while changing the load
 # commands. Removing a signature first with the older codesign shipped on some
@@ -85,6 +97,22 @@ fi
 # __LINKEDIT layout. The complete bundle is signed after all metadata is final.
 while IFS= read -r binary_path; do
     if file "${binary_path}" | grep -q "Mach-O"; then
+        architectures="$(lipo -archs "${binary_path}")"
+        if [ "${architectures}" != "arm64" ]; then
+            case " ${architectures} " in
+            *" arm64 "*)
+                thinned_path="${binary_path}.arm64"
+                lipo "${binary_path}" -thin arm64 -output "${thinned_path}"
+                chmod "$(stat -f '%Lp' "${binary_path}")" "${thinned_path}"
+                mv "${thinned_path}" "${binary_path}"
+                ;;
+            *)
+                echo "${binary_path} does not contain an arm64 slice." >&2
+                exit 1
+                ;;
+            esac
+        fi
+
         install_id="$(otool -D "${binary_path}" 2>/dev/null | tail -n +2 | head -n 1)"
         absolute_rpaths="$(otool -l "${binary_path}" | awk '
             $1 == "cmd" && $2 == "LC_RPATH" { reading_rpath = 1; next }
@@ -97,8 +125,15 @@ while IFS= read -r binary_path; do
         ')"
 
         if [ -n "${install_id}" ] && echo "${install_id}" | grep -q '^/'; then
-            relative_path="${binary_path#"${frameworks_path}/"}"
-            run_install_name_tool -id "@rpath/${relative_path}" "${binary_path}"
+            case "${binary_path}" in
+            "${frameworks_path}"/*)
+                relative_path="${binary_path#"${frameworks_path}/"}"
+                run_install_name_tool -id "@rpath/${relative_path}" "${binary_path}"
+                ;;
+            "${plugins_path}"/*)
+                run_install_name_tool -id "@loader_path/$(basename "${binary_path}")" "${binary_path}"
+                ;;
+            esac
         fi
 
         if [ -n "${absolute_rpaths}" ]; then
@@ -110,7 +145,7 @@ while IFS= read -r binary_path; do
         fi
     fi
 done <<EOF
-$(find "${frameworks_path}" -type f)
+$(find "${frameworks_path}" "${plugins_path}" -type f)
 EOF
 
 # The main executable can also inherit Homebrew link directories from
