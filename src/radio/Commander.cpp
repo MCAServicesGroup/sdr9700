@@ -2920,6 +2920,18 @@ bool Commander::parseSpectrum(ScopeData& d, uchar receiver)
     constexpr int freqLen = 5;
     constexpr int sequenceHeaderBytes = 2;
     constexpr int waveInfoBytes = sequenceHeaderBytes + 2 + (freqLen * 2);
+    auto logCompletedFrame = [&](int sequenceCount)
+    {
+        QElapsedTimer& diagnosticClock = m_scopeDiagnosticClocks[assemblyIndex];
+        if (!logSpectrumScope().isDebugEnabled() || (diagnosticClock.isValid() && diagnosticClock.elapsed() < 1000))
+        {
+            return;
+        }
+        diagnosticClock.restart();
+        qDebug(logSpectrumScope()).noquote()
+            << "Spectrum frame sequences:" << sequenceCount << "start:" << d.startFreq << "end:" << d.endFreq
+            << "mode:" << d.mode << "oor:" << d.oor << "dataLen:" << d.data.size();
+    };
 
     if (sequenceMax <= 1)
     {
@@ -2970,8 +2982,7 @@ bool Commander::parseSpectrum(ScopeData& d, uchar receiver)
         }
         ret = !d.data.isEmpty();
         d.valid = ret;
-        qInfo(logSpectrumScope()).noquote() << "Spectrum single-frame start:" << d.startFreq << "end:" << d.endFreq
-                                            << "mode:" << d.mode << "oor:" << d.oor << "dataLen:" << d.data.size();
+        logCompletedFrame(1);
         return ret;
     }
 
@@ -3028,10 +3039,6 @@ bool Commander::parseSpectrum(ScopeData& d, uchar receiver)
             d.startFreq -= halfSpanMhz;
             d.endFreq = d.startFreq + (2 * halfSpanMhz);
         }
-
-        qInfo(logSpectrumScope()).noquote()
-            << "Spectrum seq 1/" << sequenceMax << "start:" << d.startFreq << "end:" << d.endFreq << "mode:" << d.mode
-            << "oor:" << d.oor << "payloadLen:" << payloadIn.length();
     }
     else if ((sequence > 1) && (sequence < sequenceMax))
     {
@@ -3051,8 +3058,6 @@ bool Commander::parseSpectrum(ScopeData& d, uchar receiver)
         appendScopePixels(2);
         m_expectedScopeSequences[assemblyIndex] = sequence + 1;
         ret = false;
-        qInfo(logSpectrumScope()).noquote() << "Spectrum seq" << sequence << "/" << sequenceMax
-                                            << "dataAccum:" << d.data.size() << "payloadLen:" << payloadIn.length();
     }
     else if (sequence == sequenceMax)
     {
@@ -3072,9 +3077,7 @@ bool Commander::parseSpectrum(ScopeData& d, uchar receiver)
         appendScopePixels(2);
         m_expectedScopeSequences[assemblyIndex] = 0;
         ret = true;
-        qInfo(logSpectrumScope()).noquote()
-            << "Spectrum seq" << sequence << "/" << sequenceMax << "(LAST) totalData:" << d.data.size()
-            << "payloadLen:" << payloadIn.length();
+        logCompletedFrame(sequenceMax);
     }
     d.valid = ret;
 

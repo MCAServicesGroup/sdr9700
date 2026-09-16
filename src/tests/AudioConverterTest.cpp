@@ -21,6 +21,7 @@ class AudioConverterTest : public QObject
     void rejectsMalformedSampleData();
     void stereoInputAveragesBothChannels();
     void monoInputDuplicatesToBothChannels();
+    void monoMixDuplicatesToStereoOnlyOutput();
     void pcmuEncoderUsesStandardEdgeCodes();
     void pcmuDecoderPreservesSampleSign();
     void clipsFloatToIntegerOutput();
@@ -154,6 +155,29 @@ void AudioConverterTest::monoInputDuplicatesToBothChannels()
     QCOMPARE(stereo[1], qint16(1000));
     QCOMPARE(stereo[2], qint16(-2000));
     QCOMPARE(stereo[3], qint16(-2000));
+}
+
+void AudioConverterTest::monoMixDuplicatesToStereoOnlyOutput()
+{
+    const QAudioFormat stereo = audioFormat(2, QAudioFormat::Int16);
+    AudioConverter converter;
+    QVERIFY(converter.init(stereo, LPCM, stereo, LPCM, 7, 4, true));
+
+    const qint16 inputSamples[] = {12000, -4000, -2000, 10000};
+    audioPacket packet;
+    packet.data = QByteArray(reinterpret_cast<const char*>(inputSamples), sizeof(inputSamples));
+    audioPacket converted;
+    connect(&converter, &AudioConverter::converted, this,
+            [&converted](const audioPacket& result) { converted = result; });
+    QVERIFY(converter.convert(packet));
+
+    qint16 outputSamples[4]{};
+    QCOMPARE(converted.data.size(), qsizetype(sizeof(outputSamples)));
+    std::memcpy(outputSamples, converted.data.constData(), sizeof(outputSamples));
+    QCOMPARE(outputSamples[0], qint16(4000));
+    QCOMPARE(outputSamples[1], qint16(4000));
+    QCOMPARE(outputSamples[2], qint16(4000));
+    QCOMPARE(outputSamples[3], qint16(4000));
 }
 
 void AudioConverterTest::pcmuEncoderUsesStandardEdgeCodes()

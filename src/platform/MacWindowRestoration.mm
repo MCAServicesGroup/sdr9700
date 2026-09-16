@@ -45,15 +45,20 @@ void disableRestoration(QWidget* widget)
 
     nativeWindow.restorable = NO;
     nativeWindow.restorationClass = Nil;
-    nativeWindow.collectionBehavior =
-        (nativeWindow.collectionBehavior & ~NSWindowCollectionBehaviorFullScreenPrimary) |
-        NSWindowCollectionBehaviorFullScreenNone;
+    nativeWindow.collectionBehavior = (nativeWindow.collectionBehavior & ~NSWindowCollectionBehaviorFullScreenPrimary) |
+                                      NSWindowCollectionBehaviorFullScreenNone;
     [nativeWindow disableSnapshotRestoration];
+    widget->setProperty("sdr9700MacRestorationConfigured", true);
 
     // AppKit injects toggleFullScreen: into a native View menu even when Qt's
     // fullscreen button hint is disabled. sdr9700 has a fixed-size main
     // window, so remove the inapplicable system command after menu creation.
-    removeFullScreenMenuItems(NSApp.mainMenu);
+    static bool mainMenuSanitized = false;
+    if (!mainMenuSanitized)
+    {
+        removeFullScreenMenuItems(NSApp.mainMenu);
+        mainMenuSanitized = true;
+    }
 }
 
 class MacWindowRestorationFilter final : public QObject
@@ -64,9 +69,13 @@ class MacWindowRestorationFilter final : public QObject
   protected:
     bool eventFilter(QObject* watched, QEvent* event) override
     {
+        if (event->type() != QEvent::Show && event->type() != QEvent::WinIdChange)
+        {
+            return QObject::eventFilter(watched, event);
+        }
         auto* widget = qobject_cast<QWidget*>(watched);
-        if (widget && widget->isWindow() &&
-            (event->type() == QEvent::Show || event->type() == QEvent::WinIdChange))
+        if (widget && widget->isWindow() && widget->windowType() != Qt::ToolTip && widget->windowType() != Qt::Popup &&
+            (event->type() == QEvent::WinIdChange || !widget->property("sdr9700MacRestorationConfigured").toBool()))
         {
             const QPointer<QWidget> guardedWidget(widget);
             QTimer::singleShot(0, widget,
@@ -89,8 +98,10 @@ void configureMacWindowRestoration(QApplication& app)
     // AppKit's independent persistent-UI archive has repeatedly crashed while
     // encoding Qt-created NSColor state on macOS 26, so opt out rather than
     // maintaining two competing restoration systems.
-    [[NSUserDefaults standardUserDefaults]
-        registerDefaults:@{@"ApplePersistenceIgnoreState" : @YES, @"NSQuitAlwaysKeepsWindows" : @NO}];
+    [[NSUserDefaults standardUserDefaults] registerDefaults:@{
+        @"ApplePersistenceIgnoreState" : @YES,
+        @"NSQuitAlwaysKeepsWindows" : @NO
+    }];
 
     app.installEventFilter(new MacWindowRestorationFilter(&app));
 }

@@ -21,6 +21,8 @@
 #endif
 #include <cerrno>
 #include <csignal>
+#include <atomic>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -47,61 +49,61 @@ int signalPipe[2] = {-1, -1};
 volatile sig_atomic_t shutdownSignalCount = 0;
 volatile sig_atomic_t shutdownSignalNumber = 0;
 QMutex logOutputMutex;
+QMutex logFileIoMutex;
+QMutex consoleOutputMutex;
 std::unique_ptr<QFile> logFile;
 QByteArray logFileBuffer;
 bool consoleLogEnabled{false};
 bool allConsoleCategoriesEnabled{false};
 QSet<QString> consoleLogCategories;
-bool logFileFailureReported{false};
+std::atomic_bool logFileAvailable{false};
+std::atomic_bool logFileFailureReported{false};
 constexpr int kLogFlushIntervalMs = 250;
+std::array<char, 16 * 1024> consoleBuffer{};
 
-bool writeBufferedLog()
+bool writeBufferedLog(const QByteArray* bufferedData)
 {
-    if (!logFile || !logFile->isOpen() || logFileBuffer.isEmpty())
+    if (!bufferedData || bufferedData->isEmpty() || !logFile || !logFile->isOpen())
     {
         return true;
     }
 
     qsizetype written = 0;
-    while (written < logFileBuffer.size())
+    while (written < bufferedData->size())
     {
-        const qint64 result = logFile->write(logFileBuffer.constData() + written, logFileBuffer.size() - written);
+        const qint64 result = logFile->write(bufferedData->constData() + written, bufferedData->size() - written);
         if (result <= 0)
         {
-            logFileBuffer.remove(0, written);
-            if (!logFileFailureReported)
+            if (!logFileFailureReported.exchange(true))
             {
                 std::fprintf(stderr, "Application log file write failed: %s\n",
                              logFile->errorString().toLocal8Bit().constData());
                 std::fflush(stderr);
-                logFileFailureReported = true;
             }
-            // Stop accepting new file records after a sink failure so the
-            // retained unwritten tail cannot grow without bound.
+            logFileAvailable.store(false, std::memory_order_release);
             logFile->close();
             return false;
         }
         written += result;
     }
-    logFileBuffer.clear();
     return true;
 }
 
-bool flushBufferedLog()
+bool flushBufferedLog(const QByteArray* bufferedData)
 {
-    if (!writeBufferedLog())
+    if (!writeBufferedLog(bufferedData))
     {
         return false;
     }
     if (logFile && logFile->isOpen() && !logFile->flush())
     {
-        if (!logFileFailureReported)
+        if (!logFileFailureReported.exchange(true))
         {
             std::fprintf(stderr, "Application log file flush failed: %s\n",
                          logFile->errorString().toLocal8Bit().constData());
             std::fflush(stderr);
-            logFileFailureReported = true;
         }
+        logFileAvailable.store(false, std::memory_order_release);
         logFile->close();
         return false;
     }
@@ -139,21 +141,30 @@ void requestMacMicrophonePermission(QObject* context)
 
 void flushLogOutput()
 {
-    QMutexLocker lock(&logOutputMutex);
     if (consoleLogEnabled)
     {
+        QMutexLocker consoleLock(&consoleOutputMutex);
         std::fflush(stderr);
     }
-    if (!logFile || !logFile->isOpen())
+
+    QByteArray bufferedData;
+    QMutexLocker fileLock(&logFileIoMutex);
     {
-        if (!logFileFailureReported)
+        QMutexLocker bufferLock(&logOutputMutex);
+        if (logFileAvailable.load(std::memory_order_acquire))
+        {
+            logFileBuffer.swap(bufferedData);
+        }
+        else
         {
             logFileBuffer.clear();
         }
+    }
+    if (bufferedData.isEmpty())
+    {
         return;
     }
-
-    flushBufferedLog();
+    flushBufferedLog(&bufferedData);
 }
 
 struct LoggingOptions
@@ -169,7 +180,6 @@ void consoleMessageHandler(QtMsgType type, const QMessageLogContext& context, co
     const QString line = ApplicationLog::instance().append(type, context, message);
     const QByteArray encoded = line.toLocal8Bit();
 
-    QMutexLocker lock(&logOutputMutex);
     const QString category =
         context.category ? QString::fromLatin1(context.category).toLower() : QStringLiteral("default");
     const bool consoleCategoryEnabled = type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg ||
@@ -179,22 +189,26 @@ void consoleMessageHandler(QtMsgType type, const QMessageLogContext& context, co
                                      consoleLogCategories.contains(category);
     if (consoleLogEnabled && consoleCategoryEnabled)
     {
+        QMutexLocker consoleLock(&consoleOutputMutex);
         std::fprintf(stderr, "%s\n", encoded.constData());
         if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg)
         {
             std::fflush(stderr);
         }
     }
-    if (logFile && logFile->isOpen() && fileCategoryEnabled)
+    if (logFileAvailable.load(std::memory_order_acquire) && fileCategoryEnabled)
     {
-        // Radio traffic can produce thousands of lines per second. Buffer all
-        // non-fatal records so logging does not serialize radio/audio threads
-        // on a filesystem flush. The main-thread timer flushes within 250 ms.
-        logFileBuffer.append(encoded);
-        logFileBuffer.append('\n');
-        if (type == QtFatalMsg)
         {
-            flushBufferedLog();
+            QMutexLocker bufferLock(&logOutputMutex);
+            logFileBuffer.append(encoded);
+            logFileBuffer.append('\n');
+        }
+        // Critical records are durability boundaries. The buffer swap is
+        // constant-time; potentially slow filesystem work happens after the
+        // logging mutex has been released.
+        if (type == QtCriticalMsg || type == QtFatalMsg)
+        {
+            flushLogOutput();
         }
     }
 
@@ -349,6 +363,7 @@ bool openLogFile(const QString& path)
         return false;
     }
     logFile = std::move(file);
+    logFileAvailable.store(true, std::memory_order_release);
     return true;
 }
 
@@ -420,6 +435,7 @@ void configureQtMultimediaEnvironment()
 
 int main(int argc, char* argv[])
 {
+    std::setvbuf(stderr, consoleBuffer.data(), _IOLBF, consoleBuffer.size());
     configureQtMultimediaEnvironment();
 
     // Native file/color dialogs live outside Qt's QObject tree and therefore

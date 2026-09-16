@@ -1,37 +1,29 @@
 #include "ScopeAdapter.h"
 #include "ScopeController.h"
+#include "SpectrumFramePacingPolicy.h"
 #include "WaterfallController.h"
 
-#include <QLoggingCategory>
 #include <QSignalSpy>
 #include <QTest>
-#include <QTimer>
+#include <cmath>
 
 class WaterfallScopeTest : public QObject
 {
     Q_OBJECT
 
   private slots:
-    void initTestCase();
     void convertsAndClampsRawScopeBytes();
     void rejectsInvalidScopeFrames();
     void coalescesScopeFrames();
     void limitsScopeFrameRate();
-    void sustainsSelectedFrameRate();
+    void modelsSelectedFrameRatesWithoutWallClock();
     void resetDropsPendingScopeFrame();
     void rebuildsAndClearsWaterfall();
     void rendersAndScrollsWaterfallRows();
+    void preservesWaterfallHistoryAcrossRangeAndSizeChanges();
     void mapsPartialDataRangeToIdlePixels();
     void pausePreventsRendering();
 };
-
-void WaterfallScopeTest::initTestCase()
-{
-    // Timing assertions measure the pacing controller, not synchronous test-log
-    // throughput. GitHub's macOS runner can spend longer writing one debug line
-    // than the source interval when every incoming frame is logged.
-    QLoggingCategory::setFilterRules(QStringLiteral("spectrumScope.debug=false\nwaterfall.debug=false"));
-}
 
 void WaterfallScopeTest::convertsAndClampsRawScopeBytes()
 {
@@ -116,40 +108,65 @@ void WaterfallScopeTest::limitsScopeFrameRate()
     QCOMPARE(sdr9700::spectrumFrameIntervalMs(30), 34);
 }
 
-void WaterfallScopeTest::sustainsSelectedFrameRate()
+void WaterfallScopeTest::modelsSelectedFrameRatesWithoutWallClock()
 {
-    ScopeController controller;
-    controller.setFramesPerSecond(30);
-    QSignalSpy dataSpy(&controller, &ScopeController::spectrumDataReady);
+    constexpr qint64 kDurationNs = 60'000'000'000LL;
+    const auto simulate = [](int selectedFramesPerSecond, double sourceFramesPerSecond)
+    {
+        sdr9700::SpectrumFramePacingPolicy policy(selectedFramesPerSecond);
+        const qint64 sourceIntervalNs = qint64(std::llround(1'000'000'000.0 / sourceFramesPerSecond));
+        qint64 nextSourceNs = 0;
+        qint64 scheduledEmissionNs = -1;
+        bool pending = false;
+        int sourceFrames = 0;
+        int emittedFrames = 0;
 
-    ScopeData frame;
-    frame.valid = true;
-    frame.data = QByteArray::fromHex("01");
-    int sourceFrameCount = 0;
-    QTimer sourceTimer;
-    sourceTimer.setTimerType(Qt::PreciseTimer);
-    // Drive the selected 30 FPS limiter faster than its output cadence. This
-    // leaves enough headroom for timer coalescing on shared macOS CI runners
-    // while still rejecting the old arrival-plus-interval pacing behavior.
-    sourceTimer.setInterval(16);
-    connect(&sourceTimer, &QTimer::timeout, &controller,
-            [&controller, &frame, &sourceFrameCount]()
+        while (nextSourceNs < kDurationNs)
+        {
+            if (scheduledEmissionNs >= 0 && scheduledEmissionNs <= nextSourceNs)
             {
-                ++sourceFrameCount;
-                frame.data[0] = char(uchar(frame.data[0]) + 1);
-                controller.acceptScopeData(frame);
-            });
+                if (pending)
+                {
+                    policy.markEmitted(scheduledEmissionNs);
+                    ++emittedFrames;
+                    pending = false;
+                }
+                scheduledEmissionNs = -1;
+            }
 
-    sourceTimer.start();
-    QTest::qWait(2000);
-    sourceTimer.stop();
+            pending = true;
+            ++sourceFrames;
+            if (scheduledEmissionNs < 0)
+            {
+                scheduledEmissionNs = nextSourceNs + policy.nanosecondsUntilEmission(nextSourceNs);
+            }
+            nextSourceNs += sourceIntervalNs;
+        }
+        if (pending && scheduledEmissionNs < kDurationNs)
+        {
+            ++emittedFrames;
+        }
+        return std::pair(sourceFrames, emittedFrames);
+    };
 
-    QVERIFY2(sourceFrameCount >= 55,
-             qPrintable(QStringLiteral("source produced only %1 frames").arg(sourceFrameCount)));
-    QVERIFY2(dataSpy.count() >= 50,
-             qPrintable(QStringLiteral("emitted %1 of %2 source frames").arg(dataSpy.count()).arg(sourceFrameCount)));
-    QVERIFY(dataSpy.count() <= 62);
-    QVERIFY(dataSpy.count() <= sourceFrameCount);
+    for (const int selectedFramesPerSecond : sdr9700::kSpectrumFramesPerSecondPresets)
+    {
+        for (const double sourceMultiplier : {0.5, 0.97, 1.0, 1.03, 2.0})
+        {
+            const double sourceFramesPerSecond = selectedFramesPerSecond * sourceMultiplier;
+            const auto [sourceFrames, emittedFrames] = simulate(selectedFramesPerSecond, sourceFramesPerSecond);
+            const int expectedFrames =
+                int(std::floor(qMin(sourceFramesPerSecond, double(selectedFramesPerSecond)) * 60.0));
+            QVERIFY2(qAbs(emittedFrames - expectedFrames) <= 2,
+                     qPrintable(QStringLiteral("selected=%1 source=%2 input=%3 output=%4 expected=%5")
+                                    .arg(selectedFramesPerSecond)
+                                    .arg(sourceFramesPerSecond)
+                                    .arg(sourceFrames)
+                                    .arg(emittedFrames)
+                                    .arg(expectedFrames)));
+            QVERIFY(emittedFrames <= sourceFrames);
+        }
+    }
 }
 
 void WaterfallScopeTest::resetDropsPendingScopeFrame()
@@ -206,6 +223,26 @@ void WaterfallScopeTest::rendersAndScrollsWaterfallRows()
     QTRY_COMPARE(visiblePixel(0, 1), firstRow.at(0));
     QCOMPARE(visiblePixel(1, 1), firstRow.at(1));
     QCOMPARE(visiblePixel(2, 1), firstRow.at(2));
+}
+
+void WaterfallScopeTest::preservesWaterfallHistoryAcrossRangeAndSizeChanges()
+{
+    WaterfallController controller;
+    controller.setCanvasSize(QSize(5, 3));
+    controller.setFrequencyRange(144.0, 148.0);
+    controller.setDataFrequencyRange(144.0, 148.0);
+    controller.updateSpectrum({0.0f, 40.0f, 80.0f, 120.0f, 160.0f});
+
+    const int oldVisibleRow = controller.firstVisibleRow();
+    const QRgb retainedColor = controller.image().pixel(1, oldVisibleRow);
+    controller.setFrequencyRange(145.0, 149.0);
+    QCOMPARE(controller.firstVisibleRow(), oldVisibleRow);
+    QCOMPARE(controller.image().pixel(0, controller.firstVisibleRow()), retainedColor);
+
+    const QRgb colorBeforeResize = controller.image().pixel(0, controller.firstVisibleRow());
+    controller.setCanvasSize(QSize(9, 5));
+    QCOMPARE(controller.image().size(), QSize(9, 5));
+    QCOMPARE(controller.image().pixel(0, 0), colorBeforeResize);
 }
 
 void WaterfallScopeTest::mapsPartialDataRangeToIdlePixels()

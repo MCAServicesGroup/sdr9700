@@ -248,8 +248,10 @@ bool AudioHandlerBase::init(const audioSetup& setup)
     // Initialize before moving the converter to its worker thread. The previous
     // queued initialization could race the first QAudio readyRead callback and
     // silently drop the beginning of a transmission.
+    const bool stereoToDualMono =
+        !setup.isinput && setup.playbackChannels == 1 && converterOutputFormat.channelCount() == 2;
     if (!converter->init(converterInputFormat, converterInputCodec, converterOutputFormat, converterOutputCodec, 7,
-                         setup.resampleQuality))
+                         setup.resampleQuality, stereoToDualMono))
     {
         delete converter;
         converter = nullptr;

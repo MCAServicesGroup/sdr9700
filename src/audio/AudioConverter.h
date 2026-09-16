@@ -70,7 +70,7 @@ class AudioConverter : public QObject
 
   public slots:
     bool init(QAudioFormat inputFormat, codecType inputCodec, QAudioFormat outputFormat, codecType outputCodec,
-              quint8 encoderComplexity, quint8 converterResampleQuality);
+              quint8 encoderComplexity, quint8 converterResampleQuality, bool stereoToDualMono = false);
     bool convert(audioPacket audio);
     void process(audioPacket audio);
 
@@ -92,6 +92,7 @@ class AudioConverter : public QObject
     codecType inCodec{LPCM};
     codecType outCodec{LPCM};
     bool initialized = false;
+    bool mixStereoToDualMono = false;
     QByteArray scratchIn;
     QByteArray scratchOut;
     Eigen::VectorXf scratchF;

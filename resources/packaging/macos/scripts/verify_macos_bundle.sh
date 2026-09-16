@@ -27,7 +27,8 @@ trap 'rm -f "${errors_file}"' EXIT HUP INT TERM
 for required_plugin in \
     "${contents_path}/PlugIns/platforms/libqcocoa.dylib" \
     "${contents_path}/PlugIns/multimedia/libdarwinmediaplugin.dylib" \
-    "${contents_path}/PlugIns/iconengines/libqsvgicon.dylib"; do
+    "${contents_path}/PlugIns/iconengines/libqsvgicon.dylib" \
+    "${contents_path}/PlugIns/sqldrivers/libqsqlite.dylib"; do
     if [ ! -f "${required_plugin}" ]; then
         echo "Missing required Qt plugin: ${required_plugin}" >>"${errors_file}"
     fi
@@ -38,11 +39,27 @@ if [ ! -d "${frameworks_path}/QtSvg.framework" ]; then
 fi
 
 while IFS= read -r binary_path; do
-    if ! file "${binary_path}" | grep -q "Mach-O"; then
+    file_description="$(file "${binary_path}")" || {
+        echo "${binary_path}: file inspection failed" >>"${errors_file}"
+        continue
+    }
+    if ! printf '%s\n' "${file_description}" | grep -q "Mach-O"; then
         continue
     fi
 
-    otool -L "${binary_path}" | awk 'NR > 1 { print $1 }' | while IFS= read -r dependency; do
+    architectures="$(lipo -archs "${binary_path}" 2>/dev/null)" || {
+        echo "${binary_path}: architecture inspection failed" >>"${errors_file}"
+        continue
+    }
+    if [ "${architectures}" != "arm64" ]; then
+        echo "${binary_path}: expected arm64-only binary, found ${architectures}" >>"${errors_file}"
+    fi
+
+    linked_libraries="$(otool -L "${binary_path}")" || {
+        echo "${binary_path}: dependency inspection failed" >>"${errors_file}"
+        continue
+    }
+    printf '%s\n' "${linked_libraries}" | awk 'NR > 1 { print $1 }' | while IFS= read -r dependency; do
         case "${dependency}" in
         /System/Library/* | /usr/lib/* | @loader_path/*)
             ;;
@@ -78,7 +95,11 @@ while IFS= read -r binary_path; do
         esac
     fi
 
-    otool -l "${binary_path}" | awk '
+    load_commands="$(otool -l "${binary_path}")" || {
+        echo "${binary_path}: load-command inspection failed" >>"${errors_file}"
+        continue
+    }
+    printf '%s\n' "${load_commands}" | awk '
         $1 == "cmd" && $2 == "LC_RPATH" { reading_rpath = 1; next }
         reading_rpath && $1 == "path" {
             print $2

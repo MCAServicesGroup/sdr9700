@@ -86,15 +86,21 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     void invalidateStaticLayer();
     void ensureStaticLayer();
     void renderStaticLayer(QPainter* painter) const;
-    void renderDynamicLayer(QPainter* painter) const;
+    void renderDynamicLayer(QPainter* painter, bool includeTuningGeometry = true) const;
+    void renderRasterDynamicLayer(QPainter* painter);
     void paintRaster(QPainter* painter);
     void buildTraceSamples(QVector<QPointF>* points, QVector<float>* levels) const;
     void scheduleRepaint();
 #ifdef SDR9700_GPU_PANADAPTER
     void ensureGpuLayers();
     void rebuildGpuTrace();
+    void rebuildGpuTuningGeometry();
     void invalidateGpuOverlay();
+    void invalidateGpuTuningGeometry();
     void requestRasterFallback(const QString& reason);
+    bool gpuResourcesActiveForTest() const;
+    QString gpuBackendNameForTest() const;
+    quintptr gpuPipelineIdentityForTest() const;
     struct GpuState;
 #endif
 
@@ -128,7 +134,7 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     QVector<QPointF> m_tracePointsScratch;
     QVector<float> m_traceLevelsScratch;
     QPolygonF m_tracePolygonScratch;
-    QPolygonF m_traceSegmentScratch;
+    QImage m_rasterDynamicLayer;
     QPixmap m_staticLayer;
     QSize m_staticLayerSize;
     qreal m_staticLayerDevicePixelRatio{0.0};
@@ -140,13 +146,18 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     QByteArray m_gpuFillVertices;
     QByteArray m_gpuFeatherVertices;
     QByteArray m_gpuLineVertices;
+    QByteArray m_gpuFilterVertices;
+    QByteArray m_gpuMarkerVertices;
     QVector<QColor> m_gpuTraceColorsScratch;
     QWidget* m_rasterFallbackOverlay{nullptr};
     bool m_rasterFallbackRequested{false};
     QSize m_gpuTraceSize;
+    QSize m_gpuTuningSize;
     bool m_gpuBackgroundDirty{true};
     bool m_gpuOverlayDirty{true};
     bool m_gpuOverlayTextureDirty{true};
     bool m_gpuTraceDirty{true};
+    bool m_gpuTuningDirty{true};
+    bool m_gpuVertexUploadPending{true};
 #endif
 };

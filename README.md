@@ -17,7 +17,7 @@ Multimedia.
 
 ## Screenshots
 
-![sdr9700 Main Window with Dual VFO Controls, Spectrum Scope, and Waterfall](resources/images/screenshots/sdr9700_Screenshot1.png)
+![SDR9700 Main Window with Dual VFO Controls, Spectrum Scope, and Waterfall](resources/images/screenshots/sdr9700_screenshot1.png)
 
 ## Status
 

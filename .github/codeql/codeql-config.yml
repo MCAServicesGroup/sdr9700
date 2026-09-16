@@ -6,14 +6,8 @@ name: sdr9700 CodeQL configuration
 # them inflates alert noise that masks signal in our own code.
 
 paths-ignore:
-  # ExternalProject extracts upstream sources here at build time
+  # Generated build products and extracted analyzer sources.
   - 'src/build/**'
-
-  # Vendored dependencies — treat as binary-equivalent black boxes
-  - 'third_party/**'
 
   # Test harnesses — not shipped, run locally + in CI.
   - 'src/tests/**'
-
-  # Auto-generated source from CHANGELOG.md by scripts/gen_whatsnew.py.
-  - 'src/generated/**'

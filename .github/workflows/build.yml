@@ -7,18 +7,31 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+
+env:
+  QT_VERSION: 6.8.3
+
 jobs:
   linux:
     name: Linux
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Configure LLVM 23 package repository
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends ca-certificates wget
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
-            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          sudo apt-get install --no-install-recommends ca-certificates gnupg wget
+          wget -q https://apt.llvm.org/llvm-snapshot.gpg.key -O "$RUNNER_TEMP/apt.llvm.org.asc"
+          test "$(gpg --show-keys --with-colons "$RUNNER_TEMP/apt.llvm.org.asc" \
+            | awk -F: '$1 == "fpr" { print $10; exit }')" = "6084F3CF814B57C1CF12EFD515CF4D18AF4F7421"
+          sudo install -m 0644 "$RUNNER_TEMP/apt.llvm.org.asc" /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-23 main" \
             | sudo tee /etc/apt/sources.list.d/llvm-toolchain-23.list
       - name: Install dependencies
@@ -30,6 +43,7 @@ jobs:
             qt6-base-dev qt6-multimedia-dev qt6-svg-dev libqt6sql6-sqlite libssl-dev libopus-dev \
             libspeexdsp-dev libxkbcommon-dev libeigen3-dev libhidapi-dev
           clang-format-23 --version | grep -E 'clang-format version 23\.'
+          cmake --version
       - name: Build cppcheck 2.21.0
         run: |
           wget -q https://github.com/cppcheck-opensource/cppcheck/archive/refs/tags/2.21.0.tar.gz \
@@ -53,13 +67,22 @@ jobs:
     name: Apple Silicon macOS
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Verify runner architecture
         run: test "$(uname -m)" = "arm64"
       - name: Install dependencies
-        run: brew install cmake ninja pkg-config qt openssl@3 opus speexdsp eigen hidapi
-      - name: Configure Homebrew tools
-        run: echo "$(brew --prefix qt)/bin" >> "$GITHUB_PATH"
+        run: |
+          brew install cmake ninja pkg-config openssl@3 opus speexdsp eigen hidapi
+          python3 -m venv "$RUNNER_TEMP/aqt-venv"
+          "$RUNNER_TEMP/aqt-venv/bin/pip" install --disable-pip-version-check aqtinstall==3.3.0
+          "$RUNNER_TEMP/aqt-venv/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 \
+            --outputdir "$RUNNER_TEMP/Qt" \
+            -m qtmultimedia qtshadertools
+          qt_root="$RUNNER_TEMP/Qt/$QT_VERSION/macos"
+          test -x "$qt_root/bin/qmake"
+          echo "$qt_root/bin" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=$qt_root" >> "$GITHUB_ENV"
+          "$qt_root/bin/qmake" -query QT_VERSION
       - name: Build
         run: make release
       - name: Verify Metal panadapter build

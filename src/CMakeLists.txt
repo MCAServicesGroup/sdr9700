@@ -71,6 +71,7 @@ set(sdr9700_CORE_SOURCES
     core/LoggingConfiguration.cpp
     core/RadioSessionWatchdog.h
     core/SpectrumFrameRate.h
+    core/SpectrumFramePacingPolicy.h
     radio/RadioSessionOwnership.h
     backend/ReceiverReadinessPolicy.h
     radio/RadioSessionCorrelation.h
@@ -540,15 +541,23 @@ if(BUILD_TESTING)
     add_test(NAME DtmfDialogTest COMMAND DtmfDialogTest)
     set_tests_properties(DtmfDialogTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-    add_executable(SpectrumCanvasTest
-        tests/SpectrumCanvasTest.cpp
-        gui/SpectrumScopeCanvas.cpp
-        gui/SpectrumScopeDisplay.cpp
-        gui/WaterfallCanvas.cpp
-        gui/WaterfallController.cpp
-    )
+    if(sdr9700_ENABLE_GPU_PANADAPTER)
+        add_executable(SpectrumCanvasTest tests/SpectrumCanvasTest.cpp)
+    else()
+        add_executable(SpectrumCanvasTest
+            tests/SpectrumCanvasTest.cpp
+            gui/SpectrumScopeCanvas.cpp
+            gui/SpectrumScopeDisplay.cpp
+            gui/WaterfallCanvas.cpp
+            gui/WaterfallController.cpp
+        )
+    endif()
     target_include_directories(SpectrumCanvasTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
-    target_link_libraries(SpectrumCanvasTest PRIVATE sdr9700_core Qt6::Test Qt6::Widgets)
+    if(sdr9700_ENABLE_GPU_PANADAPTER)
+        target_link_libraries(SpectrumCanvasTest PRIVATE sdr9700_app_support Qt6::Test)
+    else()
+        target_link_libraries(SpectrumCanvasTest PRIVATE sdr9700_core Qt6::Test Qt6::Widgets)
+    endif()
     add_test(NAME SpectrumCanvasTest COMMAND SpectrumCanvasTest)
     set_tests_properties(SpectrumCanvasTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -558,6 +567,20 @@ if(BUILD_TESTING)
         target_link_libraries(GpuPanadapterRenderTest PRIVATE sdr9700_app_support Qt6::Test)
         add_test(NAME GpuPanadapterRenderTest COMMAND GpuPanadapterRenderTest)
         set_tests_properties(GpuPanadapterRenderTest PROPERTIES TIMEOUT 30 LABELS "gpu")
+        add_test(NAME GpuPanadapterRenderHiDpiTest COMMAND GpuPanadapterRenderTest)
+        set_tests_properties(GpuPanadapterRenderHiDpiTest PROPERTIES
+            TIMEOUT 30
+            LABELS "gpu"
+            ENVIRONMENT "QT_SCALE_FACTOR=2"
+        )
+        if(NOT APPLE)
+            add_test(NAME GpuPanadapterVulkanRenderTest COMMAND GpuPanadapterRenderTest)
+            set_tests_properties(GpuPanadapterVulkanRenderTest PROPERTIES
+                TIMEOUT 30
+                LABELS "gpu"
+                ENVIRONMENT "SDR9700_TEST_RHI_BACKEND=vulkan"
+            )
+        endif()
     endif()
 
     add_executable(PanelAccessibilityTest

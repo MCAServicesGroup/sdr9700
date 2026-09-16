@@ -4,9 +4,11 @@
 #include "WaterfallCanvas.h"
 
 #include <QSignalSpy>
+#include <QSizeF>
 #include <QSet>
 #include <QTest>
 #include <QWheelEvent>
+#include <QPainter>
 #include <algorithm>
 #include <cmath>
 
@@ -32,7 +34,33 @@ class SpectrumCanvasTest : public QObject
     void preservesNarrowPeaksAcrossRasterWidths();
     void colorsTraceBySignalIntensity();
     void paintsNeutralShelfEdges();
+
+  private:
+    static QImage renderSpectrumRaster(SpectrumScopeCanvas* canvas);
+    static QImage renderWaterfallRaster(const WaterfallCanvas* canvas);
 };
+
+QImage SpectrumCanvasTest::renderSpectrumRaster(SpectrumScopeCanvas* canvas)
+{
+    const qreal devicePixelRatio = canvas->devicePixelRatioF();
+    QImage image((QSizeF(canvas->size()) * devicePixelRatio).toSize(), QImage::Format_ARGB32_Premultiplied);
+    image.setDevicePixelRatio(devicePixelRatio);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    canvas->paintRaster(&painter);
+    return image;
+}
+
+QImage SpectrumCanvasTest::renderWaterfallRaster(const WaterfallCanvas* canvas)
+{
+    const qreal devicePixelRatio = canvas->devicePixelRatioF();
+    QImage image((QSizeF(canvas->size()) * devicePixelRatio).toSize(), QImage::Format_ARGB32_Premultiplied);
+    image.setDevicePixelRatio(devicePixelRatio);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    canvas->paintRaster(&painter);
+    return image;
+}
 
 void SpectrumCanvasTest::mapsFrequencyAcrossClosedPixelRange()
 {
@@ -153,11 +181,11 @@ void SpectrumCanvasTest::paintsEmptyAndPopulatedData()
     canvas.resize(430, 240);
     canvas.show();
     canvas.clearDisplay();
-    QVERIFY(!canvas.grab().isNull());
+    QVERIFY(!renderSpectrumRaster(&canvas).isNull());
     canvas.updateSpectrum({0.0f, 40.0f, 80.0f, 120.0f, 160.0f}, false);
-    QVERIFY(!canvas.grab().isNull());
+    QVERIFY(!renderSpectrumRaster(&canvas).isNull());
     canvas.updateSpectrum({}, true);
-    QVERIFY(!canvas.grab().isNull());
+    QVERIFY(!renderSpectrumRaster(&canvas).isNull());
 }
 
 void SpectrumCanvasTest::keepsMaximumScopeLevelBelowTopEdge()
@@ -250,7 +278,7 @@ void SpectrumCanvasTest::interpolatesSparseBinsIntoContinuousTrace()
     canvas.updateSpectrum({0.0f, 0.0f, 160.0f, 160.0f}, false);
     QCoreApplication::processEvents();
 
-    const QImage rendered = canvas.grab().toImage();
+    const QImage rendered = renderSpectrumRaster(&canvas);
     QSet<int> traceRows;
     for (int x = 120; x <= 310; ++x)
     {
@@ -319,7 +347,7 @@ void SpectrumCanvasTest::colorsTraceBySignalIntensity()
 
     auto strongestColorNearRow = [&canvas](int expectedRow)
     {
-        const QImage rendered = canvas.grab().toImage();
+        const QImage rendered = renderSpectrumRaster(&canvas);
         QColor strongest;
         int strongestChannel = -1;
         const int x = rendered.width() / 3;
@@ -372,16 +400,14 @@ void SpectrumCanvasTest::paintsNeutralShelfEdges()
 {
     SpectrumScopeCanvas spectrum;
     spectrum.resize(320, 180);
-    QPixmap spectrumImage(spectrum.size());
-    spectrum.render(&spectrumImage);
+    const QImage spectrumImage = renderSpectrumRaster(&spectrum);
     const int spectrumEdgeY = spectrum.height() - SpectrumScopeCanvas::scaleHeight() - 1;
-    QCOMPARE(spectrumImage.toImage().pixelColor(20, spectrumEdgeY), UiTheme::Color::ScopeShelfEdge);
+    QCOMPARE(spectrumImage.pixelColor(20, spectrumEdgeY), UiTheme::Color::ScopeShelfEdge);
 
     WaterfallCanvas waterfall;
     waterfall.resize(320, 120);
-    QPixmap waterfallImage(waterfall.size());
-    waterfall.render(&waterfallImage);
-    QCOMPARE(waterfallImage.toImage().pixelColor(20, 0), UiTheme::Color::ScopeShelfEdge);
+    const QImage waterfallImage = renderWaterfallRaster(&waterfall);
+    QCOMPARE(waterfallImage.pixelColor(20, 0), UiTheme::Color::ScopeShelfEdge);
 }
 
 QTEST_MAIN(SpectrumCanvasTest)

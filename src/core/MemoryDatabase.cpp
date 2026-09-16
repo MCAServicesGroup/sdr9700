@@ -177,7 +177,7 @@ bool MemoryDatabase::ensureSchema(QString* error)
     const int schemaVersion = query.value(0).toInt();
     if (schemaVersion > kSchemaVersion)
     {
-        setError(error, QStringLiteral("The memory database was created by a newer sdr9700 version."));
+        setError(error, QStringLiteral("The memory database was created by a newer SDR9700 version."));
         return false;
     }
     // Migrations are additive and idempotent: create every object required by
