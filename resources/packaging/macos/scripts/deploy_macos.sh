@@ -27,10 +27,24 @@ fi
 # cannot rediscover every plugin after the executable no longer references the
 # original Qt installation. Clean release builds begin without this directory.
 deploy_log="$(mktemp /tmp/sdr9700-macdeployqt.XXXXXX)"
-if ! "${deployqt_path}" "${app_path}" \
-    -verbose=0 \
-    -always-overwrite \
-    -no-codesign >"${deploy_log}" 2>&1; then
+run_macdeployqt()
+{
+    if "${deployqt_path}" -help 2>&1 | grep -q -- '-no-codesign'; then
+        "${deployqt_path}" "${app_path}" \
+            -verbose=0 \
+            -always-overwrite \
+            -no-codesign
+    else
+        # Qt 6.8's macdeployqt does not expose -no-codesign. Any signatures it
+        # creates are intentionally invalidated below and replaced only after
+        # the bundle's load commands have reached their final state.
+        "${deployqt_path}" "${app_path}" \
+            -verbose=0 \
+            -always-overwrite
+    fi
+}
+
+if ! run_macdeployqt >"${deploy_log}" 2>&1; then
     cat "${deploy_log}" >&2
     rm -f "${deploy_log}"
     exit 1
