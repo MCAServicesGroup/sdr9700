@@ -161,7 +161,7 @@ class FakeRadioBackend : public IRadioBackend
         dualWatchEnabled = enabled;
         return true;
     }
-    void pollFrequency() override {}
+    void pollFrequency() override { ++frequencyPollCalls; }
     void selectVfoMode() override {}
     void selectRadioMemory(quint16 group, quint16 channel, Vfo targetVfo) override
     {
@@ -191,6 +191,7 @@ class FakeRadioBackend : public IRadioBackend
     bool pttAccepted{true};
     int txPower{-1};
     int frequencyCalls{0};
+    int frequencyPollCalls{0};
     int modeCalls{0};
     int selectVfoCalls{0};
     Vfo selectedVfo{Vfo::Main};
@@ -241,6 +242,7 @@ class VfoBackendTest : public QObject
     void localControlsUpdateAndForward();
     void boundedRequestsAreClampedBeforeForwarding();
     void reportsRejectedPttRequest();
+    void pollsReceiveFrequencyAfterConfirmedUnkey();
     void receiverCommandRouteSelectsCommandsAndRestoresInOrder();
     void mapsVfoToReceiverByte();
     void alternatesInactiveMeterSamplesDuringDualWatch();
@@ -1058,6 +1060,29 @@ void VfoBackendTest::reportsRejectedPttRequest()
 
     QVERIFY(!model.setPtt(true));
     QVERIFY(backend.ptt);
+}
+
+void VfoBackendTest::pollsReceiveFrequencyAfterConfirmedUnkey()
+{
+    FakeRadioBackend backend;
+    VfoModel model(&backend);
+
+    // Initial and repeated receive-state reports do not need a refresh.
+    model.applyPtt(false);
+    QCOMPARE(backend.frequencyPollCalls, 0);
+
+    model.applyPtt(true);
+    QCOMPARE(backend.frequencyPollCalls, 0);
+    model.applyPtt(false);
+    QCOMPARE(backend.frequencyPollCalls, 1);
+
+    // Duplicate readbacks must not create a poll storm, while every later
+    // confirmed key-up/key-down cycle receives the same immediate refresh.
+    model.applyPtt(false);
+    QCOMPARE(backend.frequencyPollCalls, 1);
+    model.applyPtt(true);
+    model.applyPtt(false);
+    QCOMPARE(backend.frequencyPollCalls, 2);
 }
 
 void VfoBackendTest::receiverCommandRouteSelectsCommandsAndRestoresInOrder()
