@@ -2610,7 +2610,7 @@ void RadioBackend::sendDtmf(const QString& digits)
 void RadioBackend::pollFrequency()
 {
     invokeOnCurrentCommander([](Commander* commandSession)
-                             { commandSession->receiveCommand(funcFreqGet, QVariant(), 0); });
+                             { scheduleVfoReceiverReadForCommand(commandSession, Vfo::Main, funcFreqGet); });
 }
 
 void RadioBackend::selectVfoMode()

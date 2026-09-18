@@ -355,6 +355,14 @@ void VfoModel::applyPtt(bool on)
     }
     m_txActive = on;
     emit txActiveChanged(on);
+    if (!on && m_backend)
+    {
+        // A repeater key-up can make the IC-9700 report its temporary shifted
+        // transmit frequency through the ordinary selected-frequency path.
+        // Refresh immediately after confirmed unkey instead of waiting up to
+        // one full background-poll cycle for the receive frequency to return.
+        m_backend->pollFrequency();
+    }
 }
 
 void VfoModel::applyNrEnabled(bool on)
