@@ -133,7 +133,7 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/aqt-venv"
           "$RUNNER_TEMP/aqt-venv/bin/pip" install --disable-pip-version-check aqtinstall==3.3.0
-          "$RUNNER_TEMP/aqt-venv/bin/aqt" install-qt linux desktop "$QT_VERSION" gcc_64 \
+          "$RUNNER_TEMP/aqt-venv/bin/aqt" install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
             --outputdir "$RUNNER_TEMP/Qt" \
             -m qtmultimedia qtshadertools
           qt_root="$RUNNER_TEMP/Qt/$QT_VERSION/gcc_64"
