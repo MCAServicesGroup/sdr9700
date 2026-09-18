@@ -74,9 +74,7 @@ UdpHandler::UdpHandler(UdpConnectionSettings settings, audioSetup rxAudio, audio
     passcode(settings.username, usernameEncoded);
     passwordEncoded = settings.passwordEncoded;
     this->compName = clientSessionName();
-    std::fill(std::begin(audioLevelsTxPeak), std::end(audioLevelsTxPeak), 0);
     std::fill(std::begin(audioLevelsRxPeak), std::end(audioLevelsRxPeak), 0);
-    std::fill(std::begin(audioLevelsTxRMS), std::end(audioLevelsTxRMS), 0);
     std::fill(std::begin(audioLevelsRxRMS), std::end(audioLevelsRxRMS), 0);
 
     qInfo(logUdp()).noquote().nospace() << "Starting control session client=" << compName
@@ -722,29 +720,21 @@ void UdpHandler::getRxLevels(quint16 amplitudePeak, quint16 amplitudeRMS, quint1
     audioLevelsRxPosition++;
 }
 
-void UdpHandler::getTxLevels(quint16 amplitudePeak, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under,
-                             bool over)
+void UdpHandler::getTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency,
+                            quint16 measuredLatency, bool under, bool over)
 {
-    status.txAudioLevel = amplitudePeak;
-    status.txLatency = latency;
-    status.txCurrentLatency = qint32(current);
+    // Transport health stays on the existing network-status reporting path.
+    status.txAudioLevel = static_cast<quint8>(qBound(0, qRound(block.peak * 255.0F), 255));
+    status.txLatency = configuredLatency;
+    status.txCurrentLatency = qint32(measuredLatency);
     status.txUnderrun = under;
     status.txOverrun = over;
-    audioLevelsTxPeak[(audioLevelsTxPosition) % audioLevelBufferSize] = amplitudePeak;
-    audioLevelsTxRMS[(audioLevelsTxPosition) % audioLevelBufferSize] = amplitudeRMS;
 
-    if ((audioLevelsTxPosition) % 4 == 0)
-    {
-        // Emit a short rolling summary instead of every audio level sample.
-        quint8 meanPeak = findMax(audioLevelsTxPeak);
-        quint8 meanRMS = findMean(audioLevelsTxRMS);
-        networkAudioLevels l;
-        l.haveTxLevels = true;
-        l.txAudioPeak = meanPeak;
-        l.txAudioRMS = meanRMS;
-        emit haveNetworkAudioLevels(l);
-    }
-    audioLevelsTxPosition++;
+    // The measurement block is forwarded whole. The previous four-deep rolling
+    // summary averaged block RMS values arithmetically, which under-reports the
+    // combined RMS whenever block levels differ; aggregation now happens on
+    // energy, at the presentation layer.
+    emit haveTxAudioMeter(block);
 }
 
 quint8 UdpHandler::findMean(const quint8* data)
@@ -1201,7 +1191,7 @@ void UdpHandler::dataReceived()
                         QObject::connect(this, &UdpHandler::haveChangeLatency, audio, &UdpAudio::changeLatency);
                         QObject::connect(this, &UdpHandler::haveSetVolume, audio, &UdpAudio::setVolume);
                         QObject::connect(audio, &UdpAudio::haveRxLevels, this, &UdpHandler::getRxLevels);
-                        QObject::connect(audio, &UdpAudio::haveTxLevels, this, &UdpHandler::getTxLevels);
+                        QObject::connect(audio, &UdpAudio::haveTxMeter, this, &UdpHandler::getTxMeter);
                     }
 
                     qInfo(logUdp()).noquote().nospace()

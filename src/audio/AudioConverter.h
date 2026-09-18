@@ -17,6 +17,7 @@
 #include <Eigen/Dense>
 
 #include "Types.h"
+#include "TxAudioMeterPolicy.h"
 
 struct SpeexResamplerState_;
 using SpeexResamplerState = struct SpeexResamplerState_;
@@ -36,6 +37,10 @@ struct audioPacket
     float amplitudePeak = 0.0f;
     float amplitudeRMS = 0.0f;
     qreal volume = 1.0;
+    // Local processed-input measurement, populated only on the capture path.
+    // The receive path leaves this invalid and continues to use amplitudePeak
+    // and amplitudeRMS through the shared haveLevels signal.
+    sdr9700::audio::TxAudioMeterBlock inputMeter;
 };
 
 struct audioSetup
@@ -70,7 +75,8 @@ class AudioConverter : public QObject
 
   public slots:
     bool init(QAudioFormat inputFormat, codecType inputCodec, QAudioFormat outputFormat, codecType outputCodec,
-              quint8 encoderComplexity, quint8 converterResampleQuality, bool stereoToDualMono = false);
+              quint8 encoderComplexity, quint8 converterResampleQuality, bool stereoToDualMono = false,
+              bool measureLocalInputMeter = false);
     bool convert(audioPacket audio);
     void process(audioPacket audio);
 
@@ -93,6 +99,7 @@ class AudioConverter : public QObject
     codecType outCodec{LPCM};
     bool initialized = false;
     bool mixStereoToDualMono = false;
+    bool measureInputMeter = false;
     QByteArray scratchIn;
     QByteArray scratchOut;
     Eigen::VectorXf scratchF;

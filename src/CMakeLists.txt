@@ -89,6 +89,7 @@ set(SDR9700_CORE_SOURCES
     audio/AudioConverter.cpp
     audio/DtmfGenerator.cpp
     audio/RxAudioStartPolicy.h
+    audio/TxAudioMeterPolicy.h
     audio/TxAudioMonitoringPolicy.h
     audio/TxAudioPacing.h
     audio/AudioHandlerBase.cpp

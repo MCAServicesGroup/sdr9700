@@ -23,7 +23,35 @@ constexpr double kAlcMeterMax = 2.0;
 constexpr double kCompressionMeterMaxDb = 25.5;
 constexpr double kVoltageMeterMax = 16.0;
 constexpr double kCurrentMeterMax = 20.0;
-constexpr int kAudioMax = 255;
+
+// Map a dBFS reading onto the meter bar. The scale is deliberately not extended
+// above 0 dBFS: post-mix floats can exceed unity, and that overage is reported
+// through the full-scale sample count instead of a longer bar.
+int dbBarValue(double db)
+{
+    constexpr double kRangeDb = sdr9700::audio::kMeterDisplayCeilingDb - sdr9700::audio::kMeterDisplayFloorDb;
+    const double bounded = qBound(sdr9700::audio::kMeterDisplayFloorDb, db, sdr9700::audio::kMeterDisplayCeilingDb);
+    return qBound(0, qRound((bounded - sdr9700::audio::kMeterDisplayFloorDb) / kRangeDb * kMeterScale), kMeterScale);
+}
+
+const char* transmitAudioFill(sdr9700::audio::TxAudioMeterState state)
+{
+    switch (state)
+    {
+    case sdr9700::audio::TxAudioMeterState::FullScaleDetected:
+        return UiTheme::Color::Danger;
+    case sdr9700::audio::TxAudioMeterState::NearFullScale:
+        return UiTheme::Color::Warning;
+    case sdr9700::audio::TxAudioMeterState::RecommendedHeadroom:
+        return UiTheme::Color::Success;
+    case sdr9700::audio::TxAudioMeterState::SignalPresent:
+        return UiTheme::Color::Accent;
+    case sdr9700::audio::TxAudioMeterState::NoActivity:
+    case sdr9700::audio::TxAudioMeterState::Invalid:
+        break;
+    }
+    return UiTheme::Color::TextStatusLabel;
+}
 
 QString meterStyle(const QString& fill)
 {
@@ -103,12 +131,15 @@ MetersDialog::MetersDialog(QWidget* parent) : sdr9700::ui::UtilityWindow(QString
     root->addWidget(content);
 
     auto* audioGrid = createMeterSection(contentLayout, QStringLiteral("Audio"), QStringLiteral("audioMeters"));
-    m_txAudioAverageMeter =
-        addMeterRow(audioGrid, 0, QStringLiteral("Audio Average"),
-                    QStringLiteral("Local microphone input average level, including before PTT; high at 60% or above"));
+    m_txAudioAverageMeter = addMeterRow(
+        audioGrid, 0, QStringLiteral("Audio Average"),
+        QStringLiteral("Local processed input average level in dBFS, including before PTT. Recommended -24 to -12 "
+                       "dBFS. This is a local recording level, not radio drive: use the ALC meter for transmit "
+                       "drive on SSB."));
     m_txAudioPeakMeter = addMeterRow(
         audioGrid, 1, QStringLiteral("Audio Peak"),
-        QStringLiteral("Local microphone input peak level, including before PTT; high at 85%, clipping at 95%"));
+        QStringLiteral("Local processed input peak level in dBFS, including before PTT. Recommended -12 to -3 dBFS; "
+                       "-1 dBFS and above is near full scale. This is a local recording level, not radio drive."));
     m_compressionMeter =
         addMeterRow(audioGrid, 2, QStringLiteral("Compression"), QStringLiteral("Transmit compression"));
 
@@ -203,10 +234,8 @@ void MetersDialog::resetMeters()
     setMeterRow(m_compressionMeter, 0, QStringLiteral("-- dB"));
     setMeterRow(m_voltageMeter, 0, QStringLiteral("-- V"));
     setMeterRow(m_currentMeter, 0, QStringLiteral("-- A"));
-    setMeterRow(m_txAudioAverageMeter, 0, QStringLiteral("--"));
-    setMeterRow(m_txAudioPeakMeter, 0, QStringLiteral("--"));
-    setMeterFillColor(m_txAudioAverageMeter, UiTheme::Color::TextStatusLabel);
-    setMeterFillColor(m_txAudioPeakMeter, UiTheme::Color::TextStatusLabel);
+    setTransmitAudioMeter(sdr9700::audio::TxAudioMeterState::Invalid, sdr9700::audio::kMeterDisplayFloorDb,
+                          sdr9700::audio::kMeterDisplayFloorDb, 0);
 }
 
 void MetersDialog::setSMeter(int value)
@@ -284,41 +313,34 @@ void MetersDialog::clearCurrentMeter()
     setMeterRow(m_currentMeter, 0, QStringLiteral("-- A"));
 }
 
-void MetersDialog::setTransmitAudioLevel(int peak, int rms)
+void MetersDialog::setTransmitAudioMeter(sdr9700::audio::TxAudioMeterState state, double rmsDb, double peakDb,
+                                         quint32 fullScaleCount)
 {
-    const int peakPct = qBound(0, qRound(qBound(0, peak, kAudioMax) * 100.0 / kAudioMax), 100);
-    const int averagePct = qBound(0, qRound(qBound(0, rms, kAudioMax) * 100.0 / kAudioMax), 100);
-    const bool inactive = peakPct == 0 && averagePct == 0;
+    const bool invalid = state == sdr9700::audio::TxAudioMeterState::Invalid;
+    const bool silent = state == sdr9700::audio::TxAudioMeterState::NoActivity;
 
-    setMeterRow(m_txAudioAverageMeter, scaledValue(averagePct, 100),
-                inactive ? QStringLiteral("--") : QStringLiteral("%1%").arg(averagePct));
-    setMeterRow(m_txAudioPeakMeter, scaledValue(peakPct, 100),
-                inactive ? QStringLiteral("--") : QStringLiteral("%1%").arg(peakPct));
-
-    const char* averageColor = UiTheme::Color::TextStatusLabel;
-    if (averagePct >= 60)
+    // Invalid means no measurement exists yet: no sample, disconnect, input or
+    // converter failure, or an audio-device restart. Digital silence is a real
+    // measurement and reads at the floor instead.
+    const QString averageText = invalid  ? QStringLiteral("--")
+                                : silent ? QStringLiteral("quiet")
+                                         : QStringLiteral("%1 dB").arg(rmsDb, 0, 'f', 1);
+    QString peakText = invalid  ? QStringLiteral("--")
+                       : silent ? QStringLiteral("quiet")
+                                : QStringLiteral("%1 dB").arg(peakDb, 0, 'f', 1);
+    if (fullScaleCount > 0)
     {
-        averageColor = UiTheme::Color::Warning;
-    }
-    else if (averagePct >= 5)
-    {
-        averageColor = UiTheme::Color::Success;
+        peakText = QStringLiteral("CLIP %1").arg(fullScaleCount);
     }
 
-    const char* peakColor = UiTheme::Color::TextStatusLabel;
-    if (peakPct >= 95)
-    {
-        peakColor = UiTheme::Color::Danger;
-    }
-    else if (peakPct >= 85)
-    {
-        peakColor = UiTheme::Color::Warning;
-    }
-    else if (peakPct > 0)
-    {
-        peakColor = UiTheme::Color::Success;
-    }
+    setMeterRow(m_txAudioAverageMeter, invalid ? 0 : dbBarValue(rmsDb), averageText);
+    setMeterRow(m_txAudioPeakMeter, invalid ? 0 : dbBarValue(peakDb), peakText);
 
-    setMeterFillColor(m_txAudioAverageMeter, averageColor);
-    setMeterFillColor(m_txAudioPeakMeter, peakColor);
+    const char* const averageFill =
+        (state == sdr9700::audio::TxAudioMeterState::RecommendedHeadroom &&
+         rmsDb >= sdr9700::audio::kHeadroomRmsMinDb && rmsDb <= sdr9700::audio::kHeadroomRmsMaxDb)
+            ? UiTheme::Color::Success
+            : (invalid || silent ? UiTheme::Color::TextStatusLabel : UiTheme::Color::Accent);
+    setMeterFillColor(m_txAudioAverageMeter, averageFill);
+    setMeterFillColor(m_txAudioPeakMeter, transmitAudioFill(state));
 }

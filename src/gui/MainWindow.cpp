@@ -1529,7 +1529,7 @@ void MainWindow::onMeterSnapshotChanged(const MeterSnapshot& snapshot)
         const bool hasAnyMeterValue =
             m_meterSnapshot.sMeterValid || m_meterSnapshot.powerValid || m_meterSnapshot.swrValid ||
             m_meterSnapshot.alcValid || m_meterSnapshot.compressionValid || m_meterSnapshot.voltageValid ||
-            m_meterSnapshot.currentValid || m_meterSnapshot.txAudioPeak > 0 || m_meterSnapshot.txAudioRms > 0;
+            m_meterSnapshot.currentValid || m_meterSnapshot.txAudioState != sdr9700::audio::TxAudioMeterState::Invalid;
         if (!hasAnyMeterValue)
         {
             m_metersDialog->resetMeters();
@@ -1588,7 +1588,8 @@ void MainWindow::onMeterSnapshotChanged(const MeterSnapshot& snapshot)
             {
                 m_metersDialog->clearCurrentMeter();
             }
-            m_metersDialog->setTransmitAudioLevel(m_meterSnapshot.txAudioPeak, m_meterSnapshot.txAudioRms);
+            m_metersDialog->setTransmitAudioMeter(m_meterSnapshot.txAudioState, m_meterSnapshot.txAudioRmsDb,
+                                                  m_meterSnapshot.txAudioPeakDb, m_meterSnapshot.txAudioFullScaleCount);
         }
     }
 }
@@ -1854,7 +1855,8 @@ void MainWindow::showMetersDialog()
         {
             m_metersDialog->setCurrentMeter(m_meterSnapshot.currentAmps);
         }
-        m_metersDialog->setTransmitAudioLevel(m_meterSnapshot.txAudioPeak, m_meterSnapshot.txAudioRms);
+        m_metersDialog->setTransmitAudioMeter(m_meterSnapshot.txAudioState, m_meterSnapshot.txAudioRmsDb,
+                                              m_meterSnapshot.txAudioPeakDb, m_meterSnapshot.txAudioFullScaleCount);
     }
     else
     {

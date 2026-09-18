@@ -2,6 +2,24 @@
 #include "MeterController.h"
 
 #include <QtTest>
+#include <cmath>
+
+namespace
+{
+// Build a measurement block with an exact peak and RMS in dBFS.
+sdr9700::audio::TxAudioMeterBlock blockAt(double peakDb, double rmsDb, quint32 sampleCount = 960,
+                                          quint32 fullScaleCount = 0)
+{
+    sdr9700::audio::TxAudioMeterBlock block;
+    block.peak = static_cast<float>(std::pow(10.0, peakDb / 20.0));
+    const double rms = std::pow(10.0, rmsDb / 20.0);
+    block.sumSquares = rms * rms * static_cast<double>(sampleCount);
+    block.sampleCount = sampleCount;
+    block.fullScaleCount = fullScaleCount;
+    block.valid = true;
+    return block;
+}
+} // namespace
 
 class MeterControllerTest : public QObject
 {
@@ -23,7 +41,7 @@ void MeterControllerTest::batchesUpdatesIntoOneSnapshot()
 
     controller.setSMeter(100);
     controller.setPowerMeter(50.0);
-    controller.setTransmitAudioLevel(80, 40);
+    controller.setTransmitAudioMeter(blockAt(-6.0, -18.0));
 
     QTRY_COMPARE(snapshotSpy.count(), 1);
     const MeterSnapshot snapshot = snapshotSpy.constFirst().constFirst().value<MeterSnapshot>();
@@ -31,8 +49,9 @@ void MeterControllerTest::batchesUpdatesIntoOneSnapshot()
     QVERIFY(snapshot.sMeterValid);
     QCOMPARE(snapshot.powerWatts, 50.0);
     QVERIFY(snapshot.powerValid);
-    QCOMPARE(snapshot.txAudioPeak, 80);
-    QCOMPARE(snapshot.txAudioRms, 40);
+    QVERIFY(snapshot.txAudioState != sdr9700::audio::TxAudioMeterState::Invalid);
+    QVERIFY(qAbs(snapshot.txAudioRmsDb - (-18.0)) < 0.1);
+    QVERIFY(qAbs(snapshot.txAudioPeakDb - (-6.0)) < 0.1);
 }
 
 void MeterControllerTest::clampsMeterValues()
@@ -49,7 +68,9 @@ void MeterControllerTest::clampsMeterValues()
     controller.setCompressionMeter(99.0);
     controller.setVoltageMeter(99.0);
     controller.setCurrentMeter(-1.0);
-    controller.setTransmitAudioLevel(999, -1);
+    // Post-mix samples are not clamped to unity, so an over-unity peak must be
+    // reported at the 0 dBFS ceiling rather than extending the scale.
+    controller.setTransmitAudioMeter(blockAt(6.0, -80.0));
 
     QTRY_VERIFY(snapshot.sMeterValid);
     QCOMPARE(snapshot.sMeter, 255);
@@ -59,8 +80,8 @@ void MeterControllerTest::clampsMeterValues()
     QCOMPARE(snapshot.compressionDb, 25.5);
     QCOMPARE(snapshot.voltageVolts, 16.0);
     QCOMPARE(snapshot.currentAmps, 0.0);
-    QCOMPARE(snapshot.txAudioPeak, 255);
-    QCOMPARE(snapshot.txAudioRms, 0);
+    QCOMPARE(snapshot.txAudioPeakDb, sdr9700::audio::kMeterDisplayCeilingDb);
+    QCOMPARE(snapshot.txAudioRmsDb, sdr9700::audio::kMeterDisplayFloorDb);
 }
 
 void MeterControllerTest::resetTransmitMetersPreservesReceiveMeter()

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "TxAudioMeterPolicy.h"
+
+#include <QElapsedTimer>
 #include <QObject>
 
 struct MeterSnapshot
@@ -18,8 +21,12 @@ struct MeterSnapshot
     bool voltageValid{false};
     double currentAmps{0.0};
     bool currentValid{false};
-    int txAudioPeak{0};
-    int txAudioRms{0};
+    // Local processed-input meter. These describe the operator's capture chain,
+    // not radio drive, and are deliberately independent of PTT state.
+    sdr9700::audio::TxAudioMeterState txAudioState{sdr9700::audio::TxAudioMeterState::Invalid};
+    double txAudioRmsDb{sdr9700::audio::kMeterDisplayFloorDb};
+    double txAudioPeakDb{sdr9700::audio::kMeterDisplayFloorDb};
+    quint32 txAudioFullScaleCount{0};
 };
 
 class QTimer;
@@ -42,7 +49,10 @@ class MeterController : public QObject
     void setCompressionMeter(double db);
     void setVoltageMeter(double volts);
     void setCurrentMeter(double amps);
-    void setTransmitAudioLevel(int peak, int rms);
+    void setTransmitAudioMeter(const sdr9700::audio::TxAudioMeterBlock& block);
+    // Invalidates the local meter. Call on disconnect, input failure, converter
+    // failure, or audio-device restart -- never on a PTT or DTMF transition.
+    void resetTransmitAudioMeter();
 
   signals:
     void snapshotChanged(const MeterSnapshot& snapshot);
@@ -50,10 +60,15 @@ class MeterController : public QObject
   private:
     void scheduleFlush();
     void flush();
+    void advanceTransmitAudioMeter();
+    bool transmitAudioMeterSettling() const;
 
     MeterSnapshot m_snapshot;
     QTimer* m_flushTimer{nullptr};
     bool m_dirty{false};
+    sdr9700::audio::TxAudioMeterPresentation m_txPresentation;
+    sdr9700::audio::TxAudioMeterBlock m_pendingTxBlock;
+    QElapsedTimer m_txClock;
 };
 
 Q_DECLARE_METATYPE(MeterSnapshot)

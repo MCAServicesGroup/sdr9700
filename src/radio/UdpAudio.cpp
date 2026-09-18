@@ -297,10 +297,10 @@ void UdpAudio::getRxLevels(quint16 amplitude, quint16 amplitudeRMS, quint16 late
     emit haveRxLevels(amplitude, amplitudeRMS, latency, current, under, over);
 }
 
-void UdpAudio::getTxLevels(quint16 amplitude, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under,
-                           bool over)
+void UdpAudio::getTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency,
+                          quint16 measuredLatency, bool under, bool over)
 {
-    emit haveTxLevels(amplitude, amplitudeRMS, latency, current, under, over);
+    emit haveTxMeter(block, configuredLatency, measuredLatency, under, over);
 }
 
 void UdpAudio::dataReceived()
@@ -480,6 +480,7 @@ void UdpAudio::stopLocalAudio()
     m_rxAudioStartPolicy.reset();
     stopAudioWorker(rxaudio, rxAudioThread, "rxAudioThread");
     stopAudioWorker(txaudio, txAudioThread, "txAudioThread");
+    emit haveTxMeter({}, 0, 0, false, false);
 }
 
 void UdpAudio::startAudio()
@@ -547,7 +548,8 @@ void UdpAudio::startTxAudio()
     // the operator can verify local transmit level before pressing PTT. The
     // send path remains gated by m_txActive, and stopLocalAudio() tears the
     // capture device down during disconnect.
-    txaudio = new AudioHandlerQtInput();
+    auto* input = new AudioHandlerQtInput();
+    txaudio = input;
     txAudioThread = new QThread(this);
     txAudioThread->setObjectName("txAudio()");
     txaudio->moveToThread(txAudioThread);
@@ -555,7 +557,9 @@ void UdpAudio::startTxAudio()
 
     connect(this, &UdpAudio::setupTxAudio, txaudio, &AudioHandlerBase::init);
     connect(txaudio, &AudioHandlerBase::haveAudioData, this, &UdpAudio::receiveAudioData);
-    connect(txaudio, &AudioHandlerBase::haveLevels, this, &UdpAudio::getTxLevels);
+    // Only the capture worker is connected to the transmit meter path.
+    // AudioHandlerBase::haveLevels stays wired to the receive worker alone.
+    connect(input, &AudioHandlerQtInput::haveTxMeter, this, &UdpAudio::getTxMeter);
     connect(txAudioThread, &QThread::finished, txaudio, &QObject::deleteLater);
     connect(txaudio, &AudioHandlerBase::initFailed, this, &UdpAudio::onTxAudioInitFailed);
 
@@ -565,6 +569,10 @@ void UdpAudio::startTxAudio()
 void UdpAudio::stopTxAudio()
 {
     stopAudioWorker(txaudio, txAudioThread, "txAudioThread");
+    // The local meter has no measurement until a replacement capture worker
+    // produces one. A restarted device must read as unavailable, not as its
+    // last value from before the restart.
+    emit haveTxMeter({}, 0, 0, false, false);
 }
 
 void UdpAudio::setTxActive(bool active)
@@ -619,6 +627,7 @@ void UdpAudio::onRxAudioInitFailed()
 void UdpAudio::onTxAudioInitFailed()
 {
     qWarning(logAudio()).noquote() << "TX Audio Initialization failed. Cleaning up.";
+    emit haveTxMeter({}, 0, 0, false, false);
     if (txAudioThread)
     {
         txAudioThread->quit();

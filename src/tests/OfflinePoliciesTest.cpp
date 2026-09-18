@@ -15,11 +15,13 @@
 #include "TransmitSafetyPolicy.h"
 #include "TransmitFrequencyPolicy.h"
 #include "TransmitConfigurationPolicy.h"
+#include "TxAudioMeterPolicy.h"
 #include "VfoReceiverCommandRoute.h"
 
 #include <QCoreApplication>
 #include <QTest>
 #include <array>
+#include <cmath>
 
 class OfflinePoliciesTest : public QObject
 {
@@ -38,6 +40,12 @@ class OfflinePoliciesTest : public QObject
     void clampsFrequencyAndScopeCenterToBand();
     void requiresConsecutiveHighSwrReadings();
     void resetsTransmitSafetyWhenNotTransmitting();
+    void convertsMagnitudeToBoundedDbfs();
+    void aggregatesTransmitMeterBlocksByEnergy();
+    void holdsTransmitMeterActivityAcrossSpeechGaps();
+    void holdsAndDecaysTransmitMeterPeak();
+    void holdsFullScaleIndicationForThreeSeconds();
+    void keepsTransmitMeterValidAcrossSilence();
     void keepsPttActiveUntilRadioConfirmsUnkey();
     void republishesContradictoryKeyedReadbackAfterUnkey();
     void validatesDuplexTransmitFrequency();
@@ -537,6 +545,176 @@ void OfflinePoliciesTest::blocksPttUntilTransmitConfigurationIsConfirmed()
     QVERIFY(policy.confirmationPending());
     policy.confirmDuplexMode(dmDupMinus);
     QVERIFY(policy.transmitFrequencyAllowed());
+}
+
+
+namespace
+{
+sdr9700::audio::TxAudioMeterBlock meterBlockAt(double peakDb, double rmsDb, quint32 sampleCount = 960,
+                                               quint32 fullScaleCount = 0)
+{
+    sdr9700::audio::TxAudioMeterBlock block;
+    block.peak = static_cast<float>(std::pow(10.0, peakDb / 20.0));
+    const double rms = std::pow(10.0, rmsDb / 20.0);
+    block.sumSquares = rms * rms * static_cast<double>(sampleCount);
+    block.sampleCount = sampleCount;
+    block.fullScaleCount = fullScaleCount;
+    block.valid = true;
+    return block;
+}
+} // namespace
+
+void OfflinePoliciesTest::convertsMagnitudeToBoundedDbfs()
+{
+    using namespace sdr9700::audio;
+    QVERIFY(qAbs(dbfsFromMagnitude(1.0) - 0.0) < 0.001);
+    QVERIFY(qAbs(dbfsFromMagnitude(0.5) - (-6.0206)) < 0.01);
+    QVERIFY(qAbs(dbfsFromMagnitude(0.1) - (-20.0)) < 0.01);
+
+    // Digital silence has no logarithm and reports the floor; callers separate
+    // true silence from "no measurement" through the block sample count.
+    QCOMPARE(dbfsFromMagnitude(0.0), kMeterDisplayFloorDb);
+    QCOMPARE(dbfsFromMagnitude(-1.0), kMeterDisplayFloorDb);
+
+    // Anything quieter than the floor clamps rather than running away.
+    QCOMPARE(dbfsFromMagnitude(1.0e-9), kMeterDisplayFloorDb);
+
+    // Post-mix samples are not clamped to unity, but the nominal scale is not
+    // extended above 0 dBFS.
+    QCOMPARE(dbfsFromMagnitude(2.0), kMeterDisplayCeilingDb);
+}
+
+void OfflinePoliciesTest::aggregatesTransmitMeterBlocksByEnergy()
+{
+    using namespace sdr9700::audio;
+
+    // Two blocks at very different levels. Correct combined RMS is computed on
+    // summed energy; the previous implementation averaged the block RMS values
+    // arithmetically, which under-reports whenever levels differ.
+    const TxAudioMeterBlock loud = meterBlockAt(-3.0, -6.0, 480);
+    const TxAudioMeterBlock quiet = meterBlockAt(-40.0, -46.0, 480);
+    const TxAudioMeterBlock combined = aggregate(loud, quiet);
+
+    QCOMPARE(combined.sampleCount, 960U);
+    QVERIFY(qAbs(double(combined.peak) - double(loud.peak)) < 1.0e-6);
+
+    const double expectedRms = std::sqrt((loud.sumSquares + quiet.sumSquares) / 960.0);
+    QVERIFY(qAbs(blockRms(combined) - expectedRms) < 1.0e-9);
+
+    const double arithmeticMeanOfRms = (blockRms(loud) + blockRms(quiet)) / 2.0;
+    QVERIFY(blockRms(combined) > arithmeticMeanOfRms);
+
+    // Counts sum, and an invalid block contributes nothing.
+    const TxAudioMeterBlock clipped = meterBlockAt(0.0, -6.0, 480, 7);
+    QCOMPARE(aggregate(combined, clipped).fullScaleCount, 7U);
+    QCOMPARE(aggregate(TxAudioMeterBlock{}, loud).sampleCount, loud.sampleCount);
+    QCOMPARE(aggregate(loud, TxAudioMeterBlock{}).sampleCount, loud.sampleCount);
+}
+
+void OfflinePoliciesTest::holdsTransmitMeterActivityAcrossSpeechGaps()
+{
+    using namespace sdr9700::audio;
+    TxAudioMeterPresentation presentation;
+
+    presentation.accept(meterBlockAt(-6.0, -18.0), 0);
+    QVERIFY(presentation.active());
+
+    // A 300 ms inter-word gap must not drop to "no activity".
+    presentation.accept(meterBlockAt(-70.0, -70.0), 100);
+    presentation.accept(meterBlockAt(-70.0, -70.0), 300);
+    QVERIFY(presentation.active());
+
+    // Still held just before the 1500 ms hold expires.
+    presentation.accept(meterBlockAt(-70.0, -70.0), 1500);
+    QVERIFY(presentation.active());
+
+    // Released once sustained silence exceeds the hold.
+    presentation.accept(meterBlockAt(-70.0, -70.0), 1700);
+    QVERIFY(!presentation.active());
+
+    // Hysteresis: a level between the off and on thresholds does not re-arm.
+    presentation.accept(meterBlockAt(-52.0, -52.0), 1800);
+    QVERIFY(!presentation.active());
+    presentation.accept(meterBlockAt(-48.0, -48.0), 1900);
+    QVERIFY(presentation.active());
+}
+
+void OfflinePoliciesTest::holdsAndDecaysTransmitMeterPeak()
+{
+    using namespace sdr9700::audio;
+    TxAudioMeterPresentation presentation;
+
+    presentation.accept(meterBlockAt(-6.0, -18.0), 0);
+    QVERIFY(qAbs(presentation.heldPeakDb() - (-6.0)) < 0.1);
+
+    // Held flat for kPeakHoldMs even though the signal dropped.
+    presentation.accept(meterBlockAt(-40.0, -40.0), 500);
+    QVERIFY(qAbs(presentation.heldPeakDb() - (-6.0)) < 0.1);
+    presentation.accept(meterBlockAt(-40.0, -40.0), 1000);
+    QVERIFY(qAbs(presentation.heldPeakDb() - (-6.0)) < 0.1);
+
+    // Then decays at kPeakDecayDbPerSec: 500 ms beyond the hold is 10 dB.
+    presentation.accept(meterBlockAt(-40.0, -40.0), 1500);
+    QVERIFY(qAbs(presentation.heldPeakDb() - (-16.0)) < 0.5);
+
+    // A louder block re-arms the hold immediately.
+    presentation.accept(meterBlockAt(-2.0, -12.0), 1600);
+    QVERIFY(qAbs(presentation.heldPeakDb() - (-2.0)) < 0.1);
+}
+
+void OfflinePoliciesTest::holdsFullScaleIndicationForThreeSeconds()
+{
+    using namespace sdr9700::audio;
+    TxAudioMeterPresentation presentation;
+
+    presentation.accept(meterBlockAt(0.0, -10.0, 960, 4), 0);
+    QCOMPARE(presentation.fullScaleCount(), 4U);
+    QCOMPARE(presentation.state(), TxAudioMeterState::FullScaleDetected);
+
+    // Counts accumulate while events continue, and the hold restarts.
+    presentation.accept(meterBlockAt(0.0, -10.0, 960, 3), 1000);
+    QCOMPARE(presentation.fullScaleCount(), 7U);
+
+    // Still shown just before the hold expires, measured from the latest event.
+    presentation.accept(meterBlockAt(-20.0, -20.0), 3900);
+    QCOMPARE(presentation.fullScaleCount(), 7U);
+
+    // Cleared once kFullScaleCountHoldMs passes with no new full-scale sample.
+    presentation.accept(meterBlockAt(-20.0, -20.0), 4100);
+    QCOMPARE(presentation.fullScaleCount(), 0U);
+    QVERIFY(presentation.state() != TxAudioMeterState::FullScaleDetected);
+}
+
+void OfflinePoliciesTest::keepsTransmitMeterValidAcrossSilence()
+{
+    using namespace sdr9700::audio;
+    TxAudioMeterPresentation presentation;
+
+    // No measurement yet.
+    QCOMPARE(presentation.state(), TxAudioMeterState::Invalid);
+
+    // Valid digital silence is a measurement, not an absence of one.
+    TxAudioMeterBlock silence;
+    silence.sampleCount = 960;
+    silence.valid = true;
+    presentation.accept(silence, 0);
+    QVERIFY(presentation.valid());
+    QCOMPARE(presentation.state(), TxAudioMeterState::NoActivity);
+    QCOMPARE(presentation.rmsDb(), kMeterDisplayFloorDb);
+
+    // Speech inside the recommended window classifies as such.
+    presentation.accept(meterBlockAt(-6.0, -18.0), 100);
+    QCOMPARE(presentation.state(), TxAudioMeterState::RecommendedHeadroom);
+
+    // Near full scale outranks the headroom window.
+    presentation.accept(meterBlockAt(-0.5, -18.0), 200);
+    QCOMPARE(presentation.state(), TxAudioMeterState::NearFullScale);
+
+    // Only an explicit reset invalidates the meter. Encoding authorization
+    // changes must never reach this state.
+    presentation.reset();
+    QCOMPARE(presentation.state(), TxAudioMeterState::Invalid);
+    QVERIFY(!presentation.valid());
 }
 
 QTEST_GUILESS_MAIN(OfflinePoliciesTest)

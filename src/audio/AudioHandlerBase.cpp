@@ -251,7 +251,7 @@ bool AudioHandlerBase::init(const audioSetup& setup)
     const bool stereoToDualMono =
         !setup.isinput && setup.playbackChannels == 1 && converterOutputFormat.channelCount() == 2;
     if (!converter->init(converterInputFormat, converterInputCodec, converterOutputFormat, converterOutputCodec, 7,
-                         setup.resampleQuality, stereoToDualMono))
+                         setup.resampleQuality, stereoToDualMono, setup.isinput))
     {
         delete converter;
         converter = nullptr;

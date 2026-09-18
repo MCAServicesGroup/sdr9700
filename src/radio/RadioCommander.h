@@ -30,6 +30,7 @@ class RadioCommander : public QObject
     void handlePortError(errorType err);
     void handleStatusUpdate(const networkStatus& status);
     void handleNetworkAudioLevels(const networkAudioLevels& levels);
+    void handleTxAudioMeter(const sdr9700::audio::TxAudioMeterBlock& block);
     void changeLatency(const quint16 value);
     void radioSelection(const QList<radio_cap_packet>& radios);
     void radioUsage(quint8 radio, bool admin, quint8 busy, const QString& name, const QString& ip);
@@ -59,6 +60,7 @@ class RadioCommander : public QObject
     void haveSessionHeartbeat();
 
     void haveNetworkAudioLevels(const networkAudioLevels l);
+    void haveTxAudioMeter(const sdr9700::audio::TxAudioMeterBlock block);
     void dataForComm(const QByteArray& outData);
     void haveChangeLatency(quint16 value);
     void haveAudioData(audioPacket data);

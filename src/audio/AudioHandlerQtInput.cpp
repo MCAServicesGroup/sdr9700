@@ -111,9 +111,12 @@ void AudioHandlerQtInput::onConverted(const audioPacket& audio)
         lastReceived.restart();
     }
 
-    amplitude.store(audio.amplitudePeak, std::memory_order_relaxed);
-    emit haveLevels(amplitudePeak(), static_cast<quint16>(audio.amplitudeRMS * 255.0f), setupData.latency,
-                    static_cast<quint16>(latencyMs()), isUnderrun.load(), isOverrun.load());
+    // The transmit meter consumes the typed block measured after gain and
+    // channel mixing. The legacy 8-bit amplitude fields are not published from
+    // the capture path: a quantised 0-255 level has a -48.1 dBFS lowest nonzero
+    // step, which cannot support a truthful dBFS display.
+    emit haveTxMeter(audio.inputMeter, setupData.latency, static_cast<quint16>(latencyMs()), isUnderrun.load(),
+                     isOverrun.load());
 }
 
 QAudioFormat AudioHandlerQtInput::getNativeFormat()
