@@ -43,9 +43,9 @@ check-cppcheck:
 
 run:
 	@if [ "$$(uname -s)" = "Darwin" ]; then \
-	    open $(BUILD_DIR)/bin/sdr9700.app; \
+	    open $(BUILD_DIR)/bin/SDR9700.app; \
 	else \
-	    ./$(BUILD_DIR)/bin/sdr9700; \
+	    ./$(BUILD_DIR)/bin/SDR9700; \
 	fi
 
 bundle:
@@ -53,23 +53,23 @@ bundle:
 	    echo "The bundle target is only available on macOS."; \
 	    exit 1; \
 	fi
-	./resources/packaging/macos/scripts/deploy_macos.sh $(BUILD_DIR)/bin/sdr9700.app
+	./resources/packaging/macos/scripts/deploy_macos.sh $(BUILD_DIR)/bin/SDR9700.app
 
 verify-bundle:
-	./resources/packaging/macos/scripts/verify_macos_bundle.sh $(BUILD_DIR)/bin/sdr9700.app
+	./resources/packaging/macos/scripts/verify_macos_bundle.sh $(BUILD_DIR)/bin/SDR9700.app
 
 sign:
-	./resources/packaging/macos/scripts/sign_macos.sh $(BUILD_DIR)/bin/sdr9700.app
+	./resources/packaging/macos/scripts/sign_macos.sh $(BUILD_DIR)/bin/SDR9700.app
 
 dmg: bundle
-	./resources/packaging/macos/scripts/package_macos.sh $(BUILD_DIR)/bin/sdr9700.app $(BUILD_DIR)/package
+	./resources/packaging/macos/scripts/package_macos.sh $(BUILD_DIR)/bin/SDR9700.app $(BUILD_DIR)/package
 
 release-dmg: bundle sign
-	./resources/packaging/macos/scripts/package_macos.sh $(BUILD_DIR)/bin/sdr9700.app $(BUILD_DIR)/package
+	./resources/packaging/macos/scripts/package_macos.sh $(BUILD_DIR)/bin/SDR9700.app $(BUILD_DIR)/package
 
 notarize:
 	@if [ -z "$(DMG)" ]; then \
-	    echo "Usage: make notarize DMG=src/build/package/sdr9700-<version>-macOS-apple-silicon.dmg"; \
+	    echo "Usage: make notarize DMG=src/build/package/SDR9700-<version>-macOS-apple-silicon.dmg"; \
 	    exit 1; \
 	fi
 	./resources/packaging/macos/scripts/notarize_macos.sh "$(DMG)"
@@ -82,7 +82,7 @@ install:
 	    mkdir -p ~/.local/share/applications; \
 	    mkdir -p ~/.local/share/icons/hicolor/256x256/apps; \
 	    mkdir -p ~/.local/share/icons/hicolor/512x512/apps; \
-	    sed 's|^Exec=.*|Exec=$(abspath $(BUILD_DIR)/bin/sdr9700)|' resources/packaging/linux/sdr9700.desktop \
+	    sed 's|^Exec=.*|Exec=$(abspath $(BUILD_DIR)/bin/SDR9700)|' resources/packaging/linux/sdr9700.desktop \
 	        > ~/.local/share/applications/sdr9700.desktop; \
 	    chmod 644 ~/.local/share/applications/sdr9700.desktop; \
 	    install -m 644 resources/images/icons/sdr9700_app_icon_256x256.png \

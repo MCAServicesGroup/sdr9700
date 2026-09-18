@@ -157,7 +157,7 @@ RadioProfileStore& RadioProfileStore::instance()
 QByteArray RadioProfileStore::passwordKeyMaterial()
 {
     // Current profile encryption key scheme: a per-user random secret stored in
-    // the sdr9700 config directory, domain-separated for AES-GCM radio-profile
+    // the SDR9700 config directory, domain-separated for AES-GCM radio-profile
     // password encryption, then combined with each record's random salt. The
     // key file is protected with owner-only permissions but remains an app-local
     // secret, not a system-keyring secret; see profileKeyPath() for the accepted
@@ -167,7 +167,7 @@ QByteArray RadioProfileStore::passwordKeyMaterial()
     {
         return {};
     }
-    material += "|sdr9700-radio-profiles-aes-gcm";
+    material += "|SDR9700-radio-profiles-aes-gcm";
     const QByteArray hash = QCryptographicHash::hash(material, QCryptographicHash::Sha256);
     secureZero(material);
     return hash;

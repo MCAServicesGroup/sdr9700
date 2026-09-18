@@ -1459,7 +1459,7 @@ Commander::ReplyParseResult Commander::parseModeReply(Funcs& func, QVariant& val
     }
 
     const Funcs originalFunc = func;
-    // Normalize alternate mode reply commands to the command sdr9700 caches.
+    // Normalize alternate mode reply commands to the command SDR9700 caches.
     if (func == funcModeTR || func == funcModeGet || func == funcDataModeWithFilter)
     {
         if (radioCaps.commands.contains(funcMode))
@@ -1554,7 +1554,7 @@ Commander::ReplyParseResult Commander::parseLevelMeterReply(Funcs func, QVariant
         }
         value.setValue(bcdHexToUChar(payloadIn.at(0), payloadIn.at(1)));
         return ReplyParseResult::Parsed;
-    // Two-byte CI-V levels with sdr9700-specific unit mappings.
+    // Two-byte CI-V levels with SDR9700-specific unit mappings.
     case funcKeySpeed:
     {
         if (replyPayloadTooShort(func, 2))
@@ -2137,7 +2137,7 @@ Commander::ReplyParseResult Commander::parseScopeReply(Funcs func, QVariant& val
         value.setValue(bcdHexToUChar(payloadIn.at(1)));
         return ReplyParseResult::Parsed;
     case funcBandEdgeFreq:
-        // Band-edge payload is currently not surfaced by sdr9700.
+        // Band-edge payload is currently not surfaced by SDR9700.
         return ReplyParseResult::Parsed;
     case funcScopeHold:
         if (replyPayloadTooShort(func, 2))
@@ -2783,7 +2783,7 @@ void Commander::determineRadioCaps()
     // The IC-9700 transceiver ID response normally sets modelID before this point.
     if (radioCaps.modelID != kRadioModelId)
     {
-        qWarning(logRadio()).noquote() << QString("Unsupported CI-V radio ID: 0x%1. sdr9700 only supports the IC-9700.")
+        qWarning(logRadio()).noquote() << QString("Unsupported CI-V radio ID: 0x%1. SDR9700 only supports the IC-9700.")
                                               .arg(radioCaps.modelID, 2, 16);
         return;
     }

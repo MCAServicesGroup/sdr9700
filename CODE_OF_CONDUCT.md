@@ -1,13 +1,13 @@
 # Code of Conduct
 
-sdr9700 is a technical project for amateur radio operators and contributors.
+SDR9700 is a technical project for amateur radio operators and contributors.
 Project spaces should stay useful, respectful, and focused on the work.
 
 ## Expected Behavior
 
 - Be respectful and patient.
 - Assume good intent, but correct technical mistakes directly.
-- Keep discussions focused on sdr9700, the IC-9700, and related engineering.
+- Keep discussions focused on SDR9700, the IC-9700, and related engineering.
 - Make room for contributors with different experience levels.
 - Accept maintainer decisions about project scope, UX direction, and release
   readiness.

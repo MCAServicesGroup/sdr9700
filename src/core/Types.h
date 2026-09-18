@@ -667,7 +667,7 @@ enum Funcs
     funcFA,
     funcFB,
 
-    // sdr9700 internal function entries.
+    // SDR9700 internal function entries.
     funcSelectVFO,
     funcSeparator,
     funcLCDWaterfall,
@@ -768,7 +768,7 @@ enum class ErrorCode
     ConnectionFailed,
     Disconnected,
     // The radio explicitly reports a session owned by another client. This is
-    // terminal for the current attempt: sdr9700 must not retry automatically
+    // terminal for the current attempt: SDR9700 must not retry automatically
     // or send teardown traffic for a session it cannot prove it owns.
     RadioBusy,
     InvalidRadio,

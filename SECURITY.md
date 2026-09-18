@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in sdr9700, please report it
+If you discover a security vulnerability in SDR9700, please report it
 **privately** rather than opening a public issue.
 
 **Email:** Send details to the repository owner or use GitHub private

@@ -89,9 +89,9 @@ jobs:
         run: make release
       - name: Verify Metal panadapter build
         run: |
-          grep -Fq 'sdr9700_ENABLE_GPU_PANADAPTER:BOOL=ON' src/build/CMakeCache.txt
-          nm src/build/bin/sdr9700.app/Contents/MacOS/sdr9700 \
-            | grep -F 'qInitResources_sdr9700_panadapter_shaders' >/dev/null
+          grep -Fq 'SDR9700_ENABLE_GPU_PANADAPTER:BOOL=ON' src/build/CMakeCache.txt
+          nm src/build/bin/SDR9700.app/Contents/MacOS/SDR9700 \
+            | grep -F 'qInitResources_SDR9700_panadapter_shaders' >/dev/null
       - name: Test
         run: ctest --test-dir src/build --output-on-failure
       - name: Verify self-contained application bundle

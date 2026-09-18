@@ -25,7 +25,7 @@ class RadioState final : public QObject
 
   public:
     // Receiver is a passive snapshot of values that have actually arrived
-    // from the radio for one logical receiver. An empty value means sdr9700
+    // from the radio for one logical receiver. An empty value means SDR9700
     // does not currently have a radio-derived answer; defaults must not be
     // dressed up as confirmations.
     struct Receiver
@@ -53,7 +53,7 @@ class RadioState final : public QObject
         availableBands band{bandUnknown};
     };
 
-    // BandRecall is sdr9700's confirmed-only history for a receiver/band
+    // BandRecall is SDR9700's confirmed-only history for a receiver/band
     // pair. It is deliberately not named BandStack: native IC-9700 Band
     // Stacking Register support is a separate, unverified protocol feature.
     struct BandRecall

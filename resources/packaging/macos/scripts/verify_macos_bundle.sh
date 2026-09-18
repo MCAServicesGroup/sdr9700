@@ -7,12 +7,12 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-app_path="${1:-src/build/bin/sdr9700.app}"
+app_path="${1:-src/build/bin/SDR9700.app}"
 contents_path="${app_path}/Contents"
 frameworks_path="${contents_path}/Frameworks"
 
-if [ ! -x "${contents_path}/MacOS/sdr9700" ]; then
-    echo "sdr9700 application bundle not found at ${app_path}" >&2
+if [ ! -x "${contents_path}/MacOS/SDR9700" ]; then
+    echo "SDR9700 application bundle not found at ${app_path}" >&2
     exit 1
 fi
 

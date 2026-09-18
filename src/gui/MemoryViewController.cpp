@@ -449,7 +449,7 @@ void MemoryViewController::rebuild()
             {
                 // Do not use QPalette::PlaceholderText here. On macOS that
                 // role can carry reduced alpha intended for text fields and
-                // becomes effectively invisible against sdr9700's explicitly
+                // becomes effectively invisible against SDR9700's explicitly
                 // styled dark table. Cached rows must look secondary without
                 // ever looking empty.
                 item->setForeground(QColor(QLatin1String(UiTheme::Color::TextMuted)));

@@ -49,7 +49,7 @@ constexpr int kMemoryToneRxRole = Qt::UserRole + 2;
 constexpr int kMemoryToneTxRole = Qt::UserRole + 3;
 constexpr int kMemoryVerifiedThisSessionRole = Qt::UserRole + 4;
 constexpr int kMemoryReadOnlyRole = Qt::UserRole + 5;
-constexpr auto kMemoryFileFilter = "sdr9700 Memories (*.csv);;CSV Files (*.csv);;All Files (*)";
+constexpr auto kMemoryFileFilter = "SDR9700 Memories (*.csv);;CSV Files (*.csv);;All Files (*)";
 
 enum MemoryToneFamily
 {

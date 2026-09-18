@@ -637,7 +637,7 @@ void MainWindow::updateWindowTitle()
 {
     QString title =
         QStringLiteral("%1 v%2").arg(QString::fromLatin1(APP_DISPLAY_NAME), QString::fromLatin1(APP_VERSION));
-#if sdr9700_DEBUG_BUILD
+#if SDR9700_DEBUG_BUILD
     title += QStringLiteral(" (DEBUG)");
 #endif
     setWindowTitle(title);

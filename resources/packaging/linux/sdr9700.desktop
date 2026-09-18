@@ -2,7 +2,7 @@
 Type=Application
 Name=SDR9700
 Comment=Icom IC-9700 LAN client
-Exec=sdr9700
+Exec=SDR9700
 Icon=sdr9700
 Categories=HamRadio;
-StartupWMClass=sdr9700
+StartupWMClass=SDR9700

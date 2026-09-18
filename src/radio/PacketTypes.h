@@ -73,7 +73,7 @@ typedef union control_packet
 }* control_packet_t;
 
 // 0x14-byte watchdog packet. The trailing 16-bit fields are preserved at their
-// observed wire offsets even though sdr9700 does not currently interpret them.
+// observed wire offsets even though SDR9700 does not currently interpret them.
 typedef union watchdog_packet
 {
     struct

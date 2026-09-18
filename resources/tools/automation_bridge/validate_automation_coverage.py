@@ -81,7 +81,7 @@ def classify_control(control):
         return "transmit-prohibited"
     if window == "Memory Manager":
         return "destructive-opt-in"
-    if window in {"About sdr9700", "Application Log", "Data Decoder", "Settings"}:
+    if window in {"About SDR9700", "Application Log", "Data Decoder", "Settings"}:
         return "local-or-lifecycle"
     if name in RADIO_UI_NAMES or name in ("Dial locked", "Dial unlocked"):
         return "hardware-script"
