@@ -79,6 +79,11 @@ inline constexpr QColor MeterAmber{0xff, 0xb8, 0x4d};
 inline constexpr QColor MeterRed{0xff, 0x4d, 0x4d};
 inline constexpr QColor MeterScaleText{0x7f, 0xa4, 0xc8};
 inline constexpr QColor ScopeShelfEdge{0x2a, 0x40, 0x4f};
+inline constexpr QColor BorderLightQColor{0x4a, 0x4e, 0x58};
+inline constexpr QColor AccentBrightQColor{0x38, 0xd8, 0xff};
+inline constexpr QColor TextPrimaryQColor{0xe0, 0xe6, 0xec};
+inline constexpr QColor TextStatusSecondaryQColor{0x8e, 0xa8, 0xc0};
+inline constexpr QColor DangerQColor{0xff, 0x4d, 0x4d};
 } // namespace Color
 
 inline QColor spectrumSignalColor(double strength)

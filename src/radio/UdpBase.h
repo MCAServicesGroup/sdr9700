@@ -9,6 +9,7 @@
 #include <QByteArray>
 #include <QVector>
 #include <QMap>
+#include <QQueue>
 #include <QUuid>
 #include <QElapsedTimer>
 
@@ -147,6 +148,7 @@ class UdpBase : public QObject
     };
 
     QMap<quint16, qint64> rxSeqBuf;
+    QQueue<quint16> m_rxSequenceOrder;
     QMap<quint16, SEQBUFENTRY> txSeqBuf;
     QMap<quint16, int> rxMissing;
 

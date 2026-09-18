@@ -28,6 +28,7 @@ class StatusBarController : public QObject
 
   private:
     void applyStatusMessage(const QString& message, MainWindow::StatusMessageKind kind);
+    void updateStatusClockTooltip();
 
     MainWindow* m_window{nullptr};
     SystemStatsProvider m_systemStatsProvider;

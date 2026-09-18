@@ -5,6 +5,7 @@
 #include "UtilityWindow.h"
 
 #include <QUuid>
+#include <QSet>
 
 class QListWidget;
 class QPushButton;
@@ -52,6 +53,7 @@ class RadioChooserDialog : public sdr9700::ui::UtilityWindow
     QPushButton* m_saveBtn{nullptr};
 
     QUuid m_currentId;
+    QSet<QUuid> m_warnedUnreadablePasswords;
     bool m_formDirty{false};
     bool m_isNewProfile{false};
 };

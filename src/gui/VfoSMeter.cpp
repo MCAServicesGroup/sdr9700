@@ -3,6 +3,7 @@
 #include "SMeterScale.h"
 #include "UiTheme.h"
 
+#include <QEvent>
 #include <QPainter>
 #include <cmath>
 
@@ -89,10 +90,31 @@ VfoSMeter::VfoSMeter(QWidget* parent) : QWidget(parent)
     setFixedHeight(kMeterHeight);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     setAccessibleName(QStringLiteral("Signal strength meter"));
+    refreshPaintFonts();
 
     m_signalAnimationTimer.setTimerType(Qt::PreciseTimer);
     m_signalAnimationTimer.setInterval(kSignalAnimationIntervalMs);
     connect(&m_signalAnimationTimer, &QTimer::timeout, this, &VfoSMeter::advanceSignalDisplay);
+}
+
+void VfoSMeter::changeEvent(QEvent* event)
+{
+    if (event->type() == QEvent::FontChange)
+    {
+        refreshPaintFonts();
+    }
+    QWidget::changeEvent(event);
+}
+
+void VfoSMeter::refreshPaintFonts()
+{
+    m_scaleFont = font();
+    m_scaleFont.setPixelSize(kScaleFontSize);
+    m_scaleFont.setBold(true);
+    m_scaleMetrics = QFontMetrics(m_scaleFont);
+    m_readoutFont = font();
+    m_readoutFont.setPixelSize(kReadoutFontSize);
+    m_readoutFont.setBold(true);
 }
 
 void VfoSMeter::setRawValue(int value)
@@ -197,11 +219,7 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
     const QRect meterRect(0, height() - kSegmentHeight - 2, meterRight, kSegmentHeight);
     painter.fillRect(meterRect, QColor(4, 9, 13));
 
-    QFont scaleFont = font();
-    scaleFont.setPixelSize(kScaleFontSize);
-    scaleFont.setBold(true);
-    painter.setFont(scaleFont);
-    const QFontMetrics scaleMetrics(scaleFont);
+    painter.setFont(m_scaleFont);
     if (m_transmitPowerMode)
     {
         for (const PowerMark& mark : kPowerMarks)
@@ -211,12 +229,12 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
                 continue;
             }
             const int x = qRound(powerFraction(mark.watts, m_maxPowerWatts) * qMax(0, meterRect.width() - 1));
-            painter.setPen(QColor(QString::fromLatin1(UiTheme::Color::TextStatusSecondary)));
+            painter.setPen(UiTheme::Color::TextStatusSecondaryQColor);
             const QString label = qFuzzyCompare(mark.watts + 1.0, m_maxPowerWatts + 1.0)
                                       ? QStringLiteral("%1W").arg(m_maxPowerWatts, 0, 'f',
                                                                   m_maxPowerWatts == qRound(m_maxPowerWatts) ? 0 : 2)
                                       : QString::fromLatin1(mark.label);
-            const int labelWidth = scaleMetrics.horizontalAdvance(label);
+            const int labelWidth = m_scaleMetrics.horizontalAdvance(label);
             painter.drawText(qBound(0, x - labelWidth / 2, qMax(0, meterRect.width() - labelWidth - kLegendRightInset)),
                              meterRect.top() - 6, label);
         }
@@ -226,10 +244,9 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
         for (const MeterMark& mark : kMarks)
         {
             const int x = qRound(mark.raw / 241.0 * qMax(0, meterRect.width() - 1));
-            painter.setPen(QColor(
-                QString::fromLatin1(mark.overS9 ? UiTheme::Color::Danger : UiTheme::Color::TextStatusSecondary)));
+            painter.setPen(mark.overS9 ? UiTheme::Color::DangerQColor : UiTheme::Color::TextStatusSecondaryQColor);
             const QString label = QString::fromLatin1(mark.label);
-            const int labelWidth = scaleMetrics.horizontalAdvance(label);
+            const int labelWidth = m_scaleMetrics.horizontalAdvance(label);
             painter.drawText(qBound(0, x - labelWidth / 2, qMax(0, meterRect.width() - labelWidth - kLegendRightInset)),
                              meterRect.top() - 6, label);
         }
@@ -242,11 +259,10 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
     {
         const bool active = x - meterRect.left() < activeWidth;
         const bool highPower = m_transmitPowerMode && x - meterRect.left() >= meterRect.width() * 0.82;
-        QColor segmentColor(QString::fromLatin1(UiTheme::Color::BorderLight));
+        QColor segmentColor = UiTheme::Color::BorderLightQColor;
         if (active && m_transmitPowerMode)
         {
-            segmentColor =
-                QColor(QString::fromLatin1(highPower ? UiTheme::Color::Danger : UiTheme::Color::AccentBright));
+            segmentColor = highPower ? UiTheme::Color::DangerQColor : UiTheme::Color::AccentBrightQColor;
         }
         else if (active)
         {
@@ -257,11 +273,8 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
     }
 
     const QRect readoutRect(width() - kReadoutWidth - 10, meterRect.top(), kReadoutWidth, kSegmentHeight);
-    QFont readoutFont = font();
-    readoutFont.setPixelSize(kReadoutFontSize);
-    readoutFont.setBold(true);
-    painter.setFont(readoutFont);
-    painter.setPen(QColor(QString::fromLatin1(UiTheme::Color::TextPrimary)));
+    painter.setFont(m_readoutFont);
+    painter.setPen(UiTheme::Color::TextPrimaryQColor);
     const int displayedRawValue = qRound(m_displayRawValue);
     const QString readout = m_transmitPowerMode     ? QStringLiteral("%1W").arg(qRound(m_powerWatts))
                             : displayedRawValue > 0 ? signalText(displayedRawValue)

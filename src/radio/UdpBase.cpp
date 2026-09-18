@@ -331,22 +331,29 @@ void UdpBase::dataReceived(const QByteArray& r)
     {
         QMutexLocker rxLocker(&rxBufferMutex);
         QMutexLocker missingLocker(&missingMutex);
-        auto trimReceiveBuffer = [&]()
+        auto trackReceiveSequence = [&](quint16 sequence)
         {
-            while (rxSeqBuf.size() > BUFSIZE)
+            if (!rxSeqBuf.contains(sequence))
             {
-                auto oldest =
-                    std::min_element(rxSeqBuf.begin(), rxSeqBuf.end(), [](qint64 leftTimestamp, qint64 rightTimestamp)
-                                     { return leftTimestamp < rightTimestamp; });
-                rxSeqBuf.erase(oldest);
+                m_rxSequenceOrder.enqueue(sequence);
             }
+            rxSeqBuf.insert(sequence, receivedAtMs);
+            while (m_rxSequenceOrder.size() > BUFSIZE)
+            {
+                rxSeqBuf.remove(m_rxSequenceOrder.dequeue());
+            }
+        };
+        auto resetReceiveSequences = [&]()
+        {
+            rxSeqBuf.clear();
+            m_rxSequenceOrder.clear();
         };
 
         if (!receiveSequenceTrackingInitialized)
         {
             receiveSequenceTrackingInitialized = true;
             highestTrackedReceiveSequence = in.seq;
-            rxSeqBuf.insert(in.seq, receivedAtMs);
+            trackReceiveSequence(in.seq);
         }
         else
         {
@@ -362,13 +369,12 @@ void UdpBase::dataReceived(const QByteArray& r)
                     for (quint16 offset = 1; offset < forwardDistance; ++offset)
                     {
                         const quint16 sequence = quint16(highestTrackedReceiveSequence + offset);
-                        rxSeqBuf.insert(sequence, receivedAtMs);
+                        trackReceiveSequence(sequence);
                         rxMissing.insert(sequence, 0);
                     }
                 }
-                rxSeqBuf.insert(in.seq, receivedAtMs);
+                trackReceiveSequence(in.seq);
                 highestTrackedReceiveSequence = in.seq;
-                trimReceiveBuffer();
             }
             else if (forwardDistance > 0 && forwardDistance < 0x8000)
             {
@@ -376,9 +382,9 @@ void UdpBase::dataReceived(const QByteArray& r)
                     << this->metaObject()->className() << "Large seq number gap detected, previous highest: "
                     << QString("0x%1").arg(highestTrackedReceiveSequence, 0, 16)
                     << " current: " << QString("0x%1").arg(in.seq, 0, 16);
-                rxSeqBuf.clear();
+                resetReceiveSequences();
                 rxMissing.clear();
-                rxSeqBuf.insert(in.seq, receivedAtMs);
+                trackReceiveSequence(in.seq);
                 highestTrackedReceiveSequence = in.seq;
             }
             else if (rxMissing.remove(in.seq) > 0)
@@ -393,9 +399,9 @@ void UdpBase::dataReceived(const QByteArray& r)
                     << this->metaObject()->className() << "Ambiguous seq number jump reset tracking, previous highest: "
                     << QString("0x%1").arg(highestTrackedReceiveSequence, 0, 16)
                     << " current: " << QString("0x%1").arg(in.seq, 0, 16);
-                rxSeqBuf.clear();
+                resetReceiveSequences();
                 rxMissing.clear();
-                rxSeqBuf.insert(in.seq, receivedAtMs);
+                trackReceiveSequence(in.seq);
                 highestTrackedReceiveSequence = in.seq;
             }
         }
@@ -417,6 +423,7 @@ void UdpBase::sendRetransmitRequest()
         qInfo(logUdp()).noquote() << "Too many missing packets," << rxMissing.size() << "flushing all buffers";
         rxMissing.clear();
         rxSeqBuf.clear();
+        m_rxSequenceOrder.clear();
         receiveSequenceTrackingInitialized = false;
         return;
     }

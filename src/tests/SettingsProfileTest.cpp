@@ -26,6 +26,7 @@ class SettingsProfileTest : public QObject
     void corruptedProfileKeyIsPreserved();
     void profilePasswordIsEncryptedAndRoundTrips();
     void corruptedProfilePasswordIsPreserved();
+    void defersPasswordDecryptionUntilProfileUse();
     void managesProfileLifecycleAndLastSelection();
     void ignoresMalformedAndIncompleteProfiles();
     void rejectsInvalidProfilePorts();
@@ -191,7 +192,7 @@ void SettingsProfileTest::profilePasswordIsEncryptedAndRoundTrips()
     QVERIFY(!QJsonDocument(root).toJson().contains(profile.password.toUtf8()));
 
     store.load();
-    const RadioProfile* loaded = store.profileById(profile.id);
+    const RadioProfile* loaded = store.profileForUse(profile.id);
     QVERIFY(loaded != nullptr);
     QCOMPARE(loaded->name, profile.name);
     QCOMPARE(loaded->host, profile.host);
@@ -236,6 +237,7 @@ void SettingsProfileTest::corruptedProfilePasswordIsPreserved()
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("Loading radio profile.*")));
     RadioProfileStore& store = RadioProfileStore::instance();
     store.load();
+    QVERIFY(store.profileForUse(QUuid(profile.value(QStringLiteral("ID")).toString())) != nullptr);
     QCOMPARE(store.profiles().size(), 1);
     QCOMPARE(store.profiles().constFirst().password, QString());
     QCOMPARE(store.unreadablePasswordProfileNames(), QStringList{profile.value(QStringLiteral("name")).toString()});
@@ -257,10 +259,43 @@ void SettingsProfileTest::corruptedProfilePasswordIsPreserved()
     QVERIFY(store.updateProfile(recoveredProfile));
     QVERIFY(!store.hasUnreadablePassword(recoveredProfile.id));
     store.load();
-    const RadioProfile* reloadedProfile = store.profileById(recoveredProfile.id);
+    const RadioProfile* reloadedProfile = store.profileForUse(recoveredProfile.id);
     QVERIFY(reloadedProfile != nullptr);
     QCOMPARE(reloadedProfile->password, recoveredProfile.password);
     QVERIFY(store.removeProfile(recoveredProfile.id));
+}
+
+void SettingsProfileTest::defersPasswordDecryptionUntilProfileUse()
+{
+    RadioProfileStore& store = RadioProfileStore::instance();
+    const RadioProfile profile{
+        QUuid::createUuid(),        QStringLiteral("Lazy password"),   QStringLiteral("192.0.2.30"), 50001,
+        QStringLiteral("operator"), QStringLiteral("deferred-secret"),
+    };
+    QVERIFY(store.addProfile(profile));
+
+    const QString keyPath = QDir(sdr9700::configDirectory()).filePath(QStringLiteral("profile-key.bin"));
+    QFile keyFile(keyPath);
+    QVERIFY(keyFile.open(QIODevice::ReadOnly));
+    const QByteArray key = keyFile.readAll();
+    keyFile.close();
+    QVERIFY(QFile::remove(keyPath));
+
+    store.load();
+    QVERIFY(!QFileInfo::exists(keyPath));
+    const RadioProfile* metadata = store.profileById(profile.id);
+    QVERIFY(metadata != nullptr);
+    QVERIFY(metadata->password.isEmpty());
+
+    QVERIFY(keyFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(keyFile.write(key), static_cast<qint64>(key.size()));
+    keyFile.close();
+    QVERIFY(QFile::setPermissions(keyPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+
+    const RadioProfile* resolved = store.profileForUse(profile.id);
+    QVERIFY(resolved != nullptr);
+    QCOMPARE(resolved->password, profile.password);
+    QVERIFY(store.removeProfile(profile.id));
 }
 
 void SettingsProfileTest::managesProfileLifecycleAndLastSelection()

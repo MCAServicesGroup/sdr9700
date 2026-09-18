@@ -3,7 +3,7 @@
 #include <QByteArray>
 #include <QQueue>
 #include <QSet>
-#include <QVector>
+#include <optional>
 
 struct CivSequenceGateDiagnostics
 {
@@ -13,10 +13,7 @@ struct CivSequenceGateDiagnostics
     qsizetype highWaterMark{0};
 };
 
-struct CivSequenceGateResult
-{
-    QVector<QByteArray> payloads;
-};
+using CivSequenceGateResult = std::optional<QByteArray>;
 
 class CivSequenceGate
 {

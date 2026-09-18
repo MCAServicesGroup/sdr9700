@@ -18,6 +18,7 @@ bool AudioHandlerQtInput::openDevice() noexcept
     }
 
     connect(audioDevice, &QIODevice::readyRead, this, &AudioHandlerQtInput::onReadyRead, Qt::UniqueConnection);
+    tempBuf.data.reserve(nativeFormat.bytesForDuration(setupData.blockSize * 2000));
     qInfo(logAudio()).noquote() << "Connected to Qt audio input device" << deviceInfo.description();
     return true;
 }
@@ -47,13 +48,26 @@ void AudioHandlerQtInput::onReadyRead()
     {
         return;
     }
-    tempBuf.data.append(audioDevice->readAll());
-
     const int bytesPerBlock = nativeFormat.bytesForDuration(setupData.blockSize * 1000);
     if (bytesPerBlock <= 0)
     {
         return;
     }
+
+    const qint64 availableBytes = audioDevice->bytesAvailable();
+    if (availableBytes <= 0)
+    {
+        return;
+    }
+    const qsizetype previousSize = tempBuf.data.size();
+    tempBuf.data.resize(previousSize + availableBytes);
+    const qint64 bytesRead = audioDevice->read(tempBuf.data.data() + previousSize, availableBytes);
+    if (bytesRead <= 0)
+    {
+        tempBuf.data.resize(previousSize);
+        return;
+    }
+    tempBuf.data.resize(previousSize + bytesRead);
 
     while (tempBuf.data.size() - m_bufferReadOffset >= bytesPerBlock)
     {

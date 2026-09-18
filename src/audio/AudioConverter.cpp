@@ -239,7 +239,6 @@ bool AudioConverter::convert(audioPacket audio)
             audio.data.swap(scratchIn);
         }
         Eigen::VectorXf& samplesF = scratchSamples;
-        samplesF.resize(0);
         if (sampleFormat == QAudioFormat::Int32)
         {
             if (!byteCountMatchesSampleSize(audio.data, int(sizeof(qint32))))

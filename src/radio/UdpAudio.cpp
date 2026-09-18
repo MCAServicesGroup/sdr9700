@@ -4,6 +4,7 @@
 #include "TxAudioPacing.h"
 #include <algorithm>
 #include <cstring>
+#include <utility>
 
 namespace
 {
@@ -135,7 +136,7 @@ void UdpAudio::sendAudioBuffer(const QByteArray& data)
         // Append directly from the source frame so TX packetization performs
         // one payload copy instead of building an intermediate QByteArray.
         tx.append(chunk, chunkLen);
-        sendTrackedPacket(tx);
+        sendTrackedPacket(std::move(tx));
         sendAudioSeq++;
     }
 }

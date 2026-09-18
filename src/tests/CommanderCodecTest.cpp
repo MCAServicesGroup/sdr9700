@@ -558,9 +558,9 @@ void CommanderCodecTest::survivesCombinedTransportAndSchedulerFaultSoak()
     const auto deliver = [this, &gate](quint16 datagramSequence, const QByteArray& frame)
     {
         const CivSequenceGateResult result = gate.accept(datagramSequence, frame);
-        for (const QByteArray& payload : result.payloads)
+        if (result)
         {
-            m_commander.handleNewData(payload);
+            m_commander.handleNewData(*result);
         }
     };
 

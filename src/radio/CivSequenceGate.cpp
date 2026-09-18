@@ -7,11 +7,10 @@ qint16 CivSequenceGate::distance(quint16 from, quint16 to)
 
 CivSequenceGateResult CivSequenceGate::accept(quint16 sequence, const QByteArray& payload)
 {
-    CivSequenceGateResult result;
     if (m_recentSequences.contains(sequence))
     {
         ++m_diagnostics.duplicatesSuppressed;
-        return result;
+        return std::nullopt;
     }
 
     if (m_started && distance(m_expected, sequence) < 0)
@@ -31,10 +30,9 @@ CivSequenceGateResult CivSequenceGate::accept(quint16 sequence, const QByteArray
         m_recentSequences.remove(m_recentSequenceOrder.dequeue());
     }
 
-    result.payloads.append(payload);
     ++m_diagnostics.delivered;
     m_diagnostics.highWaterMark = qMax(m_diagnostics.highWaterMark, m_recentSequences.size());
-    return result;
+    return payload;
 }
 
 void CivSequenceGate::reset()

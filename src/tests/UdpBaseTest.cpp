@@ -2,6 +2,7 @@
 #include "UdpBase.h"
 
 #include <QtTest>
+#include <utility>
 
 class TestUdpBase : public UdpBase
 {
@@ -25,7 +26,17 @@ class TestUdpBase : public UdpBase
         packet.len = CONTROL_SIZE;
         sendTrackedPacket(QByteArray(packet.packet, CONTROL_SIZE));
     }
+    const char* sendMovedTrackedControl()
+    {
+        control_packet packet{};
+        packet.len = CONTROL_SIZE;
+        QByteArray encoded(packet.packet, CONTROL_SIZE);
+        const char* storage = encoded.constData();
+        sendTrackedPacket(std::move(encoded));
+        return storage;
+    }
     QList<quint16> transmittedSequences() const { return txSeqBuf.keys(); }
+    const char* transmittedStorage(quint16 sequence) const { return txSeqBuf.value(sequence).data.constData(); }
     QList<quint16> receivedSequences() const { return rxSeqBuf.keys(); }
     QList<quint16> missingSequences() const { return rxMissing.keys(); }
 };
@@ -43,7 +54,9 @@ class UdpBaseTest : public QObject
     void tracksMissingAndDuplicatePackets();
     void boundsLargeSequenceGaps();
     void tracksMissingPacketsAcrossSequenceRollover();
+    void boundsReceiveHistoryInInsertionOrder();
     void clearsTransmitWindowAtSequenceRollover();
+    void preservesMovedPacketStorage() const;
     void sendsDepartureOnlyOnce();
     void suppressesDepartureWithoutSessionOwnership();
     void rejectsTruncatedPackets();
@@ -169,6 +182,23 @@ void UdpBaseTest::tracksMissingPacketsAcrossSequenceRollover()
     QVERIFY(stream.missingSequences().isEmpty());
 }
 
+void UdpBaseTest::boundsReceiveHistoryInInsertionOrder()
+{
+    TestUdpBase stream;
+    for (int sequence = 1; sequence <= BUFSIZE + 100; ++sequence)
+    {
+        control_packet packet{};
+        packet.len = CONTROL_SIZE;
+        packet.type = 0;
+        packet.seq = static_cast<quint16>(sequence);
+        stream.dataReceived(QByteArray(packet.packet, CONTROL_SIZE));
+    }
+
+    QCOMPARE(stream.receivedSequences().size(), BUFSIZE);
+    QCOMPARE(stream.receivedSequences().constFirst(), quint16(101));
+    QCOMPARE(stream.receivedSequences().constLast(), quint16(BUFSIZE + 100));
+}
+
 void UdpBaseTest::clearsTransmitWindowAtSequenceRollover()
 {
     TestUdpBase stream;
@@ -181,6 +211,16 @@ void UdpBaseTest::clearsTransmitWindowAtSequenceRollover()
     QCOMPARE(stream.transmittedSequences(), QList<quint16>({0}));
     stream.sendTrackedControl();
     QCOMPARE(stream.transmittedSequences(), QList<quint16>({0, 1}));
+}
+
+void UdpBaseTest::preservesMovedPacketStorage() const
+{
+    TestUdpBase stream;
+    QVERIFY(stream.init(0));
+    stream.setExpectedPeer(QHostAddress::LocalHost, 9);
+
+    const char* originalStorage = stream.sendMovedTrackedControl();
+    QCOMPARE(stream.transmittedStorage(1), originalStorage);
 }
 
 void UdpBaseTest::sendsDepartureOnlyOnce()

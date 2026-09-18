@@ -5,12 +5,15 @@
 #include "MemoryDatabase.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QSaveFile>
 #include <QDebug>
 
@@ -144,6 +147,49 @@ QByteArray readOrCreateProfileKey()
     }
     return key;
 }
+
+struct PasswordKeyMaterialCache
+{
+    ~PasswordKeyMaterialCache() { secureZero(material); }
+
+    QMutex mutex;
+    QByteArray material;
+    QString path;
+    QDateTime modified;
+    qint64 size{-1};
+};
+
+QByteArray cachedPasswordKeyMaterial()
+{
+    static PasswordKeyMaterialCache cache;
+    QMutexLocker locker(&cache.mutex);
+    const QString path = profileKeyPath();
+    const QFileInfo currentInfo(path);
+    if (!cache.material.isEmpty() && cache.path == path && currentInfo.exists() && cache.size == currentInfo.size() &&
+        cache.modified == currentInfo.lastModified())
+    {
+        return cache.material;
+    }
+
+    secureZero(cache.material);
+    QByteArray material = readOrCreateProfileKey();
+    if (material.isEmpty())
+    {
+        cache.path.clear();
+        cache.modified = {};
+        cache.size = -1;
+        return {};
+    }
+    material += "|SDR9700-radio-profiles-aes-gcm";
+    cache.material = QCryptographicHash::hash(material, QCryptographicHash::Sha256);
+    secureZero(material);
+
+    const QFileInfo refreshedInfo(path);
+    cache.path = path;
+    cache.modified = refreshedInfo.lastModified();
+    cache.size = refreshedInfo.size();
+    return cache.material;
+}
 } // namespace
 
 RadioProfileStore& RadioProfileStore::instance()
@@ -162,15 +208,7 @@ QByteArray RadioProfileStore::passwordKeyMaterial()
     // key file is protected with owner-only permissions but remains an app-local
     // secret, not a system-keyring secret; see profileKeyPath() for the accepted
     // risk and portability rationale.
-    QByteArray material = readOrCreateProfileKey();
-    if (material.isEmpty())
-    {
-        return {};
-    }
-    material += "|SDR9700-radio-profiles-aes-gcm";
-    const QByteArray hash = QCryptographicHash::hash(material, QCryptographicHash::Sha256);
-    secureZero(material);
-    return hash;
+    return cachedPasswordKeyMaterial();
 }
 
 QByteArray RadioProfileStore::passwordFingerprint(const QString& plain)
@@ -359,20 +397,13 @@ void RadioProfileStore::load()
         }
         p.port = static_cast<quint16>(port);
         p.username = obj.value("username").toString();
-        const QString storedPassword = obj.value("password").toString();
-        p.password = decryptPassword(storedPassword);
-        if (!storedPassword.isEmpty() && p.password.isEmpty())
-        {
-            qWarning(logSystem()).noquote() << "Loading radio profile with unreadable encrypted password:" << p.name;
-            m_unreadablePasswords.insert(p.id, storedPassword);
-        }
-        else if (!p.password.isEmpty())
-        {
-            m_encryptedPasswords.insert(p.id, storedPassword);
-            m_passwordFingerprints.insert(p.id, passwordFingerprint(p.password));
-        }
         if (!p.id.isNull() && !p.host.isEmpty())
         {
+            const QString storedPassword = obj.value("password").toString();
+            if (!storedPassword.isEmpty())
+            {
+                m_encryptedPasswords.insert(p.id, storedPassword);
+            }
             m_profiles.append(p);
         }
     }
@@ -398,7 +429,7 @@ bool RadioProfileStore::save() const
         QByteArray fingerprint;
         if (p.password.isEmpty())
         {
-            encryptedPassword = m_unreadablePasswords.value(p.id);
+            encryptedPassword = m_unreadablePasswords.value(p.id, m_encryptedPasswords.value(p.id));
         }
         else
         {
@@ -419,9 +450,12 @@ bool RadioProfileStore::save() const
             return false;
         }
         obj.insert("password", encryptedPassword);
-        if (!encryptedPassword.isEmpty() && !fingerprint.isEmpty())
+        if (!encryptedPassword.isEmpty())
         {
             encryptedPasswords.insert(p.id, encryptedPassword);
+        }
+        if (!fingerprint.isEmpty())
+        {
             passwordFingerprints.insert(p.id, fingerprint);
         }
         profileArray.append(obj);
@@ -443,6 +477,32 @@ const RadioProfile* RadioProfileStore::profileById(const QUuid& id) const
     const auto it = std::find_if(m_profiles.cbegin(), m_profiles.cend(),
                                  [&id](const RadioProfile& profile) { return profile.id == id; });
     return it != m_profiles.cend() ? &(*it) : nullptr;
+}
+
+const RadioProfile* RadioProfileStore::profileForUse(const QUuid& id)
+{
+    const auto it = std::find_if(m_profiles.begin(), m_profiles.end(),
+                                 [&id](const RadioProfile& profile) { return profile.id == id; });
+    if (it == m_profiles.end())
+    {
+        return nullptr;
+    }
+
+    const QString storedPassword = m_encryptedPasswords.value(id);
+    if (it->password.isEmpty() && !storedPassword.isEmpty() && !m_unreadablePasswords.contains(id))
+    {
+        it->password = decryptPassword(storedPassword);
+        if (it->password.isEmpty())
+        {
+            qWarning(logSystem()).noquote() << "Loading radio profile with unreadable encrypted password:" << it->name;
+            m_unreadablePasswords.insert(id, storedPassword);
+        }
+        else
+        {
+            m_passwordFingerprints.insert(id, passwordFingerprint(it->password));
+        }
+    }
+    return &(*it);
 }
 
 QStringList RadioProfileStore::unreadablePasswordProfileNames() const
@@ -485,10 +545,17 @@ bool RadioProfileStore::updateProfile(const RadioProfile& p)
         {
             const RadioProfile previous = existing;
             const QString previousUnreadablePassword = m_unreadablePasswords.value(p.id);
+            const QString previousEncryptedPassword = m_encryptedPasswords.value(p.id);
+            const QByteArray previousPasswordFingerprint = m_passwordFingerprints.value(p.id);
             existing = p;
             if (!p.password.isEmpty())
             {
                 m_unreadablePasswords.remove(p.id);
+            }
+            else if (!previous.password.isEmpty())
+            {
+                m_encryptedPasswords.remove(p.id);
+                m_passwordFingerprints.remove(p.id);
             }
             if (!save())
             {
@@ -496,6 +563,14 @@ bool RadioProfileStore::updateProfile(const RadioProfile& p)
                 if (!previousUnreadablePassword.isEmpty())
                 {
                     m_unreadablePasswords.insert(p.id, previousUnreadablePassword);
+                }
+                if (!previousEncryptedPassword.isEmpty())
+                {
+                    m_encryptedPasswords.insert(p.id, previousEncryptedPassword);
+                }
+                if (!previousPasswordFingerprint.isEmpty())
+                {
+                    m_passwordFingerprints.insert(p.id, previousPasswordFingerprint);
                 }
                 return false;
             }

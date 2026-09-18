@@ -5,6 +5,7 @@
 #include <QByteArray>
 #include <QImage>
 #include <QPixmap>
+#include <QPen>
 #include <QPoint>
 #include <QPolygonF>
 #include <QSize>
@@ -29,6 +30,7 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
 {
     Q_OBJECT
     friend class SpectrumCanvasTest;
+    friend class PerformanceBenchmark;
 #ifdef SDR9700_GPU_PANADAPTER
     friend class GpuPanadapterRenderTest;
 #endif
@@ -79,7 +81,6 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     double xToFreq(int x) const;
     double levelToY(float level, int topY, int h) const;
     double gridLevelToY(float level, int topY, int h) const;
-    double sourcePositionForDisplayX(double x, int binCount) const;
     static float interpolatedLevel(const QVector<float>& levels, double sourcePosition);
     static void spatiallySmoothBins(const QVector<float>& bins, QVector<float>* smoothedBins);
     bool isSpectrumClickArea(const QPoint& pos) const;
@@ -88,6 +89,7 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     void renderStaticLayer(QPainter* painter) const;
     void renderDynamicLayer(QPainter* painter, bool includeTuningGeometry = true) const;
     void renderRasterDynamicLayer(QPainter* painter);
+    const QPen& rasterTracePen(int traceHeight);
     void paintRaster(QPainter* painter);
     void buildTraceSamples(QVector<QPointF>* points, QVector<float>* levels) const;
     void scheduleRepaint();
@@ -134,6 +136,10 @@ class SpectrumScopeCanvas : public SpectrumScopeCanvasBase
     QVector<QPointF> m_tracePointsScratch;
     QVector<float> m_traceLevelsScratch;
     QPolygonF m_tracePolygonScratch;
+    QPen m_rasterTracePen;
+    int m_rasterTracePenHeight{-1};
+    float m_rasterTracePenMinLevel{0.0f};
+    float m_rasterTracePenMaxLevel{0.0f};
     QImage m_rasterDynamicLayer;
     QPixmap m_staticLayer;
     QSize m_staticLayerSize;

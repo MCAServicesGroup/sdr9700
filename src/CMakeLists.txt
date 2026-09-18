@@ -696,4 +696,16 @@ if(BUILD_TESTING)
     target_link_libraries(AutomationControllerTest PRIVATE SDR9700_app_support Qt6::Test)
     add_test(NAME AutomationControllerTest COMMAND AutomationControllerTest)
     set_tests_properties(AutomationControllerTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    if(SDR9700_BUILD_BENCHMARKS)
+        add_executable(PerformanceBenchmark tests/PerformanceBenchmark.cpp)
+        target_include_directories(PerformanceBenchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gui)
+        target_link_libraries(PerformanceBenchmark PRIVATE SDR9700_app_support Qt6::Test)
+        add_test(NAME PerformanceBenchmark COMMAND PerformanceBenchmark)
+        set_tests_properties(PerformanceBenchmark PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            LABELS "benchmark"
+            TIMEOUT 180
+        )
+    endif()
 endif()

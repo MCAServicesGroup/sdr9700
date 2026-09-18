@@ -53,7 +53,7 @@ class AudioHandlerQtOutput : public AudioHandlerBase
     bool isFormatSupported(QAudioFormat f) override;
 
   private:
-    void writeToOutputDevice(const QByteArray& data, quint32 seq, float amplitudePeak, float amplitudeRms);
+    void writeToOutputDevice(const QByteArray& data, float amplitudePeak, float amplitudeRms);
     void drainPendingOutput();
 
     QAudioSink* audioOutput{nullptr};

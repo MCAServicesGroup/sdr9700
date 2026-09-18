@@ -1,7 +1,8 @@
 #include "UdpCivData.h"
 #include "LogCategories.h"
 
-#include <algorithm>
+#include <functional>
+#include <utility>
 
 namespace
 {
@@ -125,7 +126,7 @@ void UdpCivData::send(QByteArray d)
 
     QByteArray t = encodePacket(p);
     t.append(d);
-    sendTrackedPacket(t);
+    sendTrackedPacket(std::move(t));
     sendSeqB++;
     return;
 }
@@ -253,9 +254,11 @@ void UdpCivData::deliverSequencedPayloads(const CivSequenceGateResult& result)
     // predecessor sequence space. They are not proof that this replacement's
     // CI-V pipe opened. Stop open retries only when the sequence gate actually
     // accepts data for delivery to Commander.
-    const bool usefulCommandData = std::any_of(result.payloads.cbegin(), result.payloads.cend(),
-                                               [](const QByteArray& payload) { return !isScopeDataPayload(payload); });
-    if (usefulCommandData)
+    if (!result)
+    {
+        return;
+    }
+    if (!isScopeDataPayload(*result))
     {
         if (startCivDataTimer != nullptr)
         {
@@ -263,8 +266,5 @@ void UdpCivData::deliverSequencedPayloads(const CivSequenceGateResult& result)
         }
         m_openStartRequestCount = 0;
     }
-    for (const QByteArray& payload : result.payloads)
-    {
-        emit receive(payload);
-    }
+    emit receive(*result);
 }

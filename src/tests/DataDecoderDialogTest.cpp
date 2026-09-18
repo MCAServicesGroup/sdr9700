@@ -13,6 +13,7 @@ class DataDecoderDialogTest : public QObject
 
   private slots:
     void usesPortableTableLayout();
+    void decodesAudioOnlyWhileVisible();
 };
 
 void DataDecoderDialogTest::usesPortableTableLayout()
@@ -47,6 +48,29 @@ void DataDecoderDialogTest::usesPortableTableLayout()
     table->setCurrentCell(0, 0);
     QVERIFY(rawPacket->toPlainText().contains(QStringLiteral("WIDE1-1*,WIDE2-2")));
     QVERIFY(rawPacket->toPlainText().endsWith(QStringLiteral(":Test payload")));
+}
+
+void DataDecoderDialogTest::decodesAudioOnlyWhileVisible()
+{
+    DataDecoderDialog dialog;
+    QSignalSpy audioSpy(&dialog, &DataDecoderDialog::audioReceived);
+    QSignalSpy resetSpy(&dialog, &DataDecoderDialog::resetDecoder);
+    const QByteArray pcm(1920, '\0');
+
+    dialog.processAudio(pcm, 48000, 2);
+    QCOMPARE(audioSpy.count(), 0);
+
+    dialog.show();
+    QCoreApplication::processEvents();
+    QVERIFY(dialog.isVisible());
+    dialog.processAudio(pcm, 48000, 2);
+    QCOMPARE(audioSpy.count(), 1);
+
+    dialog.hide();
+    QCoreApplication::processEvents();
+    QCOMPARE(resetSpy.count(), 1);
+    dialog.processAudio(pcm, 48000, 2);
+    QCOMPARE(audioSpy.count(), 1);
 }
 
 QTEST_MAIN(DataDecoderDialogTest)

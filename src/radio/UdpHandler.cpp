@@ -7,6 +7,7 @@
 #include <QRandomGenerator>
 #include <algorithm>
 #include <iterator>
+#include <utility>
 
 namespace
 {
@@ -1778,7 +1779,7 @@ void UdpHandler::sendRequestStream()
                                         << " txEnabled=" << quint8(p.txenable) << " txCodec=" << quint8(p.txcodec)
                                         << " txSampleRate=" << qFromBigEndian(p.txsample)
                                         << " civLocalPort=" << civLocalPort << " audioLocalPort=" << audioLocalPort;
-    sendTrackedPacket(request);
+    sendTrackedPacket(std::move(request));
     return;
 }
 
