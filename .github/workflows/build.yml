@@ -129,7 +129,9 @@ jobs:
             build-essential cmake ninja-build pkg-config python3-venv xauth xvfb \
             libssl-dev libopus-dev libspeexdsp-dev libeigen3-dev libgl1-mesa-dev libpulse0 libvulkan-dev \
             mesa-vulkan-drivers \
-            libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0
+            libxkbcommon-dev libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-shape0 libxcb-xfixes0 libxcb-xinerama0
       - name: Install Qt
         run: |
           python3 -m venv "$RUNNER_TEMP/aqt-venv"
