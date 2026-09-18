@@ -34,9 +34,12 @@ class WaterfallController : public QObject
     void invalidateBinMap();
     void ensureBinMap(int binCount);
     void rebuildImage();
+    void remapHistory(const QSize& newSize, double newStartMhz, double newEndMhz);
+    bool historyNeedsRemap(double newStartMhz, double newEndMhz) const;
     void renderRow(const QVector<float>& levels);
 
     QImage m_waterfall;
+    QImage m_remapScratch;
     QVector<int> m_binMap;
     int m_binMapBinCount{0};
     QSize m_canvasSize;
@@ -44,6 +47,8 @@ class WaterfallController : public QObject
     double m_endMhz{146.0};
     double m_dataStartMhz{144.0};
     double m_dataEndMhz{146.0};
+    double m_imageStartMhz{144.0};
+    double m_imageEndMhz{146.0};
     float m_minLevel{0.0f};
     float m_maxLevel{160.0f};
     bool m_paused{false};

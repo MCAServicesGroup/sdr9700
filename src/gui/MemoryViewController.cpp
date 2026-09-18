@@ -161,7 +161,7 @@ void MemoryViewController::buildMemoryWindow()
     syncLayout->setContentsMargins(kMemoryToolbarGroupMargins);
     syncLayout->setSpacing(kMemoryToolbarGroupSpacing);
     auto* syncButton = new QPushButton("Sync", panel);
-    syncButton->setToolTip("Immediately read radio memories into sdr9700.");
+    syncButton->setToolTip("Immediately read radio memories into SDR9700.");
     m_owner->m_window->m_memoryBandFilter->setFixedHeight(syncButton->sizeHint().height());
     syncLayout->addWidget(syncButton);
     toolbar->addWidget(syncGroup);

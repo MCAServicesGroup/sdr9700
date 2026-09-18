@@ -308,10 +308,10 @@ SettingsDialog::SettingsDialog(Page page, QWidget* parent)
 #endif
     QTreeWidgetItem* applicationCategory =
         addCategory(QStringLiteral("APPLICATION"),
-                    QStringLiteral("Configure sdr9700 behavior, memory synchronization, and display appearance."),
+                    QStringLiteral("Configure SDR9700 behavior, memory synchronization, and display appearance."),
                     QStringLiteral("application configuration backup restore reset memory manager spectrum scope"));
     addPage(applicationCategory, Page::ApplicationConfiguration, QStringLiteral("Configuration"),
-            QStringLiteral("Back up, restore, or reset sdr9700 configuration."),
+            QStringLiteral("Back up, restore, or reset SDR9700 configuration."),
             QStringLiteral("application configuration backup restore reset settings"),
             [] { return new ApplicationConfigurationSettingsPanel; });
     addPage(applicationCategory, Page::MemoryManager, QStringLiteral("Memory Manager"),

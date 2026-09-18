@@ -25,7 +25,8 @@ bool sampleCountMatchesChannels(qsizetype sampleCount, int channelCount)
 AudioConverter::AudioConverter(QObject* parent) : QObject(parent) {}
 
 bool AudioConverter::init(QAudioFormat inputFormat, codecType inputCodec, QAudioFormat outputFormat,
-                          codecType outputCodec, quint8 encoderComplexity, quint8 converterResampleQuality)
+                          codecType outputCodec, quint8 encoderComplexity, quint8 converterResampleQuality,
+                          bool stereoToDualMono)
 {
 
     releaseCodecState();
@@ -35,6 +36,7 @@ bool AudioConverter::init(QAudioFormat inputFormat, codecType inputCodec, QAudio
     outCodec = outputCodec;
     opusComplexity = encoderComplexity;
     resampleQuality = converterResampleQuality;
+    mixStereoToDualMono = stereoToDualMono;
 
     qInfo(logAudioConverter).noquote() << "Starting AudioConverter() Input:" << inputFormat.channelCount()
                                        << "Channels of" << inputCodec << inputFormat.sampleRate()
@@ -329,6 +331,17 @@ bool AudioConverter::convert(audioPacket audio)
                 Eigen::Map<Eigen::VectorXf, 0, Eigen::InnerStride<2>>(scratchChannelMix.data() + 1, samplesF.size()) =
                     samplesF;
                 samplesF.swap(scratchChannelMix);
+            }
+            else if (inFormat.channelCount() == 2 && outFormat.channelCount() == 2 && mixStereoToDualMono)
+            {
+                const int frameCount = samplesF.size() / 2;
+                scratchChannelMix.resize(frameCount);
+                const Eigen::Map<Eigen::VectorXf, 0, Eigen::InnerStride<2>> left(samplesF.data(), frameCount);
+                const Eigen::Map<Eigen::VectorXf, 0, Eigen::InnerStride<2>> right(samplesF.data() + 1, frameCount);
+                scratchChannelMix = (left + right) * 0.5f;
+                Eigen::Map<Eigen::VectorXf, 0, Eigen::InnerStride<2>>(samplesF.data(), frameCount) = scratchChannelMix;
+                Eigen::Map<Eigen::VectorXf, 0, Eigen::InnerStride<2>>(samplesF.data() + 1, frameCount) =
+                    scratchChannelMix;
             }
             if (resampler != nullptr && resampleRatio != 1.0)
             {

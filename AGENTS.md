@@ -1,4 +1,4 @@
-#sdr9700 — Project Context for AI Agents
+# sdr9700 — Project Context for AI Agents
 
 sdr9700 is a Qt/C++ desktop GUI client for controlling an Icom IC-9700 amateur
 radio transceiver over the radio's LAN interface on Linux and Apple Silicon
@@ -6,7 +6,7 @@ macOS.
 
 ## Project Goal
 
-Build an open-source Linux application that gives IC-9700 operators a
+Build an open-source Linux and Apple Silicon macOS application that gives IC-9700 operators a
 maintainable native GUI for everyday control, spectrum/waterfall display,
 audio routing, and station workflows.
 
@@ -68,8 +68,8 @@ root, before reporting findings:
 
 **clang-format** — apply in-place and report any files changed:
 ```bash
-find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' \) -print0 \
-  | xargs -0 clang-format -i
+find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
+  | xargs -0 clang-format-23 -i
 git diff --stat
 ```
 
@@ -109,8 +109,8 @@ Items to look for include, but are not limited to:
   and formatting rules.
 - Security risks, unsafe assumptions, input validation gaps, and resource
   handling problems.
-- Leftover code, build paths, assumptions, or branches intended for operating
-  systems other than Linux.
+- Leftover code, build paths, assumptions, or branches intended for unsupported
+  operating systems other than Linux and Apple Silicon macOS.
 - Opportunities to refactor, simplify, optimize, or improve maintainability,
   regardless of size or apparent material benefit.
 - Comments that lack detail, completeness, or useful context. During review,

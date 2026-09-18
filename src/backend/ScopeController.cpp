@@ -41,8 +41,11 @@ void ScopeController::setFramesPerSecond(int requestedFramesPerSecond)
     }
     if (m_pacingClock.isValid())
     {
-        m_nextEmissionDeadlineNs =
-            m_pacingClock.nsecsElapsed() + sdr9700::spectrumFrameIntervalNanoseconds(m_framesPerSecond);
+        m_pacingPolicy.setFramesPerSecond(m_framesPerSecond, m_pacingClock.nsecsElapsed());
+    }
+    else
+    {
+        m_pacingPolicy.setFramesPerSecond(m_framesPerSecond, 0);
     }
     scheduleFlush();
 }
@@ -57,14 +60,11 @@ void ScopeController::reset()
     m_hasPendingFrame = false;
     m_frameArrivalClock.invalidate();
     m_pacingClock.invalidate();
-    m_nextEmissionDeadlineNs = 0;
+    m_pacingPolicy.reset();
 }
 
 void ScopeController::acceptScopeData(const ScopeData& data)
 {
-    qDebug(logSpectrumScope()).noquote().nospace()
-        << "ScopeWaveData valid=" << data.valid << " dataLen=" << data.data.size() << " start=" << data.startFreq
-        << " end=" << data.endFreq;
     if (!data.valid || data.data.isEmpty())
     {
         return;
@@ -93,14 +93,13 @@ void ScopeController::scheduleFlush()
     if (!m_pacingClock.isValid())
     {
         m_pacingClock.start();
-        m_nextEmissionDeadlineNs = 0;
         // Queue the first frame at zero delay so additional frames delivered
         // in the same event-loop turn still coalesce to the newest one.
         m_flushTimer->start(0);
         return;
     }
 
-    const qint64 remainingNs = m_nextEmissionDeadlineNs - m_pacingClock.nsecsElapsed();
+    const qint64 remainingNs = m_pacingPolicy.nanosecondsUntilEmission(m_pacingClock.nsecsElapsed());
     if (remainingNs <= 0)
     {
         m_flushTimer->start(0);
@@ -128,19 +127,7 @@ void ScopeController::flushLatestFrame()
     m_pendingFrame = {};
     m_hasPendingFrame = false;
     const qint64 nowNs = m_pacingClock.nsecsElapsed();
-    const qint64 intervalNs = sdr9700::spectrumFrameIntervalNanoseconds(m_framesPerSecond);
-    if (m_nextEmissionDeadlineNs <= 0)
-    {
-        m_nextEmissionDeadlineNs = nowNs + intervalNs;
-    }
-    else
-    {
-        m_nextEmissionDeadlineNs += intervalNs;
-        if (m_nextEmissionDeadlineNs <= nowNs)
-        {
-            m_nextEmissionDeadlineNs = nowNs + intervalNs;
-        }
-    }
+    m_pacingPolicy.markEmitted(nowNs);
     emit scopeDataReceived();
 
     // Reuse the conversion buffer between frames. The queued signal delivery

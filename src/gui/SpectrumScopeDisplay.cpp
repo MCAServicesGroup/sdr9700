@@ -5,6 +5,7 @@
 #include "WaterfallController.h"
 
 #include <QComboBox>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QResizeEvent>
 #include <QScrollBar>
@@ -100,13 +101,14 @@ SpectrumScopeDisplay::SpectrumScopeDisplay(QWidget* parent) : QWidget(parent)
                  UiTheme::Color::ScrollBorderPressed));
     m_spanCombo->setFixedSize(kSpanComboWidth, kSpanComboHeight);
     m_spanCombo->setFocusPolicy(Qt::NoFocus);
+    m_spanCombo->setAttribute(Qt::WA_OpaquePaintEvent);
     m_spanCombo->setToolTip(QStringLiteral("Spectrum Scope span"));
     m_spanCombo->setStyleSheet(
-        QStringLiteral("QComboBox { background: rgba(16, 22, 30, 220); "
+        QStringLiteral("QComboBox { background: #10161e; "
                        "border: 1px solid #566576; border-radius: 3px; "
                        "color: #e8f2f8; font-size: 10px; font-weight: bold; "
                        "padding: 1px 22px 1px 10px; }"
-                       "QComboBox:hover { background: rgba(32, 42, 55, 235); "
+                       "QComboBox:hover { background: #202a37; "
                        "border-color: #7f96ad; }"
                        "QComboBox::drop-down { border: none; width: 16px; }"
                        "QComboBox::down-arrow { image: none; width: 0px; height: 0px; "
@@ -254,10 +256,8 @@ void SpectrumScopeDisplay::updateChildGeometry()
 
 void SpectrumScopeDisplay::paintEvent(QPaintEvent* event)
 {
-    Q_UNUSED(event)
-
     QPainter painter(this);
-    painter.fillRect(rect(), Qt::black);
+    painter.fillRect(event->rect(), Qt::black);
 }
 
 void SpectrumScopeDisplay::setFrequencyRange(double startMhz, double endMhz)

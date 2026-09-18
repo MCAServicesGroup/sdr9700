@@ -73,7 +73,7 @@ ctest --test-dir src/build --output-on-failure
 Source formatting must use clang-format 23:
 
 ```bash
-find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' \) -print0 \
+find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
   | xargs -0 clang-format-23 --dry-run --Werror
 ```
 

@@ -5,6 +5,7 @@
 #include <QRandomGenerator>
 #include <QTime>
 
+#include <algorithm>
 #include <utility>
 
 bool UdpBase::init(quint16 bindPort, QUdpSocket* boundSocket)
@@ -271,8 +272,10 @@ void UdpBase::dataReceived(const QByteArray& r)
             QList<QByteArray> retransmitData;
             QList<quint16> unavailableSequences;
             QMutexLocker txLocker(&txBufferMutex);
-            for (qsizetype i = 0x10; i + 1 < r.length(); i = i + 2)
+            int requestedSequenceCount = 0;
+            for (qsizetype i = 0x10; i + 1 < r.length() && requestedSequenceCount < MAX_MISSING; i = i + 2)
             {
+                ++requestedSequenceCount;
                 quint16 seq = (quint8)r[i] | (quint8)r[i + 1] << 8;
                 auto match = txSeqBuf.find(seq);
                 if (match == txSeqBuf.end())
@@ -297,6 +300,14 @@ void UdpBase::dataReceived(const QByteArray& r)
             }
             txLocker.unlock();
 
+            const int encodedSequenceCount = qMax(0, (r.length() - 0x10) / 2);
+            if (encodedSequenceCount > requestedSequenceCount)
+            {
+                qWarning(logUdp()).noquote().nospace()
+                    << this->metaObject()->className()
+                    << ": Capping retransmit request requested=" << encodedSequenceCount << " limit=" << MAX_MISSING;
+            }
+
             if (!retransmitData.isEmpty())
             {
                 QMutexLocker udpLocker(&udpMutex);
@@ -316,92 +327,78 @@ void UdpBase::dataReceived(const QByteArray& r)
                                          << ": Ignoring malformed odd-length retransmit request:" << r.length();
         }
     }
-    else if (in.len != PING_SIZE && in.type == 0x00 && in.seq != 0x00)
+    else if (in.len != PING_SIZE && in.type == 0x00)
     {
-        rxBufferMutex.lock();
-        if (rxSeqBuf.isEmpty())
+        QMutexLocker rxLocker(&rxBufferMutex);
+        QMutexLocker missingLocker(&missingMutex);
+        auto trimReceiveBuffer = [&]()
         {
+            while (rxSeqBuf.size() > BUFSIZE)
+            {
+                auto oldest =
+                    std::min_element(rxSeqBuf.begin(), rxSeqBuf.end(), [](qint64 leftTimestamp, qint64 rightTimestamp)
+                                     { return leftTimestamp < rightTimestamp; });
+                rxSeqBuf.erase(oldest);
+            }
+        };
+
+        if (!receiveSequenceTrackingInitialized)
+        {
+            receiveSequenceTrackingInitialized = true;
+            highestTrackedReceiveSequence = in.seq;
             rxSeqBuf.insert(in.seq, receivedAtMs);
         }
         else
         {
-            const quint16 previousHighest = rxSeqBuf.lastKey();
-            const quint32 forwardGap =
-                in.seq >= previousHighest ? quint32(in.seq) - quint32(previousHighest) : quint32(MAX_MISSING) + 1U;
-            if (in.seq < rxSeqBuf.firstKey() || forwardGap > quint32(MAX_MISSING))
+            const quint16 forwardDistance = quint16(in.seq - highestTrackedReceiveSequence);
+            if (forwardDistance > 0 && forwardDistance <= MAX_MISSING)
+            {
+                if (forwardDistance > 1)
+                {
+                    qDebug(logUdp()).noquote().nospace()
+                        << this->metaObject()->className() << "::MissingPacketsDetected previous="
+                        << QString("0x%1").arg(highestTrackedReceiveSequence, 0, 16)
+                        << " current=" << QString("0x%1").arg(in.seq, 0, 16);
+                    for (quint16 offset = 1; offset < forwardDistance; ++offset)
+                    {
+                        const quint16 sequence = quint16(highestTrackedReceiveSequence + offset);
+                        rxSeqBuf.insert(sequence, receivedAtMs);
+                        rxMissing.insert(sequence, 0);
+                    }
+                }
+                rxSeqBuf.insert(in.seq, receivedAtMs);
+                highestTrackedReceiveSequence = in.seq;
+                trimReceiveBuffer();
+            }
+            else if (forwardDistance > 0 && forwardDistance < 0x8000)
             {
                 qDebug(logUdp()).noquote()
                     << this->metaObject()->className() << "Large seq number gap detected, previous highest: "
-                    << QString("0x%1").arg(rxSeqBuf.lastKey(), 0, 16)
+                    << QString("0x%1").arg(highestTrackedReceiveSequence, 0, 16)
                     << " current: " << QString("0x%1").arg(in.seq, 0, 16);
                 rxSeqBuf.clear();
-                rxSeqBuf.insert(in.seq, receivedAtMs);
-                rxBufferMutex.unlock();
-                missingMutex.lock();
                 rxMissing.clear();
-                missingMutex.unlock();
-                return;
+                rxSeqBuf.insert(in.seq, receivedAtMs);
+                highestTrackedReceiveSequence = in.seq;
             }
-
-            if (!rxSeqBuf.contains(in.seq))
+            else if (rxMissing.remove(in.seq) > 0)
             {
-                if (in.seq > rxSeqBuf.lastKey() + 1)
-                {
-                    qDebug(logUdp()).noquote().nospace()
-                        << this->metaObject()->className()
-                        << "::MissingPacketsDetected previous=" << QString("0x%1").arg(rxSeqBuf.lastKey(), 0, 16)
-                        << " current=" << QString("0x%1").arg(in.seq, 0, 16);
-                    missingMutex.lock();
-                    // Iterate in a wider type. A quint16 loop variable wraps to
-                    // zero after sequence 65535 and would otherwise never leave
-                    // a loop whose received sequence is 65535.
-                    const quint32 firstMissing = quint32(rxSeqBuf.lastKey()) + 1U;
-                    const quint32 receivedSequence = in.seq;
-                    for (quint32 f = firstMissing; f < receivedSequence; ++f)
-                    {
-                        if (rxSeqBuf.size() > BUFSIZE)
-                        {
-                            rxSeqBuf.erase(rxSeqBuf.begin());
-                        }
-                        const auto sequence = static_cast<quint16>(f);
-                        rxSeqBuf.insert(sequence, receivedAtMs);
-                        if (!rxMissing.contains(sequence))
-                        {
-                            rxMissing.insert(sequence, 0);
-                        }
-                    }
-                    if (rxSeqBuf.size() > BUFSIZE)
-                    {
-                        rxSeqBuf.erase(rxSeqBuf.begin());
-                    }
-                    rxSeqBuf.insert(in.seq, receivedAtMs);
-                    missingMutex.unlock();
-                }
-                else
-                {
-                    if (rxSeqBuf.size() > BUFSIZE)
-                    {
-                        rxSeqBuf.erase(rxSeqBuf.begin());
-                    }
-                    rxSeqBuf.insert(in.seq, receivedAtMs);
-                }
+                qDebug(logUdp()).noquote().nospace()
+                    << this->metaObject()->className()
+                    << "::MissingSequenceRecovered sequence=" << QString("0x%1").arg(in.seq, 0, 16);
             }
-            else
+            else if (forwardDistance != 0 && !rxSeqBuf.contains(in.seq))
             {
-                missingMutex.lock();
-                auto s = rxMissing.find(in.seq);
-                if (s != rxMissing.end())
-                {
-                    qDebug(logUdp()).noquote().nospace()
-                        << this->metaObject()->className()
-                        << "::MissingSequenceRecovered sequence=" << QString("0x%1").arg(in.seq, 0, 16);
-
-                    s = rxMissing.erase(s);
-                }
-                missingMutex.unlock();
+                qDebug(logUdp()).noquote()
+                    << this->metaObject()->className() << "Ambiguous seq number jump reset tracking, previous highest: "
+                    << QString("0x%1").arg(highestTrackedReceiveSequence, 0, 16)
+                    << " current: " << QString("0x%1").arg(in.seq, 0, 16);
+                rxSeqBuf.clear();
+                rxMissing.clear();
+                rxSeqBuf.insert(in.seq, receivedAtMs);
+                highestTrackedReceiveSequence = in.seq;
             }
         }
-        rxBufferMutex.unlock();
     }
 }
 
@@ -420,6 +417,7 @@ void UdpBase::sendRetransmitRequest()
         qInfo(logUdp()).noquote() << "Too many missing packets," << rxMissing.size() << "flushing all buffers";
         rxMissing.clear();
         rxSeqBuf.clear();
+        receiveSequenceTrackingInitialized = false;
         return;
     }
     rxLocker.unlock(); // rxSeqBuf not needed below; release early so dataReceived is not blocked
@@ -436,25 +434,17 @@ void UdpBase::sendRetransmitRequest()
     auto it = rxMissing.begin();
     while (it != rxMissing.end())
     {
-        if (it.key() != 0x0)
+        if (it.value() < 4)
         {
-            if (it.value() < 4)
-            {
-                appendRetransmitSeqRange(missingSeqs, it.key(), it.key());
-                it.value()++;
-                it++;
-            }
-            else
-            {
-                qInfo(logUdp()).noquote() << this->metaObject()->className() << ": No response for missing packet"
-                                          << QString("0x%1").arg(it.key(), 0, 16) << "deleting";
-                it = rxMissing.erase(it);
-            }
+            appendRetransmitSeqRange(missingSeqs, it.key(), it.key());
+            it.value()++;
+            it++;
         }
         else
         {
-            qInfo(logUdp()).noquote() << this->metaObject()->className() << ": found empty key in missing buffer";
-            it++;
+            qInfo(logUdp()).noquote() << this->metaObject()->className() << ": No response for missing packet"
+                                      << QString("0x%1").arg(it.key(), 0, 16) << "deleting";
+            it = rxMissing.erase(it);
         }
     }
     missingLocker.unlock();
@@ -655,7 +645,7 @@ void UdpBase::purgeOldEntries()
                 }
                 else
                 {
-                    break;
+                    ++it;
                 }
             }
         }

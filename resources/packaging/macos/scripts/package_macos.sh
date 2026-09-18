@@ -25,7 +25,7 @@ ln -s /Applications "${staging_path}/Applications"
 
 rm -f "${output_path}"
 hdiutil create \
-    -volname "sdr9700" \
+    -volname "SDR9700" \
     -srcfolder "${staging_path}" \
     -format UDZO \
     -ov \

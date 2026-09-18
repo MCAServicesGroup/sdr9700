@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SpectrumFrameRate.h"
+#include "SpectrumFramePacingPolicy.h"
 #include "Types.h"
 
 #include <QObject>
@@ -38,6 +39,6 @@ class ScopeController : public QObject
     bool m_hasPendingFrame{false};
     QElapsedTimer m_frameArrivalClock;
     QElapsedTimer m_pacingClock;
-    qint64 m_nextEmissionDeadlineNs{0};
+    sdr9700::SpectrumFramePacingPolicy m_pacingPolicy;
     int m_framesPerSecond{sdr9700::kDefaultSpectrumFramesPerSecond};
 };

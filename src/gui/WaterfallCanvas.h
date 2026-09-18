@@ -2,8 +2,8 @@
 #pragma once
 
 #include <QImage>
-#include <QSet>
 #include <QString>
+#include <QVector>
 #include <memory>
 
 #ifdef SDR9700_GPU_PANADAPTER
@@ -21,6 +21,7 @@ class QResizeEvent;
 class WaterfallCanvas : public WaterfallCanvasBase
 {
     Q_OBJECT
+    friend class SpectrumCanvasTest;
 #ifdef SDR9700_GPU_PANADAPTER
     friend class GpuPanadapterRenderTest;
 #endif
@@ -46,6 +47,8 @@ class WaterfallCanvas : public WaterfallCanvasBase
     void paintRaster(QPainter* painter) const;
 #ifdef SDR9700_GPU_PANADAPTER
     void requestRasterFallback(const QString& reason);
+    bool gpuResourcesActiveForTest() const;
+    QString gpuBackendNameForTest() const;
 #endif
     // WaterfallController owns this image and outlives the canvas within
     // SpectrumScopeDisplay. Keeping a non-owning source avoids QImage
@@ -56,7 +59,7 @@ class WaterfallCanvas : public WaterfallCanvasBase
     struct GpuState;
     std::unique_ptr<GpuState> m_gpuState;
     QImage m_gpuShelfLayer;
-    QSet<int> m_changedPhysicalRows;
+    QVector<int> m_changedPhysicalRows;
     QWidget* m_rasterFallbackOverlay{nullptr};
     bool m_rasterFallbackRequested{false};
     bool m_fullTextureUploadPending{true};

@@ -266,6 +266,7 @@ class Commander : public RadioCommander
     ScopeData mainScopeData;
     ScopeData subScopeData;
     QElapsedTimer m_scopeAssemblyClocks[2];
+    QElapsedTimer m_scopeDiagnosticClocks[2];
     quint8 m_expectedScopeSequences[2]{0, 0};
 
     // 12 entries cover 10^0–10^11; BCD frequency data is at most 5 bytes (10 nibbles, indices 0–9).

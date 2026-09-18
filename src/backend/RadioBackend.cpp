@@ -320,6 +320,7 @@ RadioBackend::RadioBackend(QObject* parent)
                 }
                 emit frequencyChanged(hz);
                 updateReadyState();
+                updateAudioReadyState();
             });
 
     m_mainSubExchangeRetryTimer = new QTimer(this);
@@ -472,6 +473,7 @@ RadioBackend::RadioBackend(QObject* parent)
                 m_initialModeReceived = true;
                 emit modeChanged(mode);
                 updateReadyState();
+                updateAudioReadyState();
             });
     connect(m_radioRouter, &RadioRouter::repeaterOffsetChanged, this,
             [this](quint64 hz)

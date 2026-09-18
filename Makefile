@@ -27,7 +27,7 @@ check: check-format check-cppcheck
 
 check-format:
 	@clang-format-23 --version | grep -E 'clang-format version 23\.'
-	find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' \) -print0 \
+	find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
 	    | xargs -0 clang-format-23 --dry-run --Werror
 
 check-cppcheck:

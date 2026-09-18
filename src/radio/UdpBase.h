@@ -115,6 +115,8 @@ class UdpBase : public QObject
     uint16_t sendSeqB = 0;
     uint16_t sendSeq = 1;
     uint16_t lastReceivedSeq = 1;
+    quint16 highestTrackedReceiveSequence{0};
+    bool receiveSequenceTrackingInitialized{false};
     uint16_t pkt0SendSeq = 0;
     uint16_t periodicSeq = 0;
     quint64 latency = 0;

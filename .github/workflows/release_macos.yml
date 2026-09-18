@@ -17,6 +17,13 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+
+env:
+  QT_VERSION: 6.8.3
+
 jobs:
   package:
     name: Apple Silicon macOS
@@ -25,16 +32,20 @@ jobs:
     steps:
       - name: Select source ref
         id: source
-        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "ref=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-            echo "release_tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-          elif [[ -n "${{ inputs.release_tag }}" ]]; then
-            echo "ref=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
-            echo "release_tag=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            printf 'ref=%s\n' "$EVENT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            printf 'release_tag=%s\n' "$EVENT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$INPUT_RELEASE_TAG" ]]; then
+            printf 'ref=%s\n' "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            printf 'release_tag=%s\n' "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
+            printf 'ref=%s\n' "$INPUT_REF" >> "$GITHUB_OUTPUT"
             echo "release_tag=" >> "$GITHUB_OUTPUT"
           fi
 
@@ -43,14 +54,15 @@ jobs:
           ref: ${{ steps.source.outputs.ref }}
 
       - name: Verify runner and release version
-        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.source.outputs.release_tag }}
         run: |
           test "$(uname -m)" = "arm64"
           version="$(sed -n 's/^set(sdr9700_DISPLAY_VERSION "\([^"]*\)").*/\1/p' CMakeLists.txt)"
           test -n "$version"
-          if [[ -n "${{ steps.source.outputs.release_tag }}" ]]; then
+          if [[ -n "$RELEASE_TAG" ]]; then
             expected_tag="v${version}"
-            if [[ "${{ steps.source.outputs.release_tag }}" != "$expected_tag" ]]; then
+            if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
               echo "::error::Release tag must be ${expected_tag}"
               exit 1
             fi
@@ -60,12 +72,22 @@ jobs:
         if: steps.source.outputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release view "${{ steps.source.outputs.release_tag }}"
+          RELEASE_TAG: ${{ steps.source.outputs.release_tag }}
+        run: gh release view "$RELEASE_TAG"
 
       - name: Install build dependencies
         run: |
-          brew install cmake ninja pkg-config qt openssl@3 opus speexdsp eigen hidapi
-          echo "$(brew --prefix qt)/bin" >> "$GITHUB_PATH"
+          brew install cmake ninja pkg-config openssl@3 opus speexdsp eigen hidapi
+          python3 -m venv "$RUNNER_TEMP/aqt-venv"
+          "$RUNNER_TEMP/aqt-venv/bin/pip" install --disable-pip-version-check aqtinstall==3.3.0
+          "$RUNNER_TEMP/aqt-venv/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 \
+            --outputdir "$RUNNER_TEMP/Qt" \
+            -m qtmultimedia qtshadertools
+          qt_root="$RUNNER_TEMP/Qt/$QT_VERSION/macos"
+          test -x "$qt_root/bin/qmake"
+          echo "$qt_root/bin" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=$qt_root" >> "$GITHUB_ENV"
+          "$qt_root/bin/qmake" -query QT_VERSION
 
       - name: Build and test
         run: |
@@ -76,7 +98,6 @@ jobs:
           ctest --test-dir src/build --output-on-failure
 
       - name: Import Developer ID certificate
-        shell: bash
         env:
           APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -146,4 +167,5 @@ jobs:
         if: steps.source.outputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ steps.source.outputs.release_tag }}" "$sdr9700_DMG" --clobber
+          RELEASE_TAG: ${{ steps.source.outputs.release_tag }}
+        run: gh release upload "$RELEASE_TAG" "$sdr9700_DMG" --clobber

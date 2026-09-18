@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <iterator>
 #include <limits>
 
@@ -86,7 +87,14 @@ void WaterfallController::setCanvasSize(const QSize& size)
         return;
     }
     m_canvasSize = size;
-    rebuildImage();
+    if (m_waterfall.isNull())
+    {
+        rebuildImage();
+    }
+    else
+    {
+        remapHistory(size, m_startMhz, m_endMhz);
+    }
 }
 
 double WaterfallController::xToFreq(int x) const
@@ -171,7 +179,10 @@ void WaterfallController::setFrequencyRange(double startMhz, double endMhz)
     m_startMhz = startMhz;
     m_endMhz = endMhz;
     invalidateBinMap();
-    rebuildImage();
+    if (historyNeedsRemap(startMhz, endMhz))
+    {
+        remapHistory(m_canvasSize, startMhz, endMhz);
+    }
 }
 
 void WaterfallController::setDataFrequencyRange(double startMhz, double endMhz)
@@ -223,7 +234,108 @@ void WaterfallController::rebuildImage()
     m_waterfall = QImage(m_canvasSize, QImage::Format_RGB32);
     m_waterfall.fill(kWaterfallIdleColor);
     m_firstVisibleRow = 0;
+    m_imageStartMhz = lowFrequencyMhz(m_startMhz, m_endMhz);
+    m_imageEndMhz = highFrequencyMhz(m_startMhz, m_endMhz);
     invalidateBinMap();
+    emit imageChanged();
+}
+
+bool WaterfallController::historyNeedsRemap(double newStartMhz, double newEndMhz) const
+{
+    if (m_waterfall.isNull() || m_waterfall.width() <= 1)
+    {
+        return true;
+    }
+    const double oldSpanMhz = m_imageEndMhz - m_imageStartMhz;
+    if (oldSpanMhz < kMinFrequencyRangeMhz)
+    {
+        return true;
+    }
+    const double pixelsPerMhz = double(m_waterfall.width() - 1) / oldSpanMhz;
+    const double startDisplacement = qAbs(newStartMhz - m_imageStartMhz) * pixelsPerMhz;
+    const double endDisplacement = qAbs(newEndMhz - m_imageEndMhz) * pixelsPerMhz;
+    // Preserve subpixel pans without touching the complete history image. Once
+    // either edge has moved by a visible pixel, realign all retained rows in a
+    // single remap instead of blanking the waterfall.
+    return qMax(startDisplacement, endDisplacement) >= 1.0;
+}
+
+void WaterfallController::remapHistory(const QSize& newSize, double newStartMhz, double newEndMhz)
+{
+    if (!newSize.isValid())
+    {
+        return;
+    }
+    const double normalizedStartMhz = lowFrequencyMhz(newStartMhz, newEndMhz);
+    const double normalizedEndMhz = highFrequencyMhz(newStartMhz, newEndMhz);
+    newStartMhz = normalizedStartMhz;
+    newEndMhz = normalizedEndMhz;
+    if (m_waterfall.isNull())
+    {
+        rebuildImage();
+        return;
+    }
+
+    const int oldWidth = m_waterfall.width();
+    const int oldHeight = m_waterfall.height();
+    const double oldSpanMhz = m_imageEndMhz - m_imageStartMhz;
+    const double newSpanMhz = newEndMhz - newStartMhz;
+    if (newSize == m_waterfall.size() && qFuzzyCompare(oldSpanMhz, newSpanMhz) && oldWidth > 1)
+    {
+        const int pixelShift = int(std::llround(((newStartMhz - m_imageStartMhz) / oldSpanMhz) * (oldWidth - 1)));
+        if (pixelShift != 0 && qAbs(pixelShift) < oldWidth)
+        {
+            for (int row = 0; row < oldHeight; ++row)
+            {
+                auto* pixels = reinterpret_cast<QRgb*>(m_waterfall.scanLine(row));
+                if (pixelShift > 0)
+                {
+                    std::memmove(pixels, pixels + pixelShift, size_t(oldWidth - pixelShift) * sizeof(QRgb));
+                    std::fill(pixels + oldWidth - pixelShift, pixels + oldWidth, kWaterfallIdleColor);
+                }
+                else
+                {
+                    const int rightShift = -pixelShift;
+                    std::memmove(pixels + rightShift, pixels, size_t(oldWidth - rightShift) * sizeof(QRgb));
+                    std::fill(pixels, pixels + rightShift, kWaterfallIdleColor);
+                }
+            }
+            m_imageStartMhz = newStartMhz;
+            m_imageEndMhz = newEndMhz;
+            emit imageChanged();
+            return;
+        }
+    }
+    if (m_remapScratch.size() != newSize || m_remapScratch.format() != QImage::Format_RGB32)
+    {
+        m_remapScratch = QImage(newSize, QImage::Format_RGB32);
+    }
+    m_remapScratch.fill(kWaterfallIdleColor);
+
+    const int retainedRows = qMin(oldHeight, newSize.height());
+    const int newRight = qMax(1, newSize.width() - 1);
+    for (int displayRow = 0; displayRow < retainedRows; ++displayRow)
+    {
+        const int oldPhysicalRow = (m_firstVisibleRow + displayRow) % oldHeight;
+        const auto* oldPixels = reinterpret_cast<const QRgb*>(m_waterfall.constScanLine(oldPhysicalRow));
+        auto* newPixels = reinterpret_cast<QRgb*>(m_remapScratch.scanLine(displayRow));
+        for (int x = 0; x < newSize.width(); ++x)
+        {
+            const double frequencyMhz = newStartMhz + (double(x) / newRight) * (newEndMhz - newStartMhz);
+            if (frequencyMhz < m_imageStartMhz || frequencyMhz > m_imageEndMhz || oldSpanMhz <= 0.0)
+            {
+                continue;
+            }
+            const int oldX = qBound(
+                0, int(std::llround(((frequencyMhz - m_imageStartMhz) / oldSpanMhz) * (oldWidth - 1))), oldWidth - 1);
+            newPixels[x] = oldPixels[oldX];
+        }
+    }
+
+    m_waterfall.swap(m_remapScratch);
+    m_firstVisibleRow = 0;
+    m_imageStartMhz = newStartMhz;
+    m_imageEndMhz = newEndMhz;
     emit imageChanged();
 }
 

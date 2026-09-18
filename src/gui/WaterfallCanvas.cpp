@@ -70,6 +70,26 @@ QRhiGraphicsPipeline::TargetBlend alphaBlend()
     blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
     return blend;
 }
+
+const char* rhiBackendName(QRhi::Implementation backend)
+{
+    switch (backend)
+    {
+    case QRhi::Vulkan:
+        return "Vulkan";
+    case QRhi::OpenGLES2:
+        return "OpenGL";
+    case QRhi::D3D11:
+        return "Direct3D11";
+    case QRhi::Metal:
+        return "Metal";
+    case QRhi::D3D12:
+        return "Direct3D12";
+    case QRhi::Null:
+        return "Null";
+    }
+    return "Unknown";
+}
 #endif
 } // namespace
 
@@ -131,6 +151,7 @@ WaterfallCanvas::WaterfallCanvas(QWidget* parent) : WaterfallCanvasBase(parent)
     }
 #endif
     m_gpuState = std::make_unique<GpuState>();
+    m_changedPhysicalRows.reserve(4);
     connect(this, &QRhiWidget::renderFailed, this,
             [this]() { requestRasterFallback(QStringLiteral("Qt reported that QRhi waterfall rendering failed")); });
 #endif
@@ -168,7 +189,10 @@ void WaterfallCanvas::setWaterfallRow(int physicalRow, int firstVisibleRow)
 #ifdef SDR9700_GPU_PANADAPTER
     if (physicalRow >= 0 && physicalRow < m_waterfall->height())
     {
-        m_changedPhysicalRows.insert(physicalRow);
+        if (!m_changedPhysicalRows.contains(physicalRow))
+        {
+            m_changedPhysicalRows.append(physicalRow);
+        }
     }
 #else
     Q_UNUSED(physicalRow)
@@ -269,6 +293,10 @@ void WaterfallCanvas::requestRasterFallback(const QString& reason)
 
 void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
 {
+    if (m_rasterFallbackRequested)
+    {
+        return;
+    }
     if (!m_gpuState)
     {
         m_gpuState = std::make_unique<GpuState>();
@@ -301,6 +329,7 @@ void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
         return;
     }
 
+    const bool rhiChanged = m_gpuState->rhi != currentRhi;
     m_gpuState->release();
     GpuState& state = *m_gpuState;
     state.rhi = currentRhi;
@@ -409,10 +438,21 @@ void WaterfallCanvas::initialize(QRhiCommandBuffer* commandBuffer)
     state.valid = true;
     m_fullTextureUploadPending = true;
     m_shelfUploadPending = true;
+    if (rhiChanged)
+    {
+        const QRhiDriverInfo driver = state.rhi->driverInfo();
+        qInfo(logWaterfall()).noquote().nospace()
+            << "GPU waterfall initialized backend=" << rhiBackendName(state.rhi->backend())
+            << " device=" << driver.deviceName;
+    }
 }
 
 void WaterfallCanvas::render(QRhiCommandBuffer* commandBuffer)
 {
+    if (m_rasterFallbackRequested)
+    {
+        return;
+    }
     QRhiRenderTarget* currentTarget = renderTarget();
     const QRhiTexture* currentOutputTexture = colorTexture();
     if (!m_gpuState || !currentTarget || !currentOutputTexture)
@@ -482,8 +522,8 @@ void WaterfallCanvas::render(QRhiCommandBuffer* commandBuffer)
             entries.reserve(m_changedPhysicalRows.size());
             for (int physicalRow : std::as_const(m_changedPhysicalRows))
             {
-                QImage rowImage(const_cast<uchar*>(m_waterfall->constScanLine(physicalRow)), m_waterfall->width(), 1,
-                                m_waterfall->bytesPerLine(), QImage::Format_RGB32);
+                const QImage rowImage(m_waterfall->constScanLine(physicalRow), m_waterfall->width(), 1,
+                                      m_waterfall->bytesPerLine(), QImage::Format_RGB32);
                 QRhiTextureSubresourceUploadDescription rowUpload(rowImage);
                 rowUpload.setSourceSize(QSize(m_waterfall->width(), 1));
                 rowUpload.setDestinationTopLeft(QPoint(0, physicalRow));
@@ -506,20 +546,31 @@ void WaterfallCanvas::render(QRhiCommandBuffer* commandBuffer)
     m_changedPhysicalRows.clear();
 
     commandBuffer->beginPass(renderTarget(), kWaterfallBg, {1.0f, 0}, updates);
-    commandBuffer->setViewport(QRhiViewport(0, 0, state.outputSize.width(), state.outputSize.height()));
     const QRhiCommandBuffer::VertexInput binding(state.quadBuffer.get(), 0);
     if (m_waterfall && !m_waterfall->isNull())
     {
         commandBuffer->setGraphicsPipeline(state.waterfallPipeline.get());
+        commandBuffer->setViewport(QRhiViewport(0, 0, state.outputSize.width(), state.outputSize.height()));
         commandBuffer->setShaderResources(state.waterfallBindings.get());
         commandBuffer->setVertexInput(0, 1, &binding);
         commandBuffer->draw(4);
     }
     commandBuffer->setGraphicsPipeline(state.shelfPipeline.get());
+    commandBuffer->setViewport(QRhiViewport(0, 0, state.outputSize.width(), state.outputSize.height()));
     commandBuffer->setShaderResources(state.shelfBindings.get());
     commandBuffer->setVertexInput(0, 1, &binding);
     commandBuffer->draw(4);
     commandBuffer->endPass();
+}
+
+bool WaterfallCanvas::gpuResourcesActiveForTest() const
+{
+    return m_gpuState && m_gpuState->valid && !m_rasterFallbackRequested;
+}
+
+QString WaterfallCanvas::gpuBackendNameForTest() const
+{
+    return m_gpuState && m_gpuState->rhi ? QString::fromLatin1(rhiBackendName(m_gpuState->rhi->backend())) : QString();
 }
 
 void WaterfallCanvas::releaseResources()
