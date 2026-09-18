@@ -127,7 +127,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends \
             build-essential cmake ninja-build pkg-config python3-venv xauth xvfb \
-            libssl-dev libopus-dev libspeexdsp-dev libeigen3-dev libvulkan-dev mesa-vulkan-drivers \
+            libssl-dev libopus-dev libspeexdsp-dev libeigen3-dev libgl1-mesa-dev libvulkan-dev mesa-vulkan-drivers \
             libxkbcommon-x11-0 libxcb-cursor0
       - name: Install Qt
         run: |
