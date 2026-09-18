@@ -7,6 +7,7 @@
 #include <QElapsedTimer>
 
 class QLabel;
+class QHideEvent;
 class QPlainTextEdit;
 class QPushButton;
 class QTableWidget;
@@ -37,6 +38,9 @@ class DataDecoderDialog : public sdr9700::ui::UtilityWindow
 
   public slots:
     void processAudio(const QByteArray& pcm, int sampleRate, int channelCount);
+
+  protected:
+    void hideEvent(QHideEvent* event) override;
 
   signals:
     void audioReceived(const QByteArray& pcm, int sampleRate, int channelCount);

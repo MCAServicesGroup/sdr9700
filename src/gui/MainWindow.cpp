@@ -68,7 +68,6 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QKeySequence>
-#include <QMessageBox>
 #include <QMediaDevices>
 #include <QCloseEvent>
 #include <QEvent>
@@ -752,7 +751,7 @@ void MainWindow::showRadioChooserDialog()
     connect(dlg, &RadioChooserDialog::connectRequested, this,
             [this](const QUuid& id)
             {
-                const RadioProfile* p = RadioProfileStore::instance().profileById(id);
+                const RadioProfile* p = RadioProfileStore::instance().profileForUse(id);
                 if (p)
                 {
                     onConnectToProfile(*p);
@@ -792,29 +791,21 @@ void MainWindow::tryAutoConnect()
     store.load();
     m_allowChooserOnDisconnect = false;
 
-    const QStringList unreadableProfiles = store.unreadablePasswordProfileNames();
-    if (!unreadableProfiles.isEmpty())
-    {
-        QMessageBox::warning(
-            this, QStringLiteral("Radio Profile Password"),
-            QStringLiteral("The saved password for the following radio profile(s) could not be decrypted:\n\n%1\n\n"
-                           "The profiles were retained, but their passwords must be entered again before connecting.")
-                .arg(unreadableProfiles.join(QLatin1Char('\n'))));
-    }
-
     const bool autoConnect = AppSettings::instance().value("autoConnect", "True").toBool();
+    const RadioProfile* autoConnectProfile = nullptr;
     if (autoConnect)
     {
         const QUuid lastId = store.lastProfileId();
         if (!lastId.isNull())
         {
-            const RadioProfile* p = store.profileById(lastId);
-            if (p && !store.hasUnreadablePassword(p->id))
-            {
-                onConnectToProfile(*p);
-                return;
-            }
+            autoConnectProfile = store.profileForUse(lastId);
         }
+    }
+
+    if (autoConnectProfile && !store.hasUnreadablePassword(autoConnectProfile->id))
+    {
+        onConnectToProfile(*autoConnectProfile);
+        return;
     }
 
     showRadioChooserDialog();
@@ -1736,7 +1727,7 @@ bool MainWindow::scheduleRadioReconnect()
                     {
                         return;
                     }
-                    const RadioProfile* profile = RadioProfileStore::instance().profileById(m_pendingProfileId);
+                    const RadioProfile* profile = RadioProfileStore::instance().profileForUse(m_pendingProfileId);
                     if (profile)
                     {
                         onConnectToProfile(*profile);

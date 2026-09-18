@@ -306,17 +306,6 @@ bool AudioHandlerBase::init(const audioSetup& setup)
     return true;
 }
 
-void AudioHandlerBase::start()
-{
-    QMutexLocker lock(&devMutex);
-}
-
-void AudioHandlerBase::stop()
-{
-    QMutexLocker lock(&devMutex);
-    closeDevice();
-}
-
 void AudioHandlerBase::setVolume(quint8 volumeIdx)
 {
     volume = localAudioGainFromSlider(volumeIdx);

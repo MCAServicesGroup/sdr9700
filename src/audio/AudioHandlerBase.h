@@ -36,8 +36,6 @@ class AudioHandlerBase : public QObject
     }
 
     void dispose();
-    virtual void start();
-    virtual void stop();
 
   signals:
     void initFailed();

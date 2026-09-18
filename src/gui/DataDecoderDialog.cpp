@@ -11,6 +11,7 @@
 #include <QFontDatabase>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QHideEvent>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPlainTextEdit>
@@ -335,7 +336,17 @@ DataDecoderDialog::~DataDecoderDialog()
 
 void DataDecoderDialog::processAudio(const QByteArray& pcm, int sampleRate, int channelCount)
 {
+    if (!isVisible())
+    {
+        return;
+    }
     emit audioReceived(pcm, sampleRate, channelCount);
+}
+
+void DataDecoderDialog::hideEvent(QHideEvent* event)
+{
+    emit resetDecoder();
+    sdr9700::ui::UtilityWindow::hideEvent(event);
 }
 
 void DataDecoderDialog::appendFrames(const QVector<Ax25Frame>& frames)

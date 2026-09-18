@@ -142,18 +142,26 @@ void StatusBarController::updateStatusClock()
     m_window->m_dateLabel->setText(now.toString("yyyy-MM-dd"));
     m_window->m_timeLabel->setText(m_window->m_statusClockUtc ? now.toString("HH:mm:ss") + "Z"
                                                               : now.toString("HH:mm:ss"));
-
-    const QString tooltip = m_window->m_statusClockUtc ? QStringLiteral("UTC Time Mode\nClick to show local time.")
-                                                       : QStringLiteral("Local Time Mode\nClick to show UTC time.");
-    m_window->m_dateLabel->setToolTip(tooltip);
-    m_window->m_timeLabel->setToolTip(tooltip);
 }
 
 void StatusBarController::toggleStatusClockMode()
 {
     m_window->m_statusClockUtc = !m_window->m_statusClockUtc;
     AppSettings::instance().setValue("statusClockUTC", m_window->m_statusClockUtc);
+    updateStatusClockTooltip();
     updateStatusClock();
+}
+
+void StatusBarController::updateStatusClockTooltip()
+{
+    if (!m_window->m_dateLabel || !m_window->m_timeLabel)
+    {
+        return;
+    }
+    const QString tooltip = m_window->m_statusClockUtc ? QStringLiteral("UTC Time Mode\nClick to show local time.")
+                                                       : QStringLiteral("Local Time Mode\nClick to show UTC time.");
+    m_window->m_dateLabel->setToolTip(tooltip);
+    m_window->m_timeLabel->setToolTip(tooltip);
 }
 
 void StatusBarController::updateSystemStats()
@@ -450,6 +458,7 @@ void StatusBarController::buildStatusBar()
     // AppSettings stores booleans as "True"/"False" strings per CONVENTIONS.md.
     m_window->m_statusClockUtc =
         AppSettings::instance().value("statusClockUTC", "True").toString().compare("True", Qt::CaseInsensitive) == 0;
+    updateStatusClockTooltip();
     updateStatusClock();
     updateNetworkQuality(0);
     auto* clockTimer = new QTimer(m_window);

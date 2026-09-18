@@ -283,7 +283,32 @@ double SpectrumScopeCanvas::levelToY(float level, int topY, int h) const
     // 35 while CI-V 15 02 reported 103..105. The exponent maps that observation
     // to about 41% of the full S0..S9+60 meter range, while the ceiling fraction
     // reserves two percent of headroom for a maximum 160-byte scope sample.
-    const double norm = std::pow(linearFraction, kScopeDisplayExponent) * kScopeDisplayCeilingFraction;
+    constexpr int kProjectionTableMaximum = 160;
+    constexpr double kDirectProjectionCutoff = 4.0;
+    static const std::array<double, kProjectionTableMaximum + 1> kProjectionTable = []()
+    {
+        std::array<double, kProjectionTableMaximum + 1> table{};
+        for (int value = 0; value <= kProjectionTableMaximum; ++value)
+        {
+            table[value] = std::pow(double(value) / kProjectionTableMaximum, kScopeDisplayExponent);
+        }
+        return table;
+    }();
+    const double tablePosition = linearFraction * kProjectionTableMaximum;
+    double projectedFraction = 0.0;
+    if (!std::isfinite(tablePosition) || tablePosition < kDirectProjectionCutoff)
+    {
+        // The curve is steepest next to zero. Retain the exact projection there
+        // and interpolate the cached table over the remainder of the range.
+        projectedFraction = std::pow(linearFraction, kScopeDisplayExponent);
+    }
+    else
+    {
+        const int lower = qBound(0, int(std::floor(tablePosition)), kProjectionTableMaximum);
+        const int upper = qMin(lower + 1, kProjectionTableMaximum);
+        projectedFraction = std::lerp(kProjectionTable[lower], kProjectionTable[upper], tablePosition - lower);
+    }
+    const double norm = projectedFraction * kScopeDisplayCeilingFraction;
     const int topInset = qMin(kLevelScaleTopInsetPx, qMax(0, h - 1));
     const int bottomInset = qMin(kLevelScaleBottomInsetPx, qMax(0, h - 1 - topInset));
     return topY + topInset + (1.0 - norm) * qMax(1, h - 1 - topInset - bottomInset);
@@ -295,32 +320,6 @@ double SpectrumScopeCanvas::gridLevelToY(float level, int topY, int h) const
     const int topInset = qMin(kLevelScaleTopInsetPx, qMax(0, h - 1));
     const int bottomInset = qMin(kLevelScaleBottomInsetPx, qMax(0, h - 1 - topInset));
     return topY + topInset + (1.0 - norm) * qMax(1, h - 1 - topInset - bottomInset);
-}
-
-double SpectrumScopeCanvas::sourcePositionForDisplayX(double x, int binCount) const
-{
-    const double displayStartMhz = lowFrequencyMhz(m_startMhz, m_endMhz);
-    const double displayEndMhz = highFrequencyMhz(m_startMhz, m_endMhz);
-    const double dataStartMhz = lowFrequencyMhz(m_dataStartMhz, m_dataEndMhz);
-    const double dataEndMhz = highFrequencyMhz(m_dataStartMhz, m_dataEndMhz);
-    const int plotW = plotWidthPx();
-    if (binCount <= 0 || plotW <= 0 || displayEndMhz <= displayStartMhz || dataEndMhz <= dataStartMhz)
-    {
-        return -1.0;
-    }
-    const double boundedX = qBound(double(plotLeftX()), x, double(plotRightX()));
-    const double mhz = displayStartMhz + ((boundedX - plotLeftX()) / plotW) * (displayEndMhz - displayStartMhz);
-    if (mhz < dataStartMhz || mhz > dataEndMhz)
-    {
-        return -1.0;
-    }
-    if (binCount == 1)
-    {
-        return 0.0;
-    }
-
-    const double normalized = (mhz - dataStartMhz) / (dataEndMhz - dataStartMhz);
-    return qBound(0.0, normalized * double(binCount - 1), double(binCount - 1));
 }
 
 float SpectrumScopeCanvas::interpolatedLevel(const QVector<float>& levels, double sourcePosition)
@@ -903,6 +902,29 @@ void SpectrumScopeCanvas::buildTraceSamples(QVector<QPointF>* points, QVector<fl
         return;
     }
 
+    const double displayStartMhz = lowFrequencyMhz(m_startMhz, m_endMhz);
+    const double displayEndMhz = highFrequencyMhz(m_startMhz, m_endMhz);
+    const double dataStartMhz = lowFrequencyMhz(m_dataStartMhz, m_dataEndMhz);
+    const double dataEndMhz = highFrequencyMhz(m_dataStartMhz, m_dataEndMhz);
+    const double displaySpanMhz = displayEndMhz - displayStartMhz;
+    const double dataSpanMhz = dataEndMhz - dataStartMhz;
+    const double sourceBinsPerMhz = binCount > 1 && dataSpanMhz > 0.0 ? double(binCount - 1) / dataSpanMhz : 0.0;
+    const bool mappingValid = displaySpanMhz > 0.0 && dataSpanMhz > 0.0;
+
+    auto sourcePositionAtDisplayX = [&](double x)
+    {
+        if (!mappingValid)
+        {
+            return -1.0;
+        }
+        const double boundedX = qBound(double(plotLeftX()), x, double(plotRightX()));
+        const double mhz = displayStartMhz + ((boundedX - plotLeftX()) / plotWidth) * displaySpanMhz;
+        if (mhz < dataStartMhz || mhz > dataEndMhz)
+        {
+            return -1.0;
+        }
+        return binCount == 1 ? 0.0 : qBound(0.0, (mhz - dataStartMhz) * sourceBinsPerMhz, double(binCount - 1));
+    };
     auto appendSample = [&](double x, float level)
     {
         const QPointF point(x, levelToY(level, 0, plotHeight()));
@@ -917,17 +939,13 @@ void SpectrumScopeCanvas::buildTraceSamples(QVector<QPointF>* points, QVector<fl
     };
     auto levelAtDisplayX = [&](double x)
     {
-        const double sourcePosition = sourcePositionForDisplayX(x, binCount);
+        const double sourcePosition = sourcePositionAtDisplayX(x);
         return sourcePosition >= 0.0 ? interpolatedLevel(m_displaySpectrumBins, sourcePosition) : m_minLevel;
     };
 
     if (binCount <= plotWidth && binCount > 1)
     {
         appendSample(plotLeftX(), levelAtDisplayX(plotLeftX()));
-        const double displayStartMhz = lowFrequencyMhz(m_startMhz, m_endMhz);
-        const double displayEndMhz = highFrequencyMhz(m_startMhz, m_endMhz);
-        const double dataStartMhz = lowFrequencyMhz(m_dataStartMhz, m_dataEndMhz);
-        const double dataEndMhz = highFrequencyMhz(m_dataStartMhz, m_dataEndMhz);
         for (int bin = 0; bin < binCount; ++bin)
         {
             const double fraction = double(bin) / double(binCount - 1);
@@ -949,15 +967,15 @@ void SpectrumScopeCanvas::buildTraceSamples(QVector<QPointF>* points, QVector<fl
     for (int pixel = 0; pixel <= plotWidth; ++pixel)
     {
         const double x = plotLeftX() + pixel;
-        const double centerPosition = sourcePositionForDisplayX(x, binCount);
+        const double centerPosition = sourcePositionAtDisplayX(x);
         if (centerPosition < 0.0)
         {
             appendSample(x, m_minLevel);
             continue;
         }
 
-        double firstPosition = sourcePositionForDisplayX(x - 0.5, binCount);
-        double lastPosition = sourcePositionForDisplayX(x + 0.5, binCount);
+        double firstPosition = sourcePositionAtDisplayX(x - 0.5);
+        double lastPosition = sourcePositionAtDisplayX(x + 0.5);
         if (firstPosition < 0.0)
         {
             firstPosition = centerPosition;
@@ -1062,15 +1080,8 @@ void SpectrumScopeCanvas::renderRasterDynamicLayer(QPainter* painter)
         painter->setBrush(kSpectrumFillColor);
         painter->drawPolygon(m_tracePolygonScratch);
 
-        QLinearGradient traceGradient(0.0, 0.0, 0.0, specH);
-        constexpr int kTraceGradientLevelStep = 10;
-        for (int level = int(m_maxLevel); level >= int(m_minLevel); level -= kTraceGradientLevelStep)
-        {
-            const double position = std::clamp(levelToY(float(level), 0, specH) / qMax(1, specH), 0.0, 1.0);
-            traceGradient.setColorAt(position, spectrumHeatColor(float(level)));
-        }
         painter->setRenderHint(QPainter::Antialiasing, true);
-        painter->setPen(QPen(traceGradient, 1.0, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin));
+        painter->setPen(rasterTracePen(specH));
         painter->drawPolyline(m_tracePointsScratch.constData(), m_tracePointsScratch.size());
 
         painter->restore();
@@ -1078,6 +1089,28 @@ void SpectrumScopeCanvas::renderRasterDynamicLayer(QPainter* painter)
     }
 
     renderDynamicLayer(painter);
+}
+
+const QPen& SpectrumScopeCanvas::rasterTracePen(int traceHeight)
+{
+    if (m_rasterTracePenHeight == traceHeight && qFuzzyCompare(m_rasterTracePenMinLevel, m_minLevel) &&
+        qFuzzyCompare(m_rasterTracePenMaxLevel, m_maxLevel))
+    {
+        return m_rasterTracePen;
+    }
+
+    QLinearGradient traceGradient(0.0, 0.0, 0.0, traceHeight);
+    constexpr int kTraceGradientLevelStep = 10;
+    for (int level = int(m_maxLevel); level >= int(m_minLevel); level -= kTraceGradientLevelStep)
+    {
+        const double position = std::clamp(levelToY(float(level), 0, traceHeight) / qMax(1, traceHeight), 0.0, 1.0);
+        traceGradient.setColorAt(position, spectrumHeatColor(float(level)));
+    }
+    m_rasterTracePen = QPen(traceGradient, 1.0, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin);
+    m_rasterTracePenHeight = traceHeight;
+    m_rasterTracePenMinLevel = m_minLevel;
+    m_rasterTracePenMaxLevel = m_maxLevel;
+    return m_rasterTracePen;
 }
 
 #ifdef SDR9700_GPU_PANADAPTER

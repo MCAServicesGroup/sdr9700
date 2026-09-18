@@ -39,6 +39,7 @@ class RadioProfileStore : public QObject
 
     const QList<RadioProfile>& profiles() const { return m_profiles; }
     const RadioProfile* profileById(const QUuid& id) const;
+    const RadioProfile* profileForUse(const QUuid& id);
     bool hasUnreadablePassword(const QUuid& id) const { return m_unreadablePasswords.contains(id); }
     QStringList unreadablePasswordProfileNames() const;
 

@@ -1,0 +1,69 @@
+name: Nightly Analysis
+
+on:
+  schedule:
+    - cron: "23 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+
+jobs:
+  sanitizers:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Qt and SDR9700 intentionally retain process-lifetime objects, so
+          # this job targets memory safety rather than shutdown leak reports.
+          - name: Address and undefined behavior sanitizers
+            cmake_option: SDR9700_SANITIZE
+            runtime_options: ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1
+          - name: Thread sanitizer
+            cmake_option: SDR9700_THREAD_SANITIZE
+            runtime_options: TSAN_OPTIONS=halt_on_error=1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            qt6-base-dev qt6-multimedia-dev qt6-svg-dev libqt6sql6-sqlite libssl-dev libopus-dev \
+            libspeexdsp-dev libxkbcommon-dev libeigen3-dev libhidapi-dev
+      - name: Build
+        run: |
+          cmake -S . -B src/build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -D${{ matrix.cmake_option }}=ON
+          cmake --build src/build -j2
+      - name: Test
+        run: env ${{ matrix.runtime_options }} ctest --test-dir src/build --output-on-failure --timeout 180
+
+  benchmarks:
+    name: Performance benchmarks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            qt6-base-dev qt6-multimedia-dev qt6-svg-dev libqt6sql6-sqlite libssl-dev libopus-dev \
+            libspeexdsp-dev libxkbcommon-dev libeigen3-dev libhidapi-dev
+      - name: Build benchmark suite
+        run: |
+          cmake -S . -B src/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDR9700_BUILD_BENCHMARKS=ON
+          cmake --build src/build --target PerformanceBenchmark -j2
+      - name: Run benchmarks
+        run: ctest --test-dir src/build --output-on-failure --verbose -L benchmark

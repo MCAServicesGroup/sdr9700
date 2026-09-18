@@ -27,6 +27,7 @@ class SpectrumCanvasTest : public QObject
     void supportsKeyboardTuningWhenUnlocked();
     void paintsEmptyAndPopulatedData();
     void keepsMaximumScopeLevelBelowTopEdge();
+    void keepsCachedProjectionWithinSubpixelTolerance();
     void mapsObservedS8ScopePeakToMeterFraction();
     void keepsHorizontalGridDivisionsEven();
     void smoothsSuccessiveFramesAndResetsAcrossRanges();
@@ -206,6 +207,26 @@ void SpectrumCanvasTest::keepsMaximumScopeLevelBelowTopEdge()
 
     QVERIFY(firstTraceRow >= 8);
     QVERIFY(firstTraceRow < 24);
+}
+
+void SpectrumCanvasTest::keepsCachedProjectionWithinSubpixelTolerance()
+{
+    SpectrumScopeCanvas canvas;
+    constexpr int kPlotHeight = 1000;
+    constexpr double kExponent = 0.58;
+    constexpr double kCeiling = 0.98;
+    constexpr int kTopInset = 6;
+    constexpr int kBottomInset = 0;
+    const int drawableHeight = kPlotHeight - 1 - kTopInset - kBottomInset;
+
+    for (int tenth = 0; tenth <= 1600; ++tenth)
+    {
+        const double level = tenth / 10.0;
+        const double exactProjection = std::pow(level / 160.0, kExponent) * kCeiling;
+        const double exactY = kTopInset + (1.0 - exactProjection) * drawableHeight;
+        QVERIFY2(qAbs(canvas.levelToY(float(level), 0, kPlotHeight) - exactY) < 0.25,
+                 qPrintable(QStringLiteral("Projection drifted at level %1").arg(level)));
+    }
 }
 
 void SpectrumCanvasTest::mapsObservedS8ScopePeakToMeterFraction()

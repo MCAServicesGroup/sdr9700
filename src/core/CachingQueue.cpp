@@ -283,7 +283,7 @@ void CachingQueue::addUnique(QueuePriority prio, Funcs func, bool recurring, uch
 
 void CachingQueue::add(QueuePriority prio, QueueItem item, bool unique)
 {
-    std::lock_guard locker(mutex);
+    std::unique_lock locker(mutex);
 
     if (queueInterval == -1)
     {
@@ -329,6 +329,7 @@ void CachingQueue::add(QueuePriority prio, QueueItem item, bool unique)
             enforceQueueLimit();
             m_queueHighWaterMark = qMax(m_queueHighWaterMark, queue.size());
             m_queueWakeRequested = true;
+            locker.unlock();
             waiting.notify_one();
         }
     }

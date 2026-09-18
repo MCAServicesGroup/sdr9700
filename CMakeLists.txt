@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.25)
-project(SDR9700 VERSION 26.9.3 LANGUAGES C CXX)
+project(SDR9700 VERSION 26.9.4 LANGUAGES C CXX)
 
 include(CTest)
 
-set(SDR9700_DISPLAY_VERSION "26.9.3")
+set(SDR9700_DISPLAY_VERSION "26.9.4-beta.1")
 option(SDR9700_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer instrumentation" OFF)
 option(SDR9700_THREAD_SANITIZE "Enable ThreadSanitizer instrumentation" OFF)
 option(SDR9700_ENABLE_HIDAPI "Build optional Icom RC-28 support when hidapi is available" ON)
 option(SDR9700_ENABLE_GPU_PANADAPTER "Render the panadapter through Qt RHI" ${APPLE})
+option(SDR9700_BUILD_BENCHMARKS "Build opt-in performance benchmarks" OFF)
 set(SDR9700_QT_PRIVATE_INCLUDE_ROOT "" CACHE PATH
     "Optional Qt include root containing versioned QtGui private headers")
 

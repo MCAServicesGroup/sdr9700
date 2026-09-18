@@ -96,3 +96,58 @@ jobs:
         run: ctest --test-dir src/build --output-on-failure
       - name: Verify self-contained application bundle
         run: make bundle
+
+  linux-no-hidapi:
+    name: Linux without HIDAPI
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            qt6-base-dev qt6-multimedia-dev qt6-svg-dev libqt6sql6-sqlite libssl-dev libopus-dev \
+            libspeexdsp-dev libxkbcommon-dev libeigen3-dev
+      - name: Build without HIDAPI
+        run: |
+          cmake -S . -B src/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDR9700_ENABLE_HIDAPI=OFF
+          cmake --build src/build -j2
+          grep -Fq 'SDR9700_ENABLE_HIDAPI:BOOL=OFF' src/build/CMakeCache.txt
+      - name: Test
+        run: ctest --test-dir src/build --output-on-failure
+
+  linux-gpu-panadapter:
+    name: Linux GPU panadapter
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends \
+            build-essential cmake ninja-build pkg-config python3-venv xauth xvfb \
+            libssl-dev libopus-dev libspeexdsp-dev libeigen3-dev libgl1-mesa-dev libpulse0 libvulkan-dev \
+            mesa-vulkan-drivers \
+            libxkbcommon-dev libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-shape0 libxcb-xfixes0 libxcb-xinerama0
+      - name: Install Qt
+        run: |
+          python3 -m venv "$RUNNER_TEMP/aqt-venv"
+          "$RUNNER_TEMP/aqt-venv/bin/pip" install --disable-pip-version-check aqtinstall==3.3.0
+          "$RUNNER_TEMP/aqt-venv/bin/aqt" install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
+            --outputdir "$RUNNER_TEMP/Qt" \
+            -m qtmultimedia qtshadertools
+          qt_root="$RUNNER_TEMP/Qt/$QT_VERSION/gcc_64"
+          test -x "$qt_root/bin/qmake"
+          echo "$qt_root/bin" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=$qt_root" >> "$GITHUB_ENV"
+          "$qt_root/bin/qmake" -query QT_VERSION
+      - name: Build GPU panadapter
+        run: |
+          cmake -S . -B src/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDR9700_ENABLE_GPU_PANADAPTER=ON
+          cmake --build src/build -j2
+          grep -Fq 'SDR9700_ENABLE_GPU_PANADAPTER:BOOL=ON' src/build/CMakeCache.txt
+      - name: Test with software Vulkan
+        run: xvfb-run -a env SDR9700_TEST_RHI_BACKEND=vulkan ctest --test-dir src/build --output-on-failure

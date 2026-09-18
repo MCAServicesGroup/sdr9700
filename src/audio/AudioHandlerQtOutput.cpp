@@ -142,13 +142,11 @@ void AudioHandlerQtOutput::onConverted(const audioPacket& audio)
                 << "RX stereo peaks channel0=" << peaks.channel0 << " channel1=" << peaks.channel1;
         }
     }
-    writeToOutputDevice(audio.data, audio.seq, audio.amplitudePeak, audio.amplitudeRMS);
+    writeToOutputDevice(audio.data, audio.amplitudePeak, audio.amplitudeRMS);
 }
 
-void AudioHandlerQtOutput::writeToOutputDevice(const QByteArray& data, quint32 seq, float amplitudePeak,
-                                               float amplitudeRms)
+void AudioHandlerQtOutput::writeToOutputDevice(const QByteArray& data, float amplitudePeak, float amplitudeRms)
 {
-    Q_UNUSED(seq);
     if (!audioOutput || !audioDevice)
     {
         return;

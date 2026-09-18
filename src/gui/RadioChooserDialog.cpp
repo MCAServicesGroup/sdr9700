@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QTimer>
 #include <QVBoxLayout>
 
 RadioChooserDialog::RadioChooserDialog(QWidget* parent)
@@ -228,11 +229,27 @@ void RadioChooserDialog::onSelectionChanged()
     }
 
     m_currentId = QUuid(item->data(Qt::UserRole).toString());
-    const RadioProfile* profile = RadioProfileStore::instance().profileById(m_currentId);
+    RadioProfileStore& store = RadioProfileStore::instance();
+    const RadioProfile* profile = store.profileForUse(m_currentId);
     if (profile)
     {
         loadProfileIntoForm(*profile);
         setFormEnabled(true);
+        if (store.hasUnreadablePassword(profile->id) && !m_warnedUnreadablePasswords.contains(profile->id))
+        {
+            m_warnedUnreadablePasswords.insert(profile->id);
+            const QString profileName = profile->name;
+            QTimer::singleShot(0, this,
+                               [this, profileName]()
+                               {
+                                   sdr9700::ui::showWarning(
+                                       this, QStringLiteral("Radio Profile Password"),
+                                       QStringLiteral("The saved password for \"%1\" could not be decrypted. "
+                                                      "The profile was retained; enter its password again before "
+                                                      "connecting.")
+                                           .arg(profileName));
+                               });
+        }
     }
 }
 
