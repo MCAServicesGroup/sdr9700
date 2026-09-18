@@ -193,7 +193,7 @@ void UdpBase::dataReceived(const QByteArray& r)
                 const int radioNow = normDay(int(in.time)); // ms since startup, wrapped daily
 
                 // Maintain a prediction of radioNow from monotonic time for this
-                // UDP stream. These values must be per-instance because sdr9700
+                // UDP stream. These values must be per-instance because SDR9700
                 // can have separate control, CIV, and audio UDP streams alive.
                 if (!pingHaveSync)
                 {

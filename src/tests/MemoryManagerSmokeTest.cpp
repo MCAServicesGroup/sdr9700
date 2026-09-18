@@ -684,7 +684,7 @@ void MemoryManagerSmokeTest::mainWindowRetainsFixedFramelessDesign()
 
     QVERIFY(window.windowFlags().testFlag(Qt::FramelessWindowHint));
     QString expectedTitle = QStringLiteral("SDR9700 v%1").arg(QString::fromLatin1(APP_VERSION));
-#if sdr9700_DEBUG_BUILD
+#if SDR9700_DEBUG_BUILD
     expectedTitle += QStringLiteral(" (DEBUG)");
 #endif
     QCOMPARE(window.windowTitle(), expectedTitle);

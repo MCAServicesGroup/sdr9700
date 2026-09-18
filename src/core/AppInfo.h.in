@@ -4,7 +4,7 @@
 
 constexpr char APP_NAME[]    = "@PROJECT_NAME@";
 constexpr char APP_DISPLAY_NAME[] = "SDR9700";
-constexpr char APP_VERSION[] = "@sdr9700_DISPLAY_VERSION@";
+constexpr char APP_VERSION[] = "@SDR9700_DISPLAY_VERSION@";
 
 constexpr int APP_VERSION_MAJOR = @PROJECT_VERSION_MAJOR@;
 constexpr int APP_VERSION_MINOR = @PROJECT_VERSION_MINOR@;

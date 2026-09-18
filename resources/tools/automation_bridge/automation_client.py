@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send one allowlisted JSON request to an opted-in sdr9700 process."""
+"""Send one allowlisted JSON request to an opted-in SDR9700 process."""
 
 import argparse
 import json

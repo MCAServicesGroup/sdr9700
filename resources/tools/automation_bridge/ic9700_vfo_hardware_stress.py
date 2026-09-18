@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise receive-only VFO transitions through sdr9700's automation bridge."""
+"""Exercise receive-only VFO transitions through SDR9700's automation bridge."""
 
 import json
 import sys

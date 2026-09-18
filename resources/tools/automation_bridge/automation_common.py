@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared discovery and transport helpers for sdr9700 automation tools."""
+"""Shared discovery and transport helpers for SDR9700 automation tools."""
 
 import glob
 import json
@@ -20,12 +20,12 @@ def _config_roots():
 
 
 def discovery_files(override=None):
-    override = override or os.environ.get("sdr9700_AUTOMATION_DISCOVERY")
+    override = override or os.environ.get("SDR9700_AUTOMATION_DISCOVERY")
     if override:
         return [os.path.expanduser(override)]
     candidates = []
     for root in _config_roots():
-        candidates.extend(glob.glob(os.path.join(root, "sdr9700", "automation",
+        candidates.extend(glob.glob(os.path.join(root, "SDR9700", "automation",
                                                  "sdr9700-automation-*.json")))
     dated = []
     for path in set(candidates):
@@ -42,7 +42,7 @@ def load_endpoint(discovery_path=None):
         try:
             with open(path, encoding="utf-8") as stream:
                 endpoint = json.load(stream)
-            if endpoint.get("application") != "sdr9700":
+            if endpoint.get("application") != "SDR9700":
                 raise RuntimeError("unexpected application identity")
             if endpoint.get("protocol") != 1:
                 raise RuntimeError(f"unsupported protocol {endpoint.get('protocol')!r}")
@@ -57,7 +57,7 @@ def load_endpoint(discovery_path=None):
             failures.append(f"{path}: {error}")
     details = "; ".join(failures) if failures else "no discovery records found"
     raise RuntimeError(
-        "No live sdr9700 automation bridge found; start the app with "
+        "No live SDR9700 automation bridge found; start the app with "
         f"--enable-automation ({details})"
     )
 

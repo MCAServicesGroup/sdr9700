@@ -1,6 +1,6 @@
 #include <QtGlobal>
 #if !defined(Q_OS_UNIX)
-#error "sdr9700 requires a Unix platform for POSIX signal handling."
+#error "SDR9700 requires a Unix platform for POSIX signal handling."
 #endif
 
 #include <QApplication>
@@ -262,7 +262,7 @@ QString loggingRulesForOptions(const LoggingOptions& options)
 {
     if (!options.logEnabled)
     {
-#if sdr9700_DEBUG_BUILD
+#if SDR9700_DEBUG_BUILD
         return QStringLiteral("*.debug=true\n"
                               "*.info=true\n"
                               "*.warning=true\n"
@@ -460,9 +460,9 @@ int main(int argc, char* argv[])
 #if defined(Q_OS_MAC)
     configureMacWindowRestoration(app);
 #endif
-    app.setApplicationName("sdr9700");
+    app.setApplicationName("SDR9700");
     app.setApplicationDisplayName(QString::fromLatin1(APP_DISPLAY_NAME));
-    app.setOrganizationName("sdr9700");
+    app.setOrganizationName("SDR9700");
     app.setApplicationVersion(APP_VERSION);
 #if defined(Q_OS_LINUX)
     app.setDesktopFileName(QStringLiteral("sdr9700"));

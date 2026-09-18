@@ -7,12 +7,12 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-app_path="${1:-src/build/bin/sdr9700.app}"
+app_path="${1:-src/build/bin/SDR9700.app}"
 contents_path="${app_path}/Contents"
 plugins_path="${contents_path}/PlugIns"
 
-if [ ! -x "${contents_path}/MacOS/sdr9700" ]; then
-    echo "sdr9700 application bundle not found at ${app_path}" >&2
+if [ ! -x "${contents_path}/MacOS/SDR9700" ]; then
+    echo "SDR9700 application bundle not found at ${app_path}" >&2
     exit 1
 fi
 
@@ -67,7 +67,7 @@ run_install_name_tool()
 # Homebrew's Qt plugin tree can contain plugins for separately packaged Qt
 # modules. macdeployqt copies those plugins even when their framework is not
 # installed, leaving unusable code in the bundle and printing unresolved-rpath
-# diagnostics. sdr9700 does not use these optional plugin families.
+# diagnostics. SDR9700 does not use these optional plugin families.
 if [ ! -e "${frameworks_path}/QtVirtualKeyboard.framework" ]; then
     rm -f "${plugins_path}/platforminputcontexts/libqtvirtualkeyboardplugin.dylib"
 fi
@@ -151,7 +151,7 @@ EOF
 # The main executable can also inherit Homebrew link directories from
 # pkg-config dependencies. It has no install ID, but its absolute rpaths must
 # be removed just like those in copied libraries.
-main_executable="${contents_path}/MacOS/sdr9700"
+main_executable="${contents_path}/MacOS/SDR9700"
 main_absolute_rpaths="$(otool -l "${main_executable}" | awk '
     $1 == "cmd" && $2 == "LC_RPATH" { reading_rpath = 1; next }
     reading_rpath && $1 == "path" {

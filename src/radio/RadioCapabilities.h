@@ -521,7 +521,7 @@ inline void populateRadioCapabilities(radioCapabilities& radioCaps)
     radioCaps.hasEthernet = true;
     radioCaps.hasWiFi = false;
     radioCaps.hasQuickSplitCommand = false;
-    // The IC-9700 supports D-STAR at the radio level, but sdr9700 does not yet
+    // The IC-9700 supports D-STAR at the radio level, but SDR9700 does not yet
     // implement the DD/DV data-mode workflows behind these capability flags.
     radioCaps.hasDD = false;
     radioCaps.hasDV = false;

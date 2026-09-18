@@ -1,6 +1,6 @@
-# sdr9700 Third-Party Licenses
+# SDR9700 Third-Party Licenses
 
-sdr9700 incorporates or references the third-party work listed below. Each
+SDR9700 incorporates or references the third-party work listed below. Each
 component retains its original license.
 
 This file is an attribution and license inventory.
@@ -44,9 +44,9 @@ SOFTWARE.
 
 ### AetherSDR Project
 
-sdr9700 benefited from AetherSDR as a source of design inspiration, operating
-experience, and behavior comparison while sdr9700 was developed as its own
-IC-9700-focused application. sdr9700's spectrum heat-map and S-meter color
+SDR9700 benefited from AetherSDR as a source of design inspiration, operating
+experience, and behavior comparison while SDR9700 was developed as its own
+IC-9700-focused application. SDR9700's spectrum heat-map and S-meter color
 palettes use the corresponding AetherSDR palette definitions.
 
 - Reference project: AetherSDR
@@ -55,10 +55,10 @@ palettes use the corresponding AetherSDR palette definitions.
 
 ### Data Decoder Research References
 
-The receive-only AX.25 decoder was written as original sdr9700 code. AetherSDR,
+The receive-only AX.25 decoder was written as original SDR9700 code. AetherSDR,
 Dire Wolf, and libmodem were reviewed to understand common Bell 202 and AX.25
 decoder designs; no source code from these projects is incorporated into
-sdr9700's decoder.
+SDR9700's decoder.
 
 - Reference project: Dire Wolf
 - Reference URL: <https://github.com/wb2osz/direwolf>
@@ -71,7 +71,7 @@ sdr9700's decoder.
 ### Icom IC-9700 LAN Protocol Research
 
 The IC-9700 LAN protocol stack in `src/radio/`, `src/audio/`, `src/core/`, and
-`src/backend/` is maintained as sdr9700 project code. Protocol behavior and
+`src/backend/` is maintained as SDR9700 project code. Protocol behavior and
 compatibility were informed by public IC-9700 behavior, local testing, Icom
 documentation, and prior open-source Icom LAN client work.
 
@@ -100,12 +100,12 @@ are not vendored in this repository.
   when `libhidapi-hidraw` or `libhidapi` is detected at build time via
   `pkg-config`. Enables the `HAVE_HIDAPI` compile definition.
 
-## Manual Material Not Distributed As sdr9700 Code
+## Manual Material Not Distributed As SDR9700 Code
 
 The `resources/manuals/` directory contains local IC-9700 manuals and related
-research material for contributors and AI agents. It is not built into sdr9700
-and must not be treated as sdr9700 source.
+research material for contributors and AI agents. It is not built into SDR9700
+and must not be treated as SDR9700 source.
 
 Imported notes, old docs, tests, and packaging work must be validated,
-rewritten, or removed before they become shipping sdr9700 documentation or
+rewritten, or removed before they become shipping SDR9700 documentation or
 code.

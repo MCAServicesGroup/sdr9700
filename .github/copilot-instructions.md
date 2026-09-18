@@ -1,4 +1,4 @@
-# GitHub Copilot Instructions for sdr9700
+# GitHub Copilot Instructions for SDR9700
 
 **Canonical project guide: [`/AGENTS.md`](../AGENTS.md).** Read it and
 [`/CONVENTIONS.md`](../CONVENTIONS.md) before suggesting non-trivial code.
@@ -7,9 +7,9 @@ within Copilot's chat context.
 
 ## Must-knows before suggesting code
 
-1. **sdr9700 targets the Icom IC-9700.** Do not import assumptions, protocol
+1. **SDR9700 targets the Icom IC-9700.** Do not import assumptions, protocol
    behavior, architecture, or terminology from other radio-control projects
-   unless it has been explicitly validated for sdr9700.
+   unless it has been explicitly validated for SDR9700.
 
 2. **Support both Linux and Apple Silicon macOS.** Prefer cross-platform Qt 6
    APIs. If platform-specific behavior is unavoidable, isolate it behind
@@ -22,7 +22,7 @@ within Copilot's chat context.
    a response path exists. Ground CI-V decisions in Icom documentation, logs,
    packet captures, or observed IC-9700 behavior.
 
-4. **Use `AppSettings`, not `QSettings`.** sdr9700 client settings are stored as
+4. **Use `AppSettings`, not `QSettings`.** SDR9700 client settings are stored as
    JSON beneath `QStandardPaths::GenericConfigLocation`. Use camel-case keys,
    preserve all-capital abbreviations such as `PTT`, `RC28`, and `LAN`, and
    prefer one structured JSON value per feature instead of numerous unrelated
@@ -89,7 +89,7 @@ positive that cannot reasonably be resolved through clearer code.
   license review.
 - Keep third-party attribution in `THIRD_PARTY_LICENSES.md`, not in active
   source comments.
-- Treat `resources/manuals/` as read-only reference material, not sdr9700
+- Treat `resources/manuals/` as read-only reference material, not SDR9700
   source code.
 - Radio capabilities are compiled into the application; do not add runtime
   radio-definition files.
