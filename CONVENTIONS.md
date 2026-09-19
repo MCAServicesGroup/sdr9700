@@ -25,7 +25,17 @@ tests, build scripts, and documentation that describes implementation details.
 
 - Use C++20-capable code where the build permits it, and keep compatibility
   with the current CMake configuration until it is deliberately updated.
+- Prefer C++20 standard-library facilities when they are direct semantic
+  equivalents, including standard algorithms, numeric helpers, utilities, and
+  C-library functions in the `std::` namespace. Include the standard header
+  that owns each facility instead of relying on Qt or another transitive
+  include.
 - Prefer Qt 6 idioms for Qt-owned objects, signals, slots, and event handling.
+- Keep Qt facilities when they provide required Qt integration or semantics,
+  such as object ownership, signals/slots, Unicode strings, event delivery,
+  cross-platform device APIs, endian conversion, and fuzzy comparison. Do not
+  add conversions between Qt and standard types solely to satisfy this
+  preference.
 - Use RAII and Qt parent ownership. Avoid raw owning `new` and manual `delete`.
 - Do not use `goto`.
 - Prefer `constexpr`, `static constexpr`, or typed constants over new
