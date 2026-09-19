@@ -36,6 +36,8 @@ class PerformanceBenchmark : public QObject
     void rendersSpectrumFrame() const;
     void ingestsUdpDatagrams() const;
     void aggregatesTransmitMeterBlocks() const;
+    void convertsAuthorizedAndUnauthorizedTransmitAudio_data() const;
+    void convertsAuthorizedAndUnauthorizedTransmitAudio() const;
 };
 
 void PerformanceBenchmark::convertsAudioPacket() const
@@ -143,6 +145,39 @@ void PerformanceBenchmark::aggregatesTransmitMeterBlocks() const
         {
             presentation.accept(block, nowMs);
             nowMs += 20;
+        }
+    }
+}
+
+void PerformanceBenchmark::convertsAuthorizedAndUnauthorizedTransmitAudio_data() const
+{
+    QTest::addColumn<bool>("authorized");
+    QTest::newRow("unauthorized-meter-only") << false;
+    QTest::newRow("authorized-full-conversion") << true;
+}
+
+void PerformanceBenchmark::convertsAuthorizedAndUnauthorizedTransmitAudio() const
+{
+    QFETCH(bool, authorized);
+    QAudioFormat input;
+    input.setSampleRate(48000);
+    input.setChannelCount(2);
+    input.setSampleFormat(QAudioFormat::Float);
+    QAudioFormat output;
+    output.setSampleRate(16000);
+    output.setChannelCount(1);
+    output.setSampleFormat(QAudioFormat::Int16);
+    AudioConverter converter;
+    QVERIFY(converter.init(input, LPCM, output, LPCM, 7, 4, false, true));
+
+    audioPacket packet;
+    packet.data = QByteArray(input.bytesForDuration(20000), '\0');
+    packet.txEncodingState = {1, authorized, false};
+    QBENCHMARK
+    {
+        for (int iteration = 0; iteration < 100; ++iteration)
+        {
+            QVERIFY(converter.convert(packet));
         }
     }
 }

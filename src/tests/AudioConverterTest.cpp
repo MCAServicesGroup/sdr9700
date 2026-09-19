@@ -1,5 +1,6 @@
 // QtTest invokes private slots through the generated meta-object.
 #include "AudioConverter.h"
+#include "AudioHandlerQtInput.h"
 #include "AudioHandlerQtOutput.h"
 #include "TxAudioMonitoringPolicy.h"
 #include "TxAudioPacing.h"
@@ -29,12 +30,23 @@ class AudioConverterTest : public QObject
     void rejectsPartialStereoFrame();
     void catchesUpTxAudioPacingWithoutBursting();
     void monitorsMicrophoneBeforePttWithoutQueuingTransmitAudio();
+    void transitionsTransmitEncodingEpochs();
+    void rejectsStaleTransmitQueueEntries();
+    void replacementInputAppliesCompleteTransmitState();
+    void unauthorizedConversionStillPublishesMeter();
     void addsOneFrameOfOutputPrefillHeadroom();
     void measuresStereoOutputChannelsIndependently();
 };
 
 namespace
 {
+class TestInputHandler : public AudioHandlerQtInput
+{
+  public:
+    void enqueuePendingPacket(const audioPacket& packet) { m_conversionQueue.enqueue(packet); }
+    qsizetype pendingPacketCount() const { return m_conversionQueue.size(); }
+};
+
 QAudioFormat audioFormat(int channels, QAudioFormat::SampleFormat sampleFormat)
 {
     QAudioFormat format;
@@ -303,6 +315,121 @@ void AudioConverterTest::monitorsMicrophoneBeforePttWithoutQueuingTransmitAudio(
     QVERIFY(!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(false, true));
     QVERIFY(!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(true, true));
     QVERIFY(sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(true, false));
+}
+
+void AudioConverterTest::transitionsTransmitEncodingEpochs()
+{
+    using namespace sdr9700::audio;
+    TxEncodingState state;
+    QVERIFY(!state.encodingAuthorized());
+    QVERIFY(!transitionTxEncodingState(state, false, false));
+
+    state = *transitionTxEncodingState(state, true, false);
+    QCOMPARE(state.epoch, 1U);
+    QVERIFY(state.encodingAuthorized());
+    QVERIFY(!transitionTxEncodingState(state, true, false));
+
+    state = *transitionTxEncodingState(state, true, true);
+    QCOMPARE(state.epoch, 2U);
+    QVERIFY(!state.encodingAuthorized());
+
+    // Natural DTMF completion restores microphone authorization; a PTT-off
+    // abort deactivates both PTT and DTMF in one effective state edge.
+    state = *transitionTxEncodingState(state, true, false);
+    QCOMPARE(state.epoch, 3U);
+    QVERIFY(state.encodingAuthorized());
+    state = *transitionTxEncodingState(state, true, true);
+    state = *transitionTxEncodingState(state, false, false);
+    QCOMPARE(state.epoch, 5U);
+    QVERIFY(!state.encodingAuthorized());
+
+    // Rapid PTT toggles remain strictly ordered; duplicate notifications do
+    // not create epochs.
+    for (int toggle = 0; toggle < 20; ++toggle)
+    {
+        state = *transitionTxEncodingState(state, !state.pttActive, false);
+    }
+    QCOMPARE(state.epoch, 25U);
+    QVERIFY(!transitionTxEncodingState(state, state.pttActive, state.dtmfActive));
+}
+
+void AudioConverterTest::rejectsStaleTransmitQueueEntries()
+{
+    using namespace sdr9700::audio;
+    QQueue<TxAudioQueueEntry> queue;
+    queue.enqueue({2, QByteArrayLiteral("old-a")});
+    queue.enqueue({2, QByteArrayLiteral("old-b")});
+    queue.enqueue({3, QByteArrayLiteral("current")});
+    queue.enqueue({1, QByteArrayLiteral("older")});
+
+    const std::optional<QByteArray> current = takeMatchingTxAudioFrame(queue, 3);
+    QVERIFY(current);
+    QCOMPARE(*current, QByteArrayLiteral("current"));
+    QVERIFY(!takeMatchingTxAudioFrame(queue, 3));
+    QVERIFY(queue.isEmpty());
+}
+
+void AudioConverterTest::replacementInputAppliesCompleteTransmitState()
+{
+    using namespace sdr9700::audio;
+    TestInputHandler input;
+
+    const TxEncodingState active{7, true, false};
+    input.updateTxEncodingState(active);
+    QVERIFY(input.txEncodingState() == active);
+
+    audioPacket pending;
+    pending.txEncodingState = active;
+    input.enqueuePendingPacket(pending);
+    QCOMPARE(input.pendingPacketCount(), 1);
+    input.updateTxEncodingState(active);
+    QCOMPARE(input.pendingPacketCount(), 1);
+
+    // A replacement created during DTMF must begin unauthorized, while an
+    // older queued update and a contradictory same-epoch update are ignored.
+    const TxEncodingState dtmfActive{8, true, true};
+    input.updateTxEncodingState(dtmfActive);
+    QVERIFY(input.txEncodingState() == dtmfActive);
+    QCOMPARE(input.pendingPacketCount(), 0);
+    input.enqueuePendingPacket(pending);
+    input.updateTxEncodingState(active);
+    QVERIFY(input.txEncodingState() == dtmfActive);
+    QCOMPARE(input.pendingPacketCount(), 1);
+    input.updateTxEncodingState({8, false, false});
+    QVERIFY(input.txEncodingState() == dtmfActive);
+    QCOMPARE(input.pendingPacketCount(), 1);
+    input.updateTxEncodingState(dtmfActive);
+    QVERIFY(input.txEncodingState() == dtmfActive);
+    QCOMPARE(input.pendingPacketCount(), 1);
+}
+
+void AudioConverterTest::unauthorizedConversionStillPublishesMeter()
+{
+    const QAudioFormat input = audioFormat(2, QAudioFormat::Int16);
+    QAudioFormat output = input;
+    output.setChannelCount(1);
+    output.setSampleRate(16000);
+    AudioConverter converter;
+    QVERIFY(converter.init(input, LPCM, output, LPCM, 7, 4, false, true));
+
+    const qint16 samples[] = {16384, 16384, -16384, -16384};
+    audioPacket packet;
+    packet.data = QByteArray(reinterpret_cast<const char*>(samples), sizeof(samples));
+    packet.txEncodingState = {4, false, false};
+
+    audioPacket converted;
+    connect(&converter, &AudioConverter::converted, this,
+            [&converted](const audioPacket& result) { converted = result; });
+    QVERIFY(converter.convert(packet));
+    QVERIFY(converted.data.isEmpty());
+    QVERIFY(converted.inputMeter.valid);
+    QCOMPARE(converted.inputMeter.sampleCount, 2U);
+
+    packet.txEncodingState = {5, true, false};
+    QVERIFY(converter.convert(packet));
+    QVERIFY(!converted.data.isEmpty());
+    QVERIFY(converted.inputMeter.valid);
+    QCOMPARE(converted.txEncodingState.epoch, 5U);
 }
 
 void AudioConverterTest::addsOneFrameOfOutputPrefillHeadroom()
