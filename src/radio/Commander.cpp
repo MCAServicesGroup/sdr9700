@@ -179,6 +179,7 @@ void Commander::commSetup(quint16 radioCivAddr, UdpConnectionSettings settings, 
             [this](const networkStatus& status) { m_rttEstimator.observe(status.networkLatency); });
     connect(udp, &UdpHandler::sessionHeartbeat, this, &RadioCommander::haveSessionHeartbeat);
     connect(udp, &UdpHandler::haveNetworkAudioLevels, this, &Commander::handleNetworkAudioLevels);
+    connect(udp, &UdpHandler::haveTxAudioMeter, this, &Commander::handleTxAudioMeter);
     connect(udp, &UdpHandler::requestRadioSelection, this, &Commander::radioSelection);
     connect(udp, &UdpHandler::setRadioUsage, this, &Commander::radioUsage);
     connect(this, &Commander::selectedRadio, udp, &UdpHandler::setCurrentRadio);

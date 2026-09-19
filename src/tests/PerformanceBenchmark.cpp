@@ -3,6 +3,7 @@
 #include "AudioConverter.h"
 #include "Ax25Decoder.h"
 #include "PacketTypes.h"
+#include "TxAudioMeterPolicy.h"
 #include "SpectrumScopeCanvas.h"
 #include "UdpBase.h"
 
@@ -34,6 +35,7 @@ class PerformanceBenchmark : public QObject
     void demodulatesAx25Audio() const;
     void rendersSpectrumFrame() const;
     void ingestsUdpDatagrams() const;
+    void aggregatesTransmitMeterBlocks() const;
 };
 
 void PerformanceBenchmark::convertsAudioPacket() const
@@ -109,6 +111,38 @@ void PerformanceBenchmark::ingestsUdpDatagrams() const
         for (const QByteArray& datagram : std::as_const(datagrams))
         {
             stream.dataReceived(datagram);
+        }
+    }
+}
+
+
+void PerformanceBenchmark::aggregatesTransmitMeterBlocks() const
+{
+    // Cost of the local processed-input meter presentation: block aggregation
+    // plus activity hysteresis, peak hold/decay, and the full-scale hold. One
+    // iteration is 50 blocks, i.e. one second of 20 ms capture.
+    using namespace sdr9700::audio;
+    QVector<TxAudioMeterBlock> blocks;
+    blocks.reserve(50);
+    for (int index = 0; index < 50; ++index)
+    {
+        TxAudioMeterBlock block;
+        block.peak = float(0.05 + 0.9 * double((index * 17) % 50) / 50.0);
+        block.sumSquares = double(block.peak) * block.peak * 0.4 * 960.0;
+        block.sampleCount = 960;
+        block.fullScaleCount = (index % 25 == 0) ? 3U : 0U;
+        block.valid = true;
+        blocks.append(block);
+    }
+
+    QBENCHMARK
+    {
+        TxAudioMeterPresentation presentation;
+        qint64 nowMs = 0;
+        for (const TxAudioMeterBlock& block : std::as_const(blocks))
+        {
+            presentation.accept(block, nowMs);
+            nowMs += 20;
         }
     }
 }

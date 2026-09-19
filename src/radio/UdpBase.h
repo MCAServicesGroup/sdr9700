@@ -43,14 +43,14 @@ struct UdpConnectionSettings
     bool adminLogin{false};
 };
 
+// Receive-side LAN audio levels only. The transmit meter uses the typed
+// TxAudioMeterBlock path instead, because a quantised 0-255 level cannot
+// support a truthful dBFS display.
 struct networkAudioLevels
 {
-    bool haveTxLevels = false;
     bool haveRxLevels = false;
     quint8 rxAudioRMS = 0;
-    quint8 txAudioRMS = 0;
     quint8 rxAudioPeak = 0;
-    quint8 txAudioPeak = 0;
 };
 
 struct networkStatus

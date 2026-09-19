@@ -979,17 +979,14 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
                     onHaveAudioData(pkt);
                 }
             });
-    connect(m_commander, &RadioCommander::haveNetworkAudioLevels, this,
-            [this, session, commandSession](const networkAudioLevels& levels)
+    connect(m_commander, &RadioCommander::haveTxAudioMeter, this,
+            [this, session, commandSession](const sdr9700::audio::TxAudioMeterBlock& block)
             {
                 if (!isCurrentSession(session, commandSession))
                 {
                     return;
                 }
-                if (levels.haveTxLevels)
-                {
-                    emit txAudioLevelChanged(levels.txAudioPeak, levels.txAudioRMS);
-                }
+                emit txAudioMeterChanged(block);
             });
 
     // All radio-to-UI data (frequency, mode, S-meter, scope) flows through the

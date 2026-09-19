@@ -100,8 +100,8 @@ void StatusBarController::updateTransmitState(bool on)
         m_window->m_meterSnapshot.compressionValid = false;
         m_window->m_meterSnapshot.voltageValid = false;
         m_window->m_meterSnapshot.currentValid = false;
-        m_window->m_meterSnapshot.txAudioPeak = 0;
-        m_window->m_meterSnapshot.txAudioRms = 0;
+        // The local processed-input meter is intentionally left alone at unkey.
+        // It must stay continuous and identical across PTT states.
         if (m_window->m_metersDialog)
         {
             m_window->m_metersDialog->resetMeters();

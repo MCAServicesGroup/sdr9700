@@ -26,6 +26,7 @@
 
 #include "AudioHandler.h"
 #include "RxAudioStartPolicy.h"
+#include "TxAudioMeterPolicy.h"
 
 class UdpAudio : public UdpBase
 {
@@ -49,8 +50,11 @@ class UdpAudio : public UdpBase
     void haveSetVolume(quint8 value);
     void haveRxLevels(quint16 amplitudePeak, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under,
                       bool over);
-    void haveTxLevels(quint16 amplitudePeak, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under,
-                      bool over);
+    // Transmit meter publication. The receive path keeps the legacy quantised
+    // haveRxLevels route; the capture path carries the typed measurement block
+    // with transport health as separate arguments.
+    void haveTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency, quint16 measuredLatency,
+                     bool under, bool over);
 
   public slots:
     void enableAudio();
@@ -61,7 +65,8 @@ class UdpAudio : public UdpBase
     void setVolume(quint8 value);
     void setTxActive(bool active);
     void getRxLevels(quint16 amplitude, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under, bool over);
-    void getTxLevels(quint16 amplitude, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under, bool over);
+    void getTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency, quint16 measuredLatency,
+                    bool under, bool over);
     void receiveAudioData(audioPacket audio);
     void queueDtmfPcm(const QByteArray& pcm);
 

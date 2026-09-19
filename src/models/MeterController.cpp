@@ -13,6 +13,8 @@ constexpr int kMeterFlushIntervalMs = 16;
 MeterController::MeterController(QObject* parent) : QObject(parent)
 {
     qRegisterMetaType<MeterSnapshot>("MeterSnapshot");
+    qRegisterMetaType<sdr9700::audio::TxAudioMeterBlock>("sdr9700::audio::TxAudioMeterBlock");
+    m_txClock.start();
 
     m_flushTimer = new QTimer(this);
     m_flushTimer->setSingleShot(true);
@@ -29,6 +31,8 @@ void MeterController::reset()
     }
     m_snapshot = {};
     m_dirty = false;
+    m_txPresentation.reset();
+    m_pendingTxBlock = {};
     emit snapshotChanged(m_snapshot);
 }
 
@@ -46,8 +50,10 @@ void MeterController::resetTransmitMeters()
     m_snapshot.voltageValid = false;
     m_snapshot.currentAmps = 0.0;
     m_snapshot.currentValid = false;
-    m_snapshot.txAudioPeak = 0;
-    m_snapshot.txAudioRms = 0;
+    // The local processed-input meter is deliberately NOT cleared here. These
+    // are radio transmit meters, which stop being current at unkey; the local
+    // microphone meter must stay continuous and identical across PTT states so
+    // an operator can set level before transmitting.
     scheduleFlush();
 }
 
@@ -112,11 +118,65 @@ void MeterController::setCurrentMeter(double amps)
     scheduleFlush();
 }
 
-void MeterController::setTransmitAudioLevel(int peak, int rms)
+void MeterController::setTransmitAudioMeter(const sdr9700::audio::TxAudioMeterBlock& block)
 {
-    m_snapshot.txAudioPeak = qBound(0, peak, 255);
-    m_snapshot.txAudioRms = qBound(0, rms, 255);
+    if (!block.valid)
+    {
+        // The capture path reports that no measurement exists: disconnect,
+        // input or converter failure, or an audio-device restart.
+        resetTransmitAudioMeter();
+        return;
+    }
+
+    // Blocks arriving between flushes are combined exactly: peak by maximum,
+    // energy by summation before any square root, counts by summation.
+    m_pendingTxBlock = sdr9700::audio::aggregate(m_pendingTxBlock, block);
     scheduleFlush();
+}
+
+void MeterController::resetTransmitAudioMeter()
+{
+    m_txPresentation.reset();
+    m_pendingTxBlock = {};
+    advanceTransmitAudioMeter();
+    scheduleFlush();
+}
+
+void MeterController::advanceTransmitAudioMeter()
+{
+    const qint64 nowMs = m_txClock.isValid() ? m_txClock.elapsed() : 0;
+    if (m_pendingTxBlock.valid)
+    {
+        m_txPresentation.accept(m_pendingTxBlock, nowMs);
+        m_pendingTxBlock = {};
+    }
+    else
+    {
+        m_txPresentation.tick(nowMs);
+    }
+
+    const sdr9700::audio::TxAudioMeterState state = m_txPresentation.state();
+    const double rmsDb = m_txPresentation.rmsDb();
+    const double peakDb = m_txPresentation.heldPeakDb();
+    const quint32 fullScaleCount = m_txPresentation.fullScaleCount();
+    if (state != m_snapshot.txAudioState || !qFuzzyCompare(rmsDb + 1.0, m_snapshot.txAudioRmsDb + 1.0) ||
+        !qFuzzyCompare(peakDb + 1.0, m_snapshot.txAudioPeakDb + 1.0) ||
+        fullScaleCount != m_snapshot.txAudioFullScaleCount)
+    {
+        m_snapshot.txAudioState = state;
+        m_snapshot.txAudioRmsDb = rmsDb;
+        m_snapshot.txAudioPeakDb = peakDb;
+        m_snapshot.txAudioFullScaleCount = fullScaleCount;
+        m_dirty = true;
+    }
+}
+
+bool MeterController::transmitAudioMeterSettling() const
+{
+    // Peak decay and the full-scale hold continue after capture stops, so keep
+    // ticking until the meter has actually settled.
+    return m_txPresentation.valid() && (m_txPresentation.active() || m_txPresentation.fullScaleCount() > 0 ||
+                                        m_txPresentation.heldPeakDb() > sdr9700::audio::kMeterDisplayFloorDb);
 }
 
 void MeterController::scheduleFlush()
@@ -130,10 +190,16 @@ void MeterController::scheduleFlush()
 
 void MeterController::flush()
 {
-    if (!m_dirty)
+    advanceTransmitAudioMeter();
+
+    if (m_dirty)
     {
-        return;
+        m_dirty = false;
+        emit snapshotChanged(m_snapshot);
     }
-    m_dirty = false;
-    emit snapshotChanged(m_snapshot);
+
+    if (transmitAudioMeterSettling() && m_flushTimer && !m_flushTimer->isActive())
+    {
+        m_flushTimer->start();
+    }
 }

@@ -64,7 +64,7 @@ RadioModel::RadioModel(QObject* parent) : QObject(parent)
     connect(m_backend, &IRadioBackend::pttChanged, this, &RadioModel::onPttChanged);
     connect(m_backend, &IRadioBackend::networkQualityChanged, this, &RadioModel::networkQualityChanged);
     connect(m_backend, &IRadioBackend::sessionHeartbeat, this, &RadioModel::sessionHeartbeat);
-    connect(m_backend, &IRadioBackend::txAudioLevelChanged, m_meterController, &MeterController::setTransmitAudioLevel);
+    connect(m_backend, &IRadioBackend::txAudioMeterChanged, m_meterController, &MeterController::setTransmitAudioMeter);
     connect(m_backend, &IRadioBackend::radioMemoryReceived, this, &RadioModel::radioMemoryReceived);
     connect(m_backend, &IRadioBackend::audioDataReady, this, &RadioModel::audioDataReady);
     connect(m_meterController, &MeterController::snapshotChanged, this, &RadioModel::onMeterSnapshotChanged);
@@ -217,7 +217,6 @@ void RadioModel::onMeterSnapshotChanged(const MeterSnapshot& snapshot)
     {
         emit currentMeterChanged(snapshot.currentAmps);
     }
-    emit txAudioLevelChanged(snapshot.txAudioPeak, snapshot.txAudioRms);
     emit meterSnapshotChanged(snapshot);
 }
 
