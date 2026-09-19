@@ -282,7 +282,10 @@ void RadioRouter::route(const CacheItem& item)
     }
     case funcSplitStatus:
         emit radioValueUpdated(item.command, item.value, item.receiver);
-        emit duplexModeChanged(item.value.value<duplexMode_t>());
+        if (item.receiver == kMainReceiver)
+        {
+            emit duplexModeChanged(item.value.value<duplexMode_t>());
+        }
         break;
     case funcVFOBandMS:
         emit radioValueUpdated(item.command, item.value, kMainReceiver);
@@ -296,7 +299,10 @@ void RadioRouter::route(const CacheItem& item)
         break;
     case funcReadFreqOffset:
         emit radioValueUpdated(item.command, item.value, item.receiver);
-        emit repeaterOffsetChanged(item.value.value<Frequency>().Hz);
+        if (item.receiver == kMainReceiver)
+        {
+            emit repeaterOffsetChanged(item.value.value<Frequency>().Hz);
+        }
         break;
     case funcToneSquelchType:
         emit radioValueUpdated(item.command, item.value, item.receiver);
@@ -316,7 +322,10 @@ void RadioRouter::route(const CacheItem& item)
         break;
     case funcDTCSCode:
         emit radioValueUpdated(item.command, item.value, item.receiver);
-        emit dtcsCodeChanged(item.value.value<ToneInfo>().tone);
+        if (item.receiver == kMainReceiver)
+        {
+            emit dtcsCodeChanged(item.value.value<ToneInfo>().tone);
+        }
         break;
     case funcMemoryContents:
     case funcSatelliteMemory:

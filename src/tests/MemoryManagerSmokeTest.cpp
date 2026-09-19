@@ -19,6 +19,7 @@
 #include "VfoSelectionController.h"
 #include "backend/IRadioBackend.h"
 #include "backend/RadioBackend.h"
+#include "backend/RadioRouter.h"
 #include "radio/Commander.h"
 #include <QScopeGuard>
 #include "models/RadioModel.h"
@@ -41,6 +42,7 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QScrollBar>
+#include <QSet>
 #include <QSlider>
 #include <QStandardPaths>
 #include <QTableWidget>
@@ -49,6 +51,7 @@
 #include <QWidget>
 #include <QtTest>
 #include <algorithm>
+#include <utility>
 
 class MemoryManagerSmokeTest : public QObject
 {
@@ -70,6 +73,8 @@ class MemoryManagerSmokeTest : public QObject
     void compressorMenuReflectsConfirmedLevel();
     void utilityWindowIsDestroyedWithHost();
     void backendReadinessWaitsForBothVfos();
+    void backendQueuesPostExchangeSettingsForBothReceivers();
+    void backendKeepsUnkeyPendingAcrossStaleReadback();
     void radioControlsDoNotWaitForInitialMemorySync();
     void quitActionDefersWindowClose();
     void persistentStatusMessageCanBeClearedByOwner();
@@ -940,6 +945,49 @@ void MemoryManagerSmokeTest::backendReadinessWaitsForBothVfos()
     QVERIFY(backend.m_radioReady);
     QCOMPARE(readySpy.count(), 1);
     QCOMPARE(readySpy.constFirst().constFirst().toBool(), true);
+}
+
+void MemoryManagerSmokeTest::backendQueuesPostExchangeSettingsForBothReceivers()
+{
+    Commander commander;
+
+    RadioBackend::schedulePostExchangeSettingsForCommand(&commander);
+
+    QCOMPARE(commander.m_scheduledCommands.size(), 2);
+    QSet<uchar> receivers;
+    for (const Commander::ScheduledCommand& command : std::as_const(commander.m_scheduledCommands))
+    {
+        QCOMPARE(command.commandClass, Commander::ScheduledCommandClass::ConfirmatoryRead);
+        QCOMPARE(command.func, funcSplitStatus);
+        QVERIFY(command.action);
+        receivers.insert(command.receiver);
+    }
+    QCOMPARE(receivers, QSet<uchar>({0, 1}));
+}
+
+void MemoryManagerSmokeTest::backendKeepsUnkeyPendingAcrossStaleReadback()
+{
+    RadioBackend backend;
+    QSignalSpy pttSpy(&backend, &IRadioBackend::pttChanged);
+
+    QVERIFY(backend.m_pttState.requestOn());
+    backend.m_pttState.confirm(true);
+    backend.m_pttState.requestOff();
+    backend.m_pttOffConfirmationClock.restart();
+    backend.m_pttOffConfirmationTimer->start();
+
+    backend.m_radioRouter->route(CacheItem(funcTransceiverStatus, QVariant::fromValue<bool>(true), 0));
+    QVERIFY(backend.m_pttState.confirmedActive());
+    QVERIFY(backend.m_pttState.offPending());
+    QVERIFY(backend.m_pttOffConfirmationTimer->isActive());
+    QVERIFY(pttSpy.isEmpty());
+
+    backend.m_radioRouter->route(CacheItem(funcTransceiverStatus, QVariant::fromValue<bool>(false), 0));
+    QVERIFY(!backend.m_pttState.confirmedActive());
+    QVERIFY(!backend.m_pttState.offPending());
+    QVERIFY(!backend.m_pttOffConfirmationTimer->isActive());
+    QCOMPARE(pttSpy.count(), 1);
+    QCOMPARE(pttSpy.takeFirst().at(0).toBool(), false);
 }
 
 void MemoryManagerSmokeTest::persistentStatusMessageCanBeClearedByOwner()

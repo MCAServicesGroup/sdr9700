@@ -33,6 +33,7 @@ class CommanderCodecTest : public QObject
     void acknowledgementsAreDiagnosticOnly();
     void tracksPendingReplyPressure();
     void unsolicitedUpdateDoesNotConsumePendingReply();
+    void acceptsOneMainFrequencyBroadcastAtEachPttTransition();
     void malformedReplyDoesNotConsumePendingReply();
     void selectedRepliesUsePendingReceiverIdentity();
     void correlatesEquivalentFrequencyAndModeReplyCommands();
@@ -1116,6 +1117,45 @@ void CommanderCodecTest::unsolicitedUpdateDoesNotConsumePendingReply()
     QCOMPARE(receiver, uchar(1));
     QVERIFY(!m_commander.queue->getCache(funcFreq, 0).value.isValid());
     QVERIFY(!m_commander.queue->getCache(funcFreq, 1).value.isValid());
+}
+
+void CommanderCodecTest::acceptsOneMainFrequencyBroadcastAtEachPttTransition()
+{
+    m_commander.m_pendingReplies.clear();
+    m_commander.m_correlationDiagnostics = {};
+    m_commander.queue->resetSessionState();
+    QSignalSpy replySpy(&m_commander, &RadioCommander::radioReplyReceived);
+
+    m_commander.setPttActive(true);
+    m_commander.handleNewData(QByteArray::fromHex("fefe00a2000000954904fd"));
+
+    QCOMPARE(replySpy.count(), 1);
+    QList<QVariant> accepted = replySpy.takeFirst();
+    QCOMPARE(accepted.at(0).value<Funcs>(), funcSelectedFreq);
+    QCOMPARE(accepted.at(1).value<Frequency>().Hz, quint64(449950000));
+    QCOMPARE(accepted.at(2).value<uchar>(), uchar(0));
+    QCOMPARE(m_commander.correlationDiagnostics().ambiguousUnsolicitedFrames, quint64(0));
+
+    // Each edge accepts only one broadcast.
+    m_commander.handleNewData(QByteArray::fromHex("fefe00a2000000954904fd"));
+    QCOMPARE(replySpy.count(), 0);
+    QCOMPARE(m_commander.correlationDiagnostics().ambiguousUnsolicitedFrames, quint64(1));
+
+    m_commander.setPttActive(false);
+    m_commander.handleNewData(QByteArray::fromHex("fefe00a2000000264701fd"));
+
+    QCOMPARE(replySpy.count(), 1);
+    accepted = replySpy.takeFirst();
+    QCOMPARE(accepted.at(0).value<Funcs>(), funcSelectedFreq);
+    QCOMPARE(accepted.at(1).value<Frequency>().Hz, quint64(147260000));
+    QCOMPARE(accepted.at(2).value<uchar>(), uchar(0));
+    QCOMPARE(m_commander.correlationDiagnostics().ambiguousUnsolicitedFrames, quint64(1));
+
+    // The exception is single-use. A later receiver-less broadcast remains
+    // ambiguous and must not silently inherit MAIN identity.
+    m_commander.handleNewData(QByteArray::fromHex("fefe00a2000000274701fd"));
+    QCOMPARE(replySpy.count(), 0);
+    QCOMPARE(m_commander.correlationDiagnostics().ambiguousUnsolicitedFrames, quint64(2));
 }
 
 void CommanderCodecTest::malformedReplyDoesNotConsumePendingReply()

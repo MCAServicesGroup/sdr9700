@@ -46,7 +46,9 @@ constexpr int kVfoStatePollIntervalMs = 250;
 constexpr int kReceiverContextSettleMs = 250;
 constexpr int kPttReleaseTailMs = 150;
 constexpr int kPttOnConfirmationMs = 1000;
-constexpr int kPttOffConfirmationMs = 1000;
+constexpr int kPttOffConfirmationRetryMs = 50;
+constexpr int kPttOffConfirmationFastWindowMs = 1000;
+constexpr int kPttOffConfirmationSlowRetryMs = 1000;
 constexpr int kMaxTransmitDurationMs = 180000;
 constexpr uchar kHardwareTxTimeoutTimer = 1; // 3 minutes, the IC-9700's shortest non-off value.
 constexpr uchar kMainReceiver = 0;
@@ -540,13 +542,19 @@ RadioBackend::RadioBackend(QObject* parent)
     connect(m_radioRouter, &RadioRouter::pttChanged, this,
             [this](bool on)
             {
-                if (on && m_pttState.offPending() && m_pttOffConfirmationTimer && m_pttOffConfirmationTimer->isActive())
+                if (on && m_pttState.offPending())
                 {
-                    // A queued status read can return after an unkey request.
-                    // Republishing that still-keyed readback corrects callers
-                    // that optimistically presented receive on release.
+                    // The IC-9700 can answer the first status read before its
+                    // unkey command has taken effect. Keep the confirmed TX
+                    // state authoritative, but do not republish a duplicate
+                    // TX transition while the short retry timer continues.
+                    const bool txWasAlreadyPublished = m_pttState.confirmedActive();
                     m_pttState.confirm(true);
-                    emit pttChanged(true);
+                    if (!txWasAlreadyPublished)
+                    {
+                        emit pttChanged(true);
+                    }
+                    qDebug(logRadio()).noquote() << "PTT status still TX after unkey request; awaiting retry";
                     return;
                 }
                 const bool publish = m_pttState.shouldPublishReadback(on);
@@ -561,6 +569,7 @@ RadioBackend::RadioBackend(QObject* parent)
                 if (!on && m_pttOffConfirmationTimer)
                 {
                     m_pttOffConfirmationTimer->stop();
+                    m_pttOffConfirmationClock.invalidate();
                 }
                 if (on)
                 {
@@ -602,7 +611,7 @@ RadioBackend::RadioBackend(QObject* parent)
 
     m_pttOffConfirmationTimer = new QTimer(this);
     m_pttOffConfirmationTimer->setSingleShot(true);
-    m_pttOffConfirmationTimer->setInterval(kPttOffConfirmationMs);
+    m_pttOffConfirmationTimer->setInterval(kPttOffConfirmationRetryMs);
     connect(m_pttOffConfirmationTimer, &QTimer::timeout, this,
             [this]()
             {
@@ -612,6 +621,10 @@ RadioBackend::RadioBackend(QObject* parent)
                 }
                 invokeOnCurrentCommander([](Commander* commandSession)
                                          { commandSession->receiveCommand(funcTransceiverStatus, QVariant(), 0); });
+                const bool fastRetry = m_pttOffConfirmationClock.isValid() &&
+                                       m_pttOffConfirmationClock.elapsed() < kPttOffConfirmationFastWindowMs;
+                m_pttOffConfirmationTimer->start(fastRetry ? kPttOffConfirmationRetryMs
+                                                           : kPttOffConfirmationSlowRetryMs);
             });
 
     m_pttMaxDurationTimer = new QTimer(this);
@@ -913,8 +926,12 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
                     m_mainSubExchangeDispatched = false;
                     m_mainSubExchangeRetryTimer->stop();
                     m_mainSubExchangeRetryCount = 0;
-                    invokeOnCurrentCommander([](Commander* commandSession)
-                                             { commandSession->finishMainSubExchangeConfirmation(); });
+                    invokeOnCurrentCommander(
+                        [](Commander* commandSession)
+                        {
+                            commandSession->finishMainSubExchangeConfirmation();
+                            schedulePostExchangeSettingsForCommand(commandSession);
+                        });
                     m_meterPollTuneHoldoff.restart();
                     qInfo(logRadio()).noquote()
                         << "MAIN/SUB exchange confirmed on physical MAIN elapsedMs="
@@ -1177,6 +1194,7 @@ void RadioBackend::shutdownConnection(bool emitDisconnectedSignal, bool emitDisc
     {
         m_pttOffConfirmationTimer->stop();
     }
+    m_pttOffConfirmationClock.invalidate();
     disarmTransmitSafety();
     if (m_syncWatchdogTimer)
     {
@@ -1565,6 +1583,35 @@ void RadioBackend::scheduleVfoReceiverReadForCommand(Commander* commandSession, 
     const uchar receiver = sdr9700::backend::receiverForVfo(vfo);
     commandSession->scheduleConfirmatoryAction(func, receiver, [commandSession, func, receiver]()
                                                { commandSession->requestReceiverScopedRead(func, receiver); });
+}
+
+void RadioBackend::schedulePostExchangeSettingsForCommand(Commander* commandSession)
+{
+    if (!commandSession)
+    {
+        return;
+    }
+
+    static constexpr std::array kSettings{
+        funcSplitStatus, funcReadFreqOffset, funcToneSquelchType, funcToneFreq, funcTSQLFreq, funcDTCSCode,
+    };
+    for (const uchar receiver : {kMainReceiver, kSubReceiver})
+    {
+        commandSession->scheduleConfirmatoryAction(funcSplitStatus, receiver,
+                                                   [commandSession, receiver]()
+                                                   {
+                                                       commandSession->executeReceiverScopedAction(
+                                                           receiver,
+                                                           [commandSession, receiver]()
+                                                           {
+                                                               for (const Funcs func : kSettings)
+                                                               {
+                                                                   commandSession->receiveCommand(func, QVariant(),
+                                                                                                  receiver);
+                                                               }
+                                                           });
+                                                   });
+    }
 }
 
 void RadioBackend::requestVfoState(Vfo vfo)
@@ -2416,11 +2463,17 @@ bool RadioBackend::setPtt(bool on)
         {
             m_pttReleaseDelayTimer->stop();
         }
+        if (m_pttOffConfirmationTimer)
+        {
+            m_pttOffConfirmationTimer->stop();
+        }
+        m_pttOffConfirmationClock.invalidate();
         if (!m_pttState.requestOn())
         {
             return true;
         }
 
+        emit pttRequestAccepted(true);
         armTransmitSafety();
         const auto selectedMemory = m_selectedRadioMemory;
         qInfo(logRadio()).noquote().nospace()
@@ -2474,6 +2527,7 @@ bool RadioBackend::setPtt(bool on)
         // buffered locally or in the LAN path can reach the transmitter.
         if (m_pttReleaseDelayTimer)
         {
+            qDebug(logRadio()).noquote() << "PTT release requested; scheduling unkey tailMs=" << kPttReleaseTailMs;
             m_pttReleaseDelayTimer->start();
         }
         else
@@ -2501,16 +2555,23 @@ void RadioBackend::sendPttOffNow()
     }
     // Always send an unkey request. If local state ever gets stale, suppressing
     // this command can leave the radio transmitting until disconnect.
+    qDebug(logRadio()).noquote() << "Dispatching PTT off command";
+    emit pttRequestAccepted(false);
     m_pttState.requestOff();
     if (m_pttOffConfirmationTimer)
     {
-        m_pttOffConfirmationTimer->start();
+        m_pttOffConfirmationClock.restart();
+        m_pttOffConfirmationTimer->start(kPttOffConfirmationRetryMs);
     }
     invokeOnCurrentCommander(
         [](Commander* commandSession)
         {
             commandSession->setPttActive(false);
-            commandSession->receiveCommand(funcTransceiverStatus, QVariant::fromValue<bool>(false), 0);
+            // The immediate automatic readback races the radio's physical
+            // unkey transition and repeatedly reports stale TX. Send the set
+            // without readback; the short confirmation timer above performs
+            // the first authoritative query after the radio has settled.
+            commandSession->receiveCommandNoReadback(funcTransceiverStatus, QVariant::fromValue<bool>(false), 0);
         });
 }
 
