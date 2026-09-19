@@ -126,8 +126,12 @@ instructions below.
 
 Building requires a C++ toolchain, CMake, Ninja, GNU Make, pkg-config, Qt 6,
 OpenSSL, Opus, SpeexDSP, Eigen, and optionally HIDAPI for RC-28 support.
+`make release` performs a clean Release build in `src/build`. Only Release and
+Debug CMake configurations are supported.
 
-On Debian, Ubuntu, and related Linux distributions:
+### Linux
+
+On Debian, Ubuntu, and related distributions, install the build dependencies:
 
 ```bash
 sudo apt install build-essential cmake ninja-build pkg-config \
@@ -147,22 +151,7 @@ make install
 
 Reconnect the RC-28 after installation if it was already attached.
 
-On macOS (Apple Silicon), Homebrew may be used to install build dependencies:
-
-```bash
-brew install cmake ninja pkg-config qt openssl@3 opus speexdsp eigen hidapi
-```
-
-Homebrew is needed only by developers building from source. It is not an
-end-user runtime requirement.
-
-```bash
-make release
-make run
-```
-
-`make release` performs a clean Release build in `src/build`. Only Release and
-Debug CMake configurations are supported:
+For a Debug build:
 
 ```bash
 make debug
@@ -174,13 +163,51 @@ Run the complete automated test suite after either build:
 ctest --test-dir src/build --output-on-failure
 ```
 
-The built application can also be launched with diagnostics enabled. On Linux:
+Launch the built application with diagnostics enabled:
 
 ```bash
 ./src/build/bin/SDR9700 --log=radio,udp,ci-v
 ```
 
-On macOS:
+### macOS (Apple Silicon)
+
+Install the Xcode command-line tools if they are not already present:
+
+```bash
+xcode-select --install
+```
+
+Use Homebrew to install the build dependencies, including Vulkan tools and
+MoltenVK support:
+
+```bash
+brew install cmake ninja pkg-config qt openssl@3 opus speexdsp eigen hidapi vulkan-tools
+```
+
+Homebrew is needed only by developers building from source. It is not an
+end-user runtime requirement. The `vulkan-tools` formula installs the Vulkan
+loader and headers along with MoltenVK for Apple Silicon.
+
+Build and run the application:
+
+```bash
+make release
+make run
+```
+
+For a Debug build:
+
+```bash
+make debug
+```
+
+Run the complete automated test suite after either build:
+
+```bash
+ctest --test-dir src/build --output-on-failure
+```
+
+Launch the built application directly with diagnostics enabled:
 
 ```bash
 ./src/build/bin/SDR9700.app/Contents/MacOS/SDR9700 --log=radio,udp,ci-v
