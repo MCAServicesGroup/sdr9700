@@ -4,6 +4,8 @@
 #include "AppInfo.h"
 #include "LogCategories.h"
 
+#include <cmath>
+#include <cstring>
 #include <QRandomGenerator>
 #include <algorithm>
 #include <iterator>
@@ -17,10 +19,10 @@ constexpr int kClientSessionCodeWidth = 6;
 
 template <size_t N> void copyPacketField(char (&destination)[N], const QByteArray& source)
 {
-    const int length = qMin<int>(static_cast<int>(N), source.size());
+    const int length = std::min<int>(static_cast<int>(N), source.size());
     if (length > 0)
     {
-        memcpy(destination, source.constData(), length);
+        std::memcpy(destination, source.constData(), length);
     }
 }
 
@@ -404,7 +406,7 @@ void UdpHandler::waitForStreamShutdownSettle(int timeoutMs)
     while (timer.elapsed() < timeoutMs)
     {
         const int remaining = timeoutMs - static_cast<int>(timer.elapsed());
-        if (udp->waitForReadyRead(qMin(50, remaining)))
+        if (udp->waitForReadyRead(std::min(50, remaining)))
         {
             dataReceived();
         }
@@ -516,7 +518,7 @@ bool UdpHandler::releaseAuthenticationToken(bool waitForAcknowledgement)
                    attemptTimer.elapsed() < kDisconnectRetryIntervalMs)
             {
                 const int remaining = kDisconnectRetryIntervalMs - static_cast<int>(attemptTimer.elapsed());
-                if (udp->waitForReadyRead(qMin(50, remaining)))
+                if (udp->waitForReadyRead(std::min(50, remaining)))
                 {
                     dataReceived();
                 }
@@ -724,7 +726,7 @@ void UdpHandler::getTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quin
                             quint16 measuredLatency, bool under, bool over)
 {
     // Transport health stays on the existing network-status reporting path.
-    status.txAudioLevel = static_cast<quint8>(qBound(0, qRound(block.peak * 255.0F), 255));
+    status.txAudioLevel = static_cast<quint8>(std::clamp(static_cast<int>(std::lround(block.peak * 255.0F)), 0, 255));
     status.txLatency = configuredLatency;
     status.txCurrentLatency = qint32(measuredLatency);
     status.txUnderrun = under;
@@ -1334,7 +1336,7 @@ void UdpHandler::dataReceived()
                      radios[f].macaddress[1] == in->macaddress[1] && radios[f].macaddress[2] == in->macaddress[2] &&
                      radios[f].macaddress[3] == in->macaddress[3] && radios[f].macaddress[4] == in->macaddress[4] &&
                      radios[f].macaddress[5] == in->macaddress[5]) ||
-                    !memcmp(radios[f].guid, in->guid, GUIDLEN))
+                    !std::memcmp(radios[f].guid, in->guid, GUIDLEN))
                 {
 
                     bool admin = false;
@@ -1469,7 +1471,7 @@ void UdpHandler::dataReceived()
                 qWarning(logUdp()).noquote() << "Capabilities radio count mismatch, advertised" << advertisedRadios
                                              << "contains" << availableRadios;
             }
-            if (qMin(advertisedRadios, availableRadios) > MAX_CAPABILITY_RADIOS)
+            if (std::min(advertisedRadios, availableRadios) > MAX_CAPABILITY_RADIOS)
             {
                 qWarning(logUdp()).noquote() << "Capabilities radio list exceeds supported limit; using first"
                                              << MAX_CAPABILITY_RADIOS << "entries";
@@ -1482,7 +1484,7 @@ void UdpHandler::dataReceived()
             {
                 radio_cap_packet rad{};
                 const char* tmpRad = r.constData();
-                memcpy(&rad, tmpRad + CAPABILITIES_SIZE + i * RADIO_CAP_SIZE, RADIO_CAP_SIZE);
+                std::memcpy(&rad, tmpRad + CAPABILITIES_SIZE + i * RADIO_CAP_SIZE, RADIO_CAP_SIZE);
                 radios.append(rad);
                 qInfo(logUdp()).noquote().nospace()
                     << this->metaObject()->className()
@@ -1693,13 +1695,13 @@ void UdpHandler::setCurrentRadio(quint8 radio)
     // propagated into Commander.
     if (radios[radio].commoncap == 0x8010)
     {
-        memcpy(&macaddress, radios[radio].macaddress, sizeof(macaddress));
+        std::memcpy(&macaddress, radios[radio].macaddress, sizeof(macaddress));
         useGuid = false;
     }
     else
     {
         useGuid = true;
-        memcpy(&guid, radios[radio].guid, GUIDLEN);
+        std::memcpy(&guid, radios[radio].guid, GUIDLEN);
     }
 
     devName = boundedLatin1(radios[radio].name, sizeof(radios[radio].name));
@@ -1736,11 +1738,11 @@ void UdpHandler::sendRequestStream()
     if (!useGuid)
     {
         p.commoncap = 0x8010;
-        memcpy(p.macaddress, macaddress, sizeof(p.macaddress));
+        std::memcpy(p.macaddress, macaddress, sizeof(p.macaddress));
     }
     else
     {
-        memcpy(p.guid, guid, sizeof(p.guid));
+        std::memcpy(p.guid, guid, sizeof(p.guid));
     }
     const quint16 requestSequence = authSeq++;
     p.innerseq = qToBigEndian(requestSequence);

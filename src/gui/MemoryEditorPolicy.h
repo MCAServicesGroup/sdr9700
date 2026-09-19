@@ -4,6 +4,7 @@
 #include "MemoryConstants.h"
 #include "MemoryRecordHelpers.h"
 
+#include <algorithm>
 #include <QSize>
 
 namespace sdr9700::memory
@@ -31,8 +32,8 @@ inline bool modeSupportsMemoryOffset(int mode)
 inline QSize memoryEditorDialogSize(const QSize& availableSize)
 {
     constexpr int kScreenMargin = 24;
-    return QSize(qMin(kMemoryEditorDialogWidth, qMax(1, availableSize.width() - kScreenMargin)),
-                 qMin(kMemoryEditorDialogHeight, qMax(1, availableSize.height() - kScreenMargin)));
+    return QSize(std::min(kMemoryEditorDialogWidth, std::max(1, availableSize.width() - kScreenMargin)),
+                 std::min(kMemoryEditorDialogHeight, std::max(1, availableSize.height() - kScreenMargin)));
 }
 
 constexpr int radioMemorySyncTimeoutMs()

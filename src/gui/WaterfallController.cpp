@@ -69,12 +69,12 @@ bool normalizeFrequencyRange(double* startMhz, double* endMhz)
 
 double lowFrequencyMhz(double startMhz, double endMhz)
 {
-    return qMin(startMhz, endMhz);
+    return std::min(startMhz, endMhz);
 }
 
 double highFrequencyMhz(double startMhz, double endMhz)
 {
-    return qMax(startMhz, endMhz);
+    return std::max(startMhz, endMhz);
 }
 } // namespace
 
@@ -101,14 +101,14 @@ double WaterfallController::xToFreq(int x) const
 {
     const double startMhz = lowFrequencyMhz(m_startMhz, m_endMhz);
     const double endMhz = highFrequencyMhz(m_startMhz, m_endMhz);
-    const int right = qMax(0, m_canvasSize.width() - 1);
+    const int right = std::max(0, m_canvasSize.width() - 1);
     if (right <= 0 || endMhz <= startMhz)
     {
         return startMhz;
     }
     // Keep the waterfall bin map aligned with the Spectrum Scope canvas by
     // treating the last drawable pixel as the end frequency.
-    return startMhz + (double(qBound(0, x, right)) / right) * (endMhz - startMhz);
+    return startMhz + (double(std::clamp(x, 0, right)) / right) * (endMhz - startMhz);
 }
 
 int WaterfallController::binForFrequency(double mhz, int binCount) const
@@ -129,7 +129,7 @@ int WaterfallController::binForFrequency(double mhz, int binCount) const
     }
 
     const double normalized = (mhz - dataStartMhz) / (dataEndMhz - dataStartMhz);
-    return qBound(0, int(std::llround(normalized * double(binCount - 1))), binCount - 1);
+    return std::clamp(int(std::llround(normalized * double(binCount - 1))), 0, binCount - 1);
 }
 
 int WaterfallController::binForDisplayX(int x, int binCount) const
@@ -141,7 +141,7 @@ QRgb WaterfallController::levelToColor(float level) const
 {
     const float normalized = std::clamp((level - m_minLevel) / (m_maxLevel - m_minLevel), 0.0f, 1.0f);
     const int index =
-        qBound(0, int(std::lround(normalized * kWaterfallPaletteResolution)), kWaterfallPaletteResolution);
+        std::clamp(int(std::lround(normalized * kWaterfallPaletteResolution)), 0, kWaterfallPaletteResolution);
     return waterfallPalette()[std::size_t(index)];
 }
 
@@ -252,12 +252,12 @@ bool WaterfallController::historyNeedsRemap(double newStartMhz, double newEndMhz
         return true;
     }
     const double pixelsPerMhz = double(m_waterfall.width() - 1) / oldSpanMhz;
-    const double startDisplacement = qAbs(newStartMhz - m_imageStartMhz) * pixelsPerMhz;
-    const double endDisplacement = qAbs(newEndMhz - m_imageEndMhz) * pixelsPerMhz;
+    const double startDisplacement = std::abs(newStartMhz - m_imageStartMhz) * pixelsPerMhz;
+    const double endDisplacement = std::abs(newEndMhz - m_imageEndMhz) * pixelsPerMhz;
     // Preserve subpixel pans without touching the complete history image. Once
     // either edge has moved by a visible pixel, realign all retained rows in a
     // single remap instead of blanking the waterfall.
-    return qMax(startDisplacement, endDisplacement) >= 1.0;
+    return std::max(startDisplacement, endDisplacement) >= 1.0;
 }
 
 void WaterfallController::remapHistory(const QSize& newSize, double newStartMhz, double newEndMhz)
@@ -283,7 +283,7 @@ void WaterfallController::remapHistory(const QSize& newSize, double newStartMhz,
     if (newSize == m_waterfall.size() && qFuzzyCompare(oldSpanMhz, newSpanMhz) && oldWidth > 1)
     {
         const int pixelShift = int(std::llround(((newStartMhz - m_imageStartMhz) / oldSpanMhz) * (oldWidth - 1)));
-        if (pixelShift != 0 && qAbs(pixelShift) < oldWidth)
+        if (pixelShift != 0 && std::abs(pixelShift) < oldWidth)
         {
             for (int row = 0; row < oldHeight; ++row)
             {
@@ -312,8 +312,8 @@ void WaterfallController::remapHistory(const QSize& newSize, double newStartMhz,
     }
     m_remapScratch.fill(kWaterfallIdleColor);
 
-    const int retainedRows = qMin(oldHeight, newSize.height());
-    const int newRight = qMax(1, newSize.width() - 1);
+    const int retainedRows = std::min(oldHeight, newSize.height());
+    const int newRight = std::max(1, newSize.width() - 1);
     for (int displayRow = 0; displayRow < retainedRows; ++displayRow)
     {
         const int oldPhysicalRow = (m_firstVisibleRow + displayRow) % oldHeight;
@@ -326,8 +326,8 @@ void WaterfallController::remapHistory(const QSize& newSize, double newStartMhz,
             {
                 continue;
             }
-            const int oldX = qBound(
-                0, int(std::llround(((frequencyMhz - m_imageStartMhz) / oldSpanMhz) * (oldWidth - 1))), oldWidth - 1);
+            const int oldX = std::clamp(
+                int(std::llround(((frequencyMhz - m_imageStartMhz) / oldSpanMhz) * (oldWidth - 1))), 0, oldWidth - 1);
             newPixels[x] = oldPixels[oldX];
         }
     }

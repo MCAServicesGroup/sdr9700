@@ -8,6 +8,7 @@
 #include "UiTheme.h"
 #include "models/RadioModel.h"
 
+#include <algorithm>
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -249,27 +250,27 @@ void StatusBarController::buildStatusBar()
         // separators or neighboring status groups.
         for (const char* s : {"Reconnecting", "Connected", "Disconnected"})
         {
-            w = qMax(w, fmR.horizontalAdvance(QString::fromLatin1(s)));
+            w = std::max(w, fmR.horizontalAdvance(QString::fromLatin1(s)));
         }
-        w = qMax(w, fmB.horizontalAdvance(QStringLiteral("Radio")));
+        w = std::max(w, fmB.horizontalAdvance(QStringLiteral("Radio")));
         // Network-quality stack. Include every operator-visible quality label
         // because the active page changes as latency and loss measurements
         // cross their thresholds.
         for (const char* s : {"Excellent", "Good", "Fair", "Poor"})
         {
-            w = qMax(w, fmR.horizontalAdvance(QString::fromLatin1(s)));
+            w = std::max(w, fmR.horizontalAdvance(QString::fromLatin1(s)));
         }
-        w = qMax(w, fmB.horizontalAdvance(QStringLiteral("Network")));
+        w = std::max(w, fmB.horizontalAdvance(QStringLiteral("Network")));
         // processor stack
-        w = qMax(w, fmR.horizontalAdvance(QStringLiteral("100.0%")));
-        w = qMax(w, fmB.horizontalAdvance(QStringLiteral("Processor")));
+        w = std::max(w, fmR.horizontalAdvance(QStringLiteral("100.0%")));
+        w = std::max(w, fmB.horizontalAdvance(QStringLiteral("Processor")));
         // memory stack
-        w = qMax(w, fmR.horizontalAdvance(QStringLiteral("999M")));
-        w = qMax(w, fmR.horizontalAdvance(QStringLiteral("1.0G")));
-        w = qMax(w, fmB.horizontalAdvance(QStringLiteral("Memory")));
+        w = std::max(w, fmR.horizontalAdvance(QStringLiteral("999M")));
+        w = std::max(w, fmR.horizontalAdvance(QStringLiteral("1.0G")));
+        w = std::max(w, fmB.horizontalAdvance(QStringLiteral("Memory")));
         // time stack
-        w = qMax(w, fmR.horizontalAdvance(QStringLiteral("0000-00-00")));
-        w = qMax(w, fmR.horizontalAdvance(QStringLiteral("00:00:00Z")));
+        w = std::max(w, fmR.horizontalAdvance(QStringLiteral("0000-00-00")));
+        w = std::max(w, fmR.horizontalAdvance(QStringLiteral("00:00:00Z")));
 
         return w + 16; // uniform padding buffer
     }();
@@ -477,7 +478,7 @@ void StatusBarController::setAutomationClientCount(int count)
     {
         return;
     }
-    const int boundedCount = qMax(0, count);
+    const int boundedCount = std::max(0, count);
     m_window->m_automationIndicator->setStyleSheet(automationIndicatorStyle(boundedCount > 0));
     m_window->m_automationIndicator->setToolTip(
         QStringLiteral("Automation enabled.\n%1 local client%2 connected.\nTransmit controls are unavailable.")

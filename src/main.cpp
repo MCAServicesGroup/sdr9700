@@ -407,14 +407,14 @@ void installUnixSignalHandlers()
     }
 
     struct sigaction action;
-    memset(&action, 0, sizeof(action));
+    std::memset(&action, 0, sizeof(action));
     action.sa_handler = handleUnixSignal;
     sigemptyset(&action.sa_mask);
     sigaction(SIGINT, &action, nullptr);
     sigaction(SIGTERM, &action, nullptr);
 
     struct sigaction alarmAction;
-    memset(&alarmAction, 0, sizeof(alarmAction));
+    std::memset(&alarmAction, 0, sizeof(alarmAction));
     alarmAction.sa_handler = handleForcedUnixExit;
     sigemptyset(&alarmAction.sa_mask);
     sigaction(SIGALRM, &alarmAction, nullptr);

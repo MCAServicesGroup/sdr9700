@@ -2,6 +2,7 @@
 
 #include "SpectrumFrameRate.h"
 
+#include <algorithm>
 #include <QtGlobal>
 
 namespace sdr9700
@@ -27,7 +28,7 @@ class SpectrumFramePacingPolicy
 
     qint64 nanosecondsUntilEmission(qint64 nowNs) const
     {
-        return m_started ? qMax<qint64>(0, m_nextEmissionDeadlineNs - nowNs) : 0;
+        return m_started ? std::max<qint64>(0, m_nextEmissionDeadlineNs - nowNs) : 0;
     }
 
     void markEmitted(qint64 nowNs)

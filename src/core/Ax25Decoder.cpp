@@ -72,13 +72,13 @@ QString printablePayload(const QByteArray& payload)
 
 void Ax25Decoder::configure(int sampleRate)
 {
-    const int samplesPerSymbol = qRound(static_cast<double>(sampleRate) / kBaud);
+    const int samplesPerSymbol = static_cast<int>(std::lround(static_cast<double>(sampleRate) / kBaud));
     if (sampleRate == m_sampleRate && samplesPerSymbol == m_samplesPerSymbol)
     {
         return;
     }
     m_sampleRate = sampleRate;
-    m_samplesPerSymbol = qMax(1, samplesPerSymbol);
+    m_samplesPerSymbol = std::max(1, samplesPerSymbol);
     m_window.fill(0.0F, m_samplesPerSymbol);
     m_markCos.resize(m_samplesPerSymbol);
     m_markSin.resize(m_samplesPerSymbol);
@@ -124,7 +124,7 @@ QVector<Ax25Frame> Ax25Decoder::processPcm16(const QByteArray& pcm, int sampleRa
         squaredSum += static_cast<double>(sample) * sample;
         m_window[m_windowPosition] = sample;
         m_windowPosition = (m_windowPosition + 1) % m_samplesPerSymbol;
-        m_windowFill = qMin(m_windowFill + 1, m_samplesPerSymbol);
+        m_windowFill = std::min(m_windowFill + 1, m_samplesPerSymbol);
 
         if (m_windowFill == m_samplesPerSymbol)
         {
@@ -149,8 +149,8 @@ QVector<Ax25Frame> Ax25Decoder::processPcm16(const QByteArray& pcm, int sampleRa
 
     const double rms = sampleFrames > 0 ? std::sqrt(squaredSum / sampleFrames) : 0.0;
     const double dbfs = rms > 0.0 ? 20.0 * std::log10(rms) : -80.0;
-    const int instantaneousLevel = qBound(0, qRound((dbfs + 60.0) * (100.0 / 60.0)), 100);
-    m_stats.audioLevel = qMax(instantaneousLevel, qRound(m_stats.audioLevel * 0.85));
+    const int instantaneousLevel = std::clamp(static_cast<int>(std::lround((dbfs + 60.0) * (100.0 / 60.0))), 0, 100);
+    m_stats.audioLevel = std::max(instantaneousLevel, static_cast<int>(std::lround(m_stats.audioLevel * 0.85)));
     return frames;
 }
 
@@ -270,7 +270,7 @@ void Ax25Decoder::finishFrame(const QVector<bool>& rawBits, QVector<Ax25Frame>& 
         }
         return;
     }
-    const quint64 duplicateWindow = static_cast<quint64>(qMax(1, m_samplesPerSymbol * 2));
+    const quint64 duplicateWindow = static_cast<quint64>(std::max(1, m_samplesPerSymbol * 2));
     if (m_haveFrameSample && frame == m_lastFrame && m_sampleIndex >= m_lastFrameSampleIndex &&
         m_sampleIndex - m_lastFrameSampleIndex <= duplicateWindow)
     {
@@ -286,9 +286,9 @@ void Ax25Decoder::finishFrame(const QVector<bool>& rawBits, QVector<Ax25Frame>& 
     frames.append(decoded);
 }
 
-bool Ax25Decoder::isDistinctCandidate(quint64* lastSampleIndex, bool* haveSample)
+bool Ax25Decoder::isDistinctCandidate(quint64* lastSampleIndex, bool* haveSample) const
 {
-    const quint64 rejectionWindow = static_cast<quint64>(qMax(1, m_samplesPerSymbol * 2));
+    const quint64 rejectionWindow = static_cast<quint64>(std::max(1, m_samplesPerSymbol * 2));
     if (*haveSample && m_sampleIndex >= *lastSampleIndex && m_sampleIndex - *lastSampleIndex <= rejectionWindow)
     {
         return false;

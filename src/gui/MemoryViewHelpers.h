@@ -46,9 +46,9 @@ class BracketAlignedItemDelegate final : public QStyledItemDelegate
         int widestDigit = 0;
         for (QChar digit = QLatin1Char('0'); digit <= QLatin1Char('9'); digit = QChar(digit.unicode() + 1))
         {
-            widestDigit = qMax(widestDigit, metrics.horizontalAdvance(digit));
+            widestDigit = std::max(widestDigit, metrics.horizontalAdvance(digit));
         }
-        const int identifierWidth = qMax(widestDigit * 3, metrics.horizontalAdvance(text.first(delimiter)));
+        const int identifierWidth = std::max(widestDigit * 3, metrics.horizontalAdvance(text.first(delimiter)));
         const int gapWidth = metrics.horizontalAdvance(QLatin1Char(' '));
         const QPalette::ColorRole textRole =
             itemOption.state.testFlag(QStyle::State_Selected) ? QPalette::HighlightedText : QPalette::Text;
@@ -102,14 +102,14 @@ class ToneCellDelegate : public QStyledItemDelegate
         const int typeWidth = std::max({metrics.horizontalAdvance(QStringLiteral("CTCSS")),
                                         metrics.horizontalAdvance(QStringLiteral("DTCS")),
                                         metrics.horizontalAdvance(QStringLiteral("DCS"))});
-        const int txWidth = qMax(metrics.horizontalAdvance(QStringLiteral("TX: 000.0")),
-                                 metrics.horizontalAdvance(QStringLiteral("TX: 000N")));
+        const int txWidth = std::max(metrics.horizontalAdvance(QStringLiteral("TX: 000.0")),
+                                     metrics.horizontalAdvance(QStringLiteral("TX: 000N")));
         const int typeX = rect.left() + kMemoryToneCellTextPadding;
         const int txX = typeX + typeWidth + kFieldGap;
         const int rxX = txX + txWidth + kFieldGap;
         const QRect typeRect(typeX, rect.top(), typeWidth, rect.height());
         const QRect txRect(txX, rect.top(), txWidth, rect.height());
-        const QRect rxRect(rxX, rect.top(), qMax(0, rect.right() - rxX + 1), rect.height());
+        const QRect rxRect(rxX, rect.top(), std::max(0, rect.right() - rxX + 1), rect.height());
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, false);

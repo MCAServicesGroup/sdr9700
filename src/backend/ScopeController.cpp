@@ -2,6 +2,7 @@
 #include "LogCategories.h"
 #include "ScopeAdapter.h"
 
+#include <algorithm>
 #include <QElapsedTimer>
 #include <QTimer>
 #include <limits>
@@ -107,7 +108,7 @@ void ScopeController::scheduleFlush()
     }
     constexpr qint64 kNanosecondsPerMillisecond = 1'000'000;
     const qint64 remainingMs = (remainingNs + kNanosecondsPerMillisecond - 1) / kNanosecondsPerMillisecond;
-    m_flushTimer->start(int(qMin<qint64>(remainingMs, std::numeric_limits<int>::max())));
+    m_flushTimer->start(int(std::min<qint64>(remainingMs, std::numeric_limits<int>::max())));
 }
 
 void ScopeController::flushLatestFrame()
@@ -146,8 +147,8 @@ void ScopeController::flushLatestFrame()
             for (const unsigned char raw : frame.data)
             {
                 const int value = static_cast<int>(raw);
-                rawMin = qMin(rawMin, value);
-                rawMax = qMax(rawMax, value);
+                rawMin = std::min(rawMin, value);
+                rawMax = std::max(rawMax, value);
                 rawTotal += value;
                 if (value == 0)
                 {

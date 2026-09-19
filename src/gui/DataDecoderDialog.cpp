@@ -1,6 +1,7 @@
 #include "DataDecoderDialog.h"
 #include "UiTheme.h"
 
+#include <cmath>
 #include <QDateTime>
 #include <QApplication>
 #include <QDesktopServices>
@@ -389,8 +390,9 @@ void DataDecoderDialog::updateStats(const Ax25DecoderStats& stats)
     m_candidatesValue->setText(QString::number(stats.candidates));
     m_decodedValue->setText(QString::number(stats.decoded));
     m_rejectedValue->setText(QString::number(failures));
-    m_successValue->setText(completed == 0 ? QStringLiteral("--")
-                                           : QStringLiteral("%1%").arg(qRound(100.0 * stats.decoded / completed)));
+    m_successValue->setText(
+        completed == 0 ? QStringLiteral("--")
+                       : QStringLiteral("%1%").arg(static_cast<int>(std::lround(100.0 * stats.decoded / completed))));
 
     if (stats.decoded < m_lastDecodedCount)
     {

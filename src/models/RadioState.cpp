@@ -2,6 +2,8 @@
 
 #include "backend/IRadioBackend.h"
 
+#include <algorithm>
+
 namespace sdr9700
 {
 
@@ -70,15 +72,15 @@ void RadioState::applyRadioValue(Funcs func, const QVariant& value, uchar receiv
     switch (func)
     {
     case funcAfGain:
-        m_shared.afGain = qBound(0, value.toInt(), 255);
+        m_shared.afGain = std::clamp(value.toInt(), 0, 255);
         emit sharedStateChanged();
         return;
     case funcRFPower:
-        m_shared.txPower = qBound(0, value.toInt(), 255);
+        m_shared.txPower = std::clamp(value.toInt(), 0, 255);
         emit sharedStateChanged();
         return;
     case funcLANModLevel:
-        m_shared.lanModLevel = qBound(0, value.toInt(), 255);
+        m_shared.lanModLevel = std::clamp(value.toInt(), 0, 255);
         emit sharedStateChanged();
         return;
     case funcCompressor:
@@ -86,7 +88,7 @@ void RadioState::applyRadioValue(Funcs func, const QVariant& value, uchar receiv
         emit sharedStateChanged();
         return;
     case funcCompressorLevel:
-        m_shared.compressorLevel = qBound(0, value.toInt(), 255);
+        m_shared.compressorLevel = std::clamp(value.toInt(), 0, 255);
         emit sharedStateChanged();
         return;
     default:
@@ -216,7 +218,7 @@ void RadioState::applyRadioValue(Funcs func, const QVariant& value, uchar receiv
         receiverChanged = true;
         break;
     case funcAGCTimeConstant:
-        state.agcMode = qBound(0, value.toInt(), 3);
+        state.agcMode = std::clamp(value.toInt(), 0, 3);
         receiverChanged = true;
         break;
     case funcAttenuator:
@@ -228,7 +230,7 @@ void RadioState::applyRadioValue(Funcs func, const QVariant& value, uchar receiv
         receiverChanged = true;
         break;
     case funcNBLevel:
-        state.nbLevel = qBound(0, value.toInt(), 255);
+        state.nbLevel = std::clamp(value.toInt(), 0, 255);
         receiverChanged = true;
         break;
     case funcAutoNotch:
@@ -244,19 +246,19 @@ void RadioState::applyRadioValue(Funcs func, const QVariant& value, uchar receiv
         receiverChanged = true;
         break;
     case funcNRLevel:
-        state.nrLevel = qBound(0, value.toInt(), 255);
+        state.nrLevel = std::clamp(value.toInt(), 0, 255);
         receiverChanged = true;
         break;
     case funcPreamp:
-        state.preampLevel = qBound(0, value.toInt(), 3);
+        state.preampLevel = std::clamp(value.toInt(), 0, 3);
         receiverChanged = true;
         break;
     case funcRfGain:
-        state.rfGain = qBound(0, value.toInt(), 255);
+        state.rfGain = std::clamp(value.toInt(), 0, 255);
         receiverChanged = true;
         break;
     case funcSquelch:
-        state.squelch = qBound(0, value.toInt(), 255);
+        state.squelch = std::clamp(value.toInt(), 0, 255);
         receiverChanged = true;
         break;
     case funcVFOBandMS:

@@ -44,6 +44,10 @@ Other CMake build types are rejected by CMake.
 ## Change Guidelines
 
 - Keep each change focused on one problem.
+- Prefer C++20 standard-library facilities over framework or global helpers
+  when they are direct semantic equivalents. Keep Qt APIs where Qt integration
+  or Qt-specific behavior is required, and include each facility's owning
+  header as specified in `CONVENTIONS.md`.
 - Consider build and behavior impacts for both Linux and Apple Silicon macOS.
   Prefer Qt's cross-platform APIs and isolate unavoidable native code.
 - Attempt to add or update automated tests for every code change wherever

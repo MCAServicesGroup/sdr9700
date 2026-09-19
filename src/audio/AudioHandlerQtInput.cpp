@@ -1,5 +1,7 @@
 #include "AudioHandlerQtInput.h"
 
+#include <cstring>
+
 bool AudioHandlerQtInput::openDevice() noexcept
 {
     // Install the complete state before start() can synchronously expose the
@@ -81,7 +83,7 @@ void AudioHandlerQtInput::onReadyRead()
         pkt.sent = 0;
         pkt.volume = volume;
         pkt.txEncodingState = m_txEncodingState;
-        memcpy(&pkt.guid, setupData.guid, GUIDLEN);
+        std::memcpy(&pkt.guid, setupData.guid, GUIDLEN);
         pkt.data = QByteArray(tempBuf.data.constData() + m_bufferReadOffset, bytesPerBlock);
         m_bufferReadOffset += bytesPerBlock;
         queueForConversion(std::move(pkt));

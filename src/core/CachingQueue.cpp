@@ -119,7 +119,7 @@ void CachingQueue::run()
         }
         else
         {
-            woke = waiting.wait_for(locker, std::chrono::milliseconds(qMax<qint64>(0, deadline.remainingTime()))) ==
+            woke = waiting.wait_for(locker, std::chrono::milliseconds(std::max<qint64>(0, deadline.remainingTime()))) ==
                    std::cv_status::no_timeout;
         }
         if (aborted.load(std::memory_order_acquire))
@@ -327,7 +327,7 @@ void CachingQueue::add(QueuePriority prio, QueueItem item, bool unique)
             }
             queue.insert(prio, item);
             enforceQueueLimit();
-            m_queueHighWaterMark = qMax(m_queueHighWaterMark, queue.size());
+            m_queueHighWaterMark = std::max(m_queueHighWaterMark, queue.size());
             m_queueWakeRequested = true;
             locker.unlock();
             waiting.notify_one();
@@ -499,11 +499,11 @@ CachingQueueDiagnostics CachingQueue::diagnostics()
     for (auto item = queue.cbegin(); item != queue.cend(); ++item)
     {
         ++result.depthByPriority[item.key()];
-        oldestEnqueuedAtMs = qMin(oldestEnqueuedAtMs, item->enqueuedAtMs);
+        oldestEnqueuedAtMs = std::min(oldestEnqueuedAtMs, item->enqueuedAtMs);
     }
     if (!queue.isEmpty())
     {
-        result.oldestItemAgeMs = qMax<qint64>(0, nowMs - oldestEnqueuedAtMs);
+        result.oldestItemAgeMs = std::max<qint64>(0, nowMs - oldestEnqueuedAtMs);
     }
     return result;
 }

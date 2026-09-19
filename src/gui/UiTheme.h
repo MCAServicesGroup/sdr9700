@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <QColor>
 #include <QString>
 
@@ -88,7 +89,7 @@ inline constexpr QColor DangerQColor{0xff, 0x4d, 0x4d};
 
 inline QColor spectrumSignalColor(double strength)
 {
-    const double normalized = qBound(0.0, strength, 1.0);
+    const double normalized = std::clamp(strength, 0.0, 1.0);
     if (normalized < 0.25)
     {
         return QColor::fromRgbF(0.0, normalized / 0.25, 1.0);
@@ -119,7 +120,7 @@ inline QColor sMeterSignalColor(double meterFraction)
                                        {0.50, QColor(0xd4, 0xc0, 0x00)}, {0.70, QColor(0xdd, 0x14, 0x00)},
                                        {0.85, QColor(0xff, 0x00, 0x00)}, {1.00, QColor(0xff, 0x00, 0x00)}};
     constexpr int kStopCount = int(sizeof(kStops) / sizeof(kStops[0]));
-    const double normalized = qBound(0.0, meterFraction, 1.0);
+    const double normalized = std::clamp(meterFraction, 0.0, 1.0);
     for (int index = 1; index < kStopCount; ++index)
     {
         if (normalized <= kStops[index].position)

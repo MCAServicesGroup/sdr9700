@@ -3,6 +3,8 @@
 #include "SpectrumFramePacingPolicy.h"
 #include "WaterfallController.h"
 
+#include <utility>
+#include <algorithm>
 #include <QSignalSpy>
 #include <QTest>
 #include <cmath>
@@ -156,8 +158,8 @@ void WaterfallScopeTest::modelsSelectedFrameRatesWithoutWallClock()
             const double sourceFramesPerSecond = selectedFramesPerSecond * sourceMultiplier;
             const auto [sourceFrames, emittedFrames] = simulate(selectedFramesPerSecond, sourceFramesPerSecond);
             const int expectedFrames =
-                int(std::floor(qMin(sourceFramesPerSecond, double(selectedFramesPerSecond)) * 60.0));
-            QVERIFY2(qAbs(emittedFrames - expectedFrames) <= 2,
+                int(std::floor(std::min(sourceFramesPerSecond, double(selectedFramesPerSecond)) * 60.0));
+            QVERIFY2(std::abs(emittedFrames - expectedFrames) <= 2,
                      qPrintable(QStringLiteral("selected=%1 source=%2 input=%3 output=%4 expected=%5")
                                     .arg(selectedFramesPerSecond)
                                     .arg(sourceFramesPerSecond)

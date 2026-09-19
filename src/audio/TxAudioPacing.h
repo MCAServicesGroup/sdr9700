@@ -17,7 +17,7 @@ struct TxAudioPumpDecision
 
 inline TxAudioPumpDecision txAudioPumpDecision(qint64 elapsedMs, qint64 framesSent)
 {
-    const qint64 elapsedFrames = qMax<qint64>(0, elapsedMs) / kTxAudioFrameIntervalMs;
+    const qint64 elapsedFrames = std::max<qint64>(0, elapsedMs) / kTxAudioFrameIntervalMs;
     const qint64 framesAccountedFor = 1 + elapsedFrames;
     return {std::clamp(framesAccountedFor - framesSent, qint64(1), kMaximumTxAudioFramesPerTick), framesAccountedFor};
 }

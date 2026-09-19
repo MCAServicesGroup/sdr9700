@@ -185,7 +185,7 @@ void WaterfallCanvas::setWaterfallRow(int physicalRow, int firstVisibleRow)
     {
         return;
     }
-    m_firstVisibleRow = qBound(0, firstVisibleRow, m_waterfall->height() - 1);
+    m_firstVisibleRow = std::clamp(firstVisibleRow, 0, m_waterfall->height() - 1);
 #ifdef SDR9700_GPU_PANADAPTER
     if (physicalRow >= 0 && physicalRow < m_waterfall->height())
     {
@@ -213,7 +213,7 @@ void WaterfallCanvas::paintShelf(QPainter* painter) const
     {
         return;
     }
-    const int shadowHeight = qMin(height(), kControlShelfShadowHeightPx);
+    const int shadowHeight = std::min(height(), kControlShelfShadowHeightPx);
     QLinearGradient shelfShadow(0, 0, 0, shadowHeight);
     shelfShadow.setColorAt(0.0, QColor(0x00, 0x04, 0x08, 220));
     shelfShadow.setColorAt(1.0, QColor(0x00, 0x08, 0x0f, 0));
@@ -246,8 +246,8 @@ void WaterfallCanvas::paintRaster(QPainter* painter) const
     painter->fillRect(rect(), kWaterfallBg);
     if (m_waterfall && !m_waterfall->isNull())
     {
-        const int sourceHeight = qMin(height(), m_waterfall->height());
-        const int firstPartHeight = qMin(sourceHeight, m_waterfall->height() - m_firstVisibleRow);
+        const int sourceHeight = std::min(height(), m_waterfall->height());
+        const int firstPartHeight = std::min(sourceHeight, m_waterfall->height() - m_firstVisibleRow);
         painter->drawImage(QRect(0, 0, width(), firstPartHeight), *m_waterfall,
                            QRect(0, m_firstVisibleRow, m_waterfall->width(), firstPartHeight));
         if (firstPartHeight < sourceHeight)

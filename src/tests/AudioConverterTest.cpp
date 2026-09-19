@@ -7,6 +7,7 @@
 
 #include <QtTest>
 
+#include <cmath>
 #include <cstring>
 #include <limits>
 
@@ -510,8 +511,8 @@ void AudioConverterTest::measuresTransmitInputAfterGainAndChannelMix()
     QVERIFY(converter.convert(matchingPacket));
     QVERIFY(converted.inputMeter.valid);
     QCOMPARE(converted.inputMeter.sampleCount, 2U);
-    QVERIFY(qAbs(converted.inputMeter.peak - 0.25F) < 0.0001F);
-    QVERIFY(qAbs(converted.inputMeter.sumSquares - 0.125) < 0.0001);
+    QVERIFY(std::abs(converted.inputMeter.peak - 0.25F) < 0.0001F);
+    QVERIFY(std::abs(converted.inputMeter.sumSquares - 0.125) < 0.0001);
 }
 
 QTEST_GUILESS_MAIN(AudioConverterTest)

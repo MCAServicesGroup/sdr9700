@@ -3,6 +3,8 @@
 #include "CachingQueue.h"
 #include "LogCategories.h"
 
+#include <algorithm>
+#include <cmath>
 #include <QDateTime>
 #include <QThread>
 #include <QtGlobal>
@@ -126,7 +128,7 @@ void RadioRouter::enqueueBatch(const QVector<CacheItem>& items, quint64 session)
                     }
                 }
                 m_pendingItems.append(item);
-                m_pendingHighWaterMark = qMax(m_pendingHighWaterMark, m_pendingItems.size());
+                m_pendingHighWaterMark = std::max(m_pendingHighWaterMark, m_pendingItems.size());
             }
         }
         if (!m_drainScheduled && !m_pendingItems.isEmpty())
@@ -334,7 +336,7 @@ void RadioRouter::route(const CacheItem& item)
         break;
     case funcSMeter:
     {
-        const int rawValue = qBound(0, item.value.toInt(), 255);
+        const int rawValue = std::clamp(item.value.toInt(), 0, 255);
         qDebug(logRadioTraffic()).noquote().nospace()
             << "CivData::Decoded command=SMeter receiver=" << item.receiver << " raw=" << rawValue;
         emit radioValueUpdated(item.command, QVariant(rawValue), item.receiver);
@@ -351,11 +353,11 @@ void RadioRouter::route(const CacheItem& item)
         break;
     case funcNRLevel:
     {
-        const int rawLevel = qBound(0, item.value.toInt(), 255);
+        const int rawLevel = std::clamp(item.value.toInt(), 0, 255);
         emit radioValueUpdated(item.command, QVariant(rawLevel), item.receiver);
         if (item.receiver == kMainReceiver)
         {
-            emit nrLevelChanged(qRound(rawLevel * 14.0 / 255.0) + 1);
+            emit nrLevelChanged(static_cast<int>(std::lround(rawLevel * 14.0 / 255.0)) + 1);
         }
         break;
     }
@@ -366,17 +368,17 @@ void RadioRouter::route(const CacheItem& item)
         break;
     case funcNBLevel:
     {
-        const int rawLevel = qBound(0, item.value.toInt(), 255);
+        const int rawLevel = std::clamp(item.value.toInt(), 0, 255);
         emit radioValueUpdated(item.command, QVariant(rawLevel), item.receiver);
         if (item.receiver == kMainReceiver)
         {
-            emit nbLevelChanged(qRound(rawLevel * 9.0 / 255.0) + 1);
+            emit nbLevelChanged(static_cast<int>(std::lround(rawLevel * 9.0 / 255.0)) + 1);
         }
         break;
     }
     case funcPreamp:
     {
-        const int level = qBound(0, item.value.toInt(), 3);
+        const int level = std::clamp(item.value.toInt(), 0, 3);
         emit radioValueUpdated(item.command, QVariant(level), item.receiver);
         if (item.receiver == kMainReceiver)
         {
@@ -404,7 +406,7 @@ void RadioRouter::route(const CacheItem& item)
         emit compressorChanged(item.value.toBool());
         break;
     case funcCompressorLevel:
-        emit compressorLevelChanged(qBound(0, item.value.toInt(), 255));
+        emit compressorLevelChanged(std::clamp(item.value.toInt(), 0, 255));
         break;
     case funcXFCStatus:
         emit xfcChanged(item.value.toBool());
@@ -418,7 +420,7 @@ void RadioRouter::route(const CacheItem& item)
     case funcAGCTimeConstant:
     {
         static const char* const kAgcModes[] = {"off", "fast", "mid", "slow"};
-        const int idx = qBound(0, item.value.toInt(), 3);
+        const int idx = std::clamp(item.value.toInt(), 0, 3);
         emit radioValueUpdated(item.command, QVariant(idx), item.receiver);
         if (item.receiver == kMainReceiver)
             emit agcModeChanged(QString::fromLatin1(kAgcModes[idx]));
@@ -426,14 +428,14 @@ void RadioRouter::route(const CacheItem& item)
     }
     case funcRfGain:
         qDebug(logRadio()).noquote().nospace() << "Receiver level readback control=RFG receiver=" << int(item.receiver)
-                                               << " raw=" << qBound(0, item.value.toInt(), 255);
+                                               << " raw=" << std::clamp(item.value.toInt(), 0, 255);
         emit radioValueUpdated(item.command, item.value, item.receiver);
         if (item.receiver == kMainReceiver)
-            emit rfGainChanged(qBound(0, item.value.toInt(), 255));
+            emit rfGainChanged(std::clamp(item.value.toInt(), 0, 255));
         break;
     case funcRFPower:
     {
-        const int level = qBound(0, item.value.toInt(), 255);
+        const int level = std::clamp(item.value.toInt(), 0, 255);
         emit radioValueUpdated(item.command, QVariant(level), item.receiver);
         emit txPowerChanged(level);
         break;
@@ -458,7 +460,7 @@ void RadioRouter::route(const CacheItem& item)
     }
     case funcSquelch:
     {
-        const int level = qBound(0, item.value.toInt(), 255);
+        const int level = std::clamp(item.value.toInt(), 0, 255);
         qDebug(logRadio()).noquote().nospace()
             << "Receiver level readback control=SQL receiver=" << int(item.receiver) << " raw=" << level;
         emit radioValueUpdated(item.command, QVariant(level), item.receiver);

@@ -2,6 +2,7 @@
 
 #include "AppPaths.h"
 
+#include <algorithm>
 #include <QDataStream>
 #include <QDir>
 #include <QFileInfo>
@@ -31,7 +32,7 @@ QByteArray fixedField(const char* data, qsizetype size)
 void restoreFixedField(const QByteArray& source, char* destination, qsizetype size)
 {
     std::fill(destination, destination + size, '\0');
-    const qsizetype count = qMin(size, source.size());
+    const qsizetype count = std::min(size, source.size());
     std::copy_n(source.constData(), count, destination);
 }
 

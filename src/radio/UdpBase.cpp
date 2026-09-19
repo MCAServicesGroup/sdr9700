@@ -1,6 +1,7 @@
 #include "UdpBase.h"
 #include "LogCategories.h"
 
+#include <cmath>
 #include <QMutexLocker>
 #include <QRandomGenerator>
 #include <QTime>
@@ -226,7 +227,7 @@ void UdpBase::dataReceived(const QByteArray& r)
                     if (std::abs(dev) < 200)
                     {
                         pingBaselineMs = (pingBaselineMs * 31 + pingLatenessMs) / 32;
-                        pingBaselineMs = qBound(0, pingBaselineMs, kMaxBaselineClampMs);
+                        pingBaselineMs = std::clamp(pingBaselineMs, 0, kMaxBaselineClampMs);
                     }
                 }
 
@@ -300,7 +301,7 @@ void UdpBase::dataReceived(const QByteArray& r)
             }
             txLocker.unlock();
 
-            const int encodedSequenceCount = qMax(0, (r.length() - 0x10) / 2);
+            const int encodedSequenceCount = static_cast<int>(std::max<qsizetype>(0, (r.length() - 0x10) / 2));
             if (encodedSequenceCount > requestedSequenceCount)
             {
                 qWarning(logUdp()).noquote().nospace()

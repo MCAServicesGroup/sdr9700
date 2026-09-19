@@ -4,6 +4,7 @@
 #include "UiTheme.h"
 #include "VfoSMeter.h"
 
+#include <algorithm>
 #include <QEvent>
 #include <QFontDatabase>
 #include <QHBoxLayout>
@@ -518,7 +519,7 @@ void VfoDisplay::setTransmitSwr(double swr)
     {
         return;
     }
-    m_transmitSwr = qBound(1.0, swr, 6.0);
+    m_transmitSwr = std::clamp(swr, 1.0, 6.0);
     m_transmitSwrValid = true;
     m_txBadge->setText(QString::number(m_transmitSwr, 'f', 2));
 }

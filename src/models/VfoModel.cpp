@@ -1,6 +1,7 @@
 #include "VfoModel.h"
 #include "backend/IRadioBackend.h"
 
+#include <algorithm>
 #include <QtGlobal>
 
 VfoModel::VfoModel(IRadioBackend* backend, QObject* parent) : QObject(parent), m_backend(backend) {}
@@ -45,7 +46,7 @@ void VfoModel::setRfGain(int level)
 {
     if (m_backend)
     {
-        m_backend->setRfGain(qBound(0, level, 255));
+        m_backend->setRfGain(std::clamp(level, 0, 255));
     }
 }
 
@@ -63,7 +64,7 @@ void VfoModel::setSquelch(bool on, int level)
 {
     if (m_backend)
     {
-        m_backend->setSquelch(on, qBound(0, level, 255));
+        m_backend->setSquelch(on, std::clamp(level, 0, 255));
     }
 }
 
@@ -79,7 +80,7 @@ void VfoModel::setNrLevel(int level)
 {
     if (m_backend)
     {
-        m_backend->setNrLevel(qBound(1, level, 15));
+        m_backend->setNrLevel(std::clamp(level, 1, 15));
     }
 }
 
@@ -95,13 +96,13 @@ void VfoModel::setNbLevel(int level)
 {
     if (m_backend)
     {
-        m_backend->setNbLevel(qBound(1, level, 10));
+        m_backend->setNbLevel(std::clamp(level, 1, 10));
     }
 }
 
 void VfoModel::setPreampLevel(int level)
 {
-    level = qBound(0, level, 3);
+    level = std::clamp(level, 0, 3);
     if (m_backend)
     {
         m_backend->setPreampLevel(level);
@@ -120,7 +121,7 @@ void VfoModel::setTxPower(int level)
 {
     if (m_backend)
     {
-        m_backend->setTxPower(qBound(0, level, 255));
+        m_backend->setTxPower(std::clamp(level, 0, 255));
     }
 }
 
@@ -160,7 +161,7 @@ void VfoModel::setCompressorLevel(int level)
 {
     if (m_backend)
     {
-        m_backend->setCompressorLevel(qBound(0, level, 255));
+        m_backend->setCompressorLevel(std::clamp(level, 0, 255));
     }
 }
 
@@ -182,7 +183,7 @@ void VfoModel::setRitEnabled(bool on)
 
 void VfoModel::setRitOffset(short hz)
 {
-    hz = qBound(static_cast<short>(-999), hz, static_cast<short>(999));
+    hz = std::clamp(hz, static_cast<short>(-999), static_cast<short>(999));
     if (m_backend)
     {
         m_backend->setRitOffset(hz);
@@ -201,7 +202,7 @@ void VfoModel::applyRitEnabled(bool on)
 
 void VfoModel::applyRitOffset(short hz)
 {
-    hz = qBound(static_cast<short>(-999), hz, static_cast<short>(999));
+    hz = std::clamp(hz, static_cast<short>(-999), static_cast<short>(999));
     if (m_ritHz == hz)
     {
         return;
@@ -230,7 +231,7 @@ void VfoModel::applyCompressor(bool on)
 
 void VfoModel::applyCompressorLevel(int level)
 {
-    level = qBound(0, level, 255);
+    level = std::clamp(level, 0, 255);
     const bool wasKnown = m_compressorLevel.has_value();
     if (wasKnown && *m_compressorLevel == level)
     {
@@ -377,7 +378,7 @@ void VfoModel::applyNrEnabled(bool on)
 
 void VfoModel::applyNrLevel(int level)
 {
-    level = qBound(0, level, 15);
+    level = std::clamp(level, 0, 15);
     if (m_nrLevel == level)
     {
         return;
@@ -398,7 +399,7 @@ void VfoModel::applyNbEnabled(bool on)
 
 void VfoModel::applyNbLevel(int level)
 {
-    level = qBound(0, level, 10);
+    level = std::clamp(level, 0, 10);
     if (m_nbLevel == level)
     {
         return;
@@ -409,12 +410,12 @@ void VfoModel::applyNbLevel(int level)
 
 void VfoModel::applyPreampEnabled(bool on)
 {
-    applyPreampLevel(on ? qMax(1, m_preampLevel) : 0);
+    applyPreampLevel(on ? std::max(1, m_preampLevel) : 0);
 }
 
 void VfoModel::applyPreampLevel(int level)
 {
-    level = qBound(0, level, 3);
+    level = std::clamp(level, 0, 3);
     const bool on = level != 0;
     if (m_preampLevel == level && m_preampOn == on)
     {
@@ -438,7 +439,7 @@ void VfoModel::applyAttenuatorEnabled(bool on)
 
 void VfoModel::applyRfGain(int level)
 {
-    level = qBound(0, level, 255);
+    level = std::clamp(level, 0, 255);
     if (m_rfGain.has_value() && *m_rfGain == level)
     {
         return;
@@ -449,7 +450,7 @@ void VfoModel::applyRfGain(int level)
 
 void VfoModel::applySquelch(bool on, int level)
 {
-    level = qBound(0, level, 255);
+    level = std::clamp(level, 0, 255);
     if (m_squelch.has_value() && m_squelch->on == on && m_squelch->level == level)
     {
         return;
@@ -460,7 +461,7 @@ void VfoModel::applySquelch(bool on, int level)
 
 void VfoModel::applyTxPower(int level)
 {
-    level = qBound(0, level, 255);
+    level = std::clamp(level, 0, 255);
     if (m_txPower.has_value() && *m_txPower == level)
     {
         return;

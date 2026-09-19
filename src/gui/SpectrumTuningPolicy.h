@@ -39,11 +39,11 @@ inline quint64 clampScopeCenterToBand(quint64 hz, quint64 referenceHz, double ba
         return hz;
     }
 
-    const double halfBandwidthHz = qMax(0.0, bandwidthMhz) * 500000.0;
+    const double halfBandwidthHz = std::max(0.0, bandwidthMhz) * 500000.0;
     const double minCenterHz = double(startHz) + halfBandwidthHz;
     const double maxCenterHz = double(endHz) - halfBandwidthHz;
     const double centerHz =
-        maxCenterHz >= minCenterHz ? qBound(minCenterHz, double(hz), maxCenterHz) : (double(startHz) + endHz) / 2.0;
+        maxCenterHz >= minCenterHz ? std::clamp(double(hz), minCenterHz, maxCenterHz) : (double(startHz) + endHz) / 2.0;
     return static_cast<quint64>(std::llround(centerHz));
 }
 } // namespace sdr9700

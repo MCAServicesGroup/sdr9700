@@ -1,6 +1,7 @@
 #include "MainTitleBar.h"
 #include "UiTheme.h"
 
+#include <algorithm>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
@@ -369,7 +370,7 @@ void MainTitleBar::setVolume(int value)
     {
         return;
     }
-    const int bounded = qBound(0, value, 255);
+    const int bounded = std::clamp(value, 0, 255);
     const QSignalBlocker blocker(m_volumeSlider);
     m_volumeSlider->setValue(bounded);
     if (m_volumeLabel)

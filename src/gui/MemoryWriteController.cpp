@@ -9,6 +9,7 @@
 #include "UiTheme.h"
 #include "models/RadioModel.h"
 
+#include <algorithm>
 #include <QLabel>
 #include <QTimer>
 
@@ -45,7 +46,7 @@ void MemoryWriteController::queueWrites(const QVector<MemoryType>& memories, int
         return;
     }
 
-    QTimer::singleShot(qMax(0, startDelayMs), this,
+    QTimer::singleShot(std::max(0, startDelayMs), this,
                        [this, memories, progressLabel, completion = std::move(completion)]() mutable
                        { startWrites(memories, progressLabel, std::move(completion)); });
 }

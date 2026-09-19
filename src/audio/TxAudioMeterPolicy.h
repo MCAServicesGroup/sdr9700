@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <QMetaType>
 #include <QtGlobal>
 
@@ -53,7 +54,7 @@ inline double dbfsFromMagnitude(double magnitude)
     {
         return kMeterDisplayFloorDb;
     }
-    return qBound(kMeterDisplayFloorDb, 20.0 * std::log10(magnitude), kMeterDisplayCeilingDb);
+    return std::clamp(20.0 * std::log10(magnitude), kMeterDisplayFloorDb, kMeterDisplayCeilingDb);
 }
 
 inline double blockRms(const TxAudioMeterBlock& block)
@@ -80,7 +81,7 @@ inline TxAudioMeterBlock aggregate(const TxAudioMeterBlock& lhs, const TxAudioMe
     }
 
     TxAudioMeterBlock combined;
-    combined.peak = qMax(lhs.peak, rhs.peak);
+    combined.peak = std::max(lhs.peak, rhs.peak);
     combined.sumSquares = lhs.sumSquares + rhs.sumSquares;
     combined.sampleCount = lhs.sampleCount + rhs.sampleCount;
     combined.fullScaleCount = lhs.fullScaleCount + rhs.fullScaleCount;
@@ -216,12 +217,12 @@ class TxAudioMeterPresentation
         // window. Using the whole interval would over-decay the first update
         // after the hold expires, dropping the held peak by up to a full
         // inter-update period's worth of decay at the instant it is released.
-        const qint64 decayFromMs = qMax(m_lastUpdateMs, m_peakHoldUntilMs);
+        const qint64 decayFromMs = std::max(m_lastUpdateMs, m_peakHoldUntilMs);
         const qint64 decayMs = nowMs - decayFromMs;
         if (decayMs > 0)
         {
             const double decayDb = kPeakDecayDbPerSec * (static_cast<double>(decayMs) / 1000.0);
-            m_heldPeakDb = qMax(kMeterDisplayFloorDb, m_heldPeakDb - decayDb);
+            m_heldPeakDb = std::max(kMeterDisplayFloorDb, m_heldPeakDb - decayDb);
         }
         if (m_fullScaleCount > 0 && nowMs >= m_fullScaleClearAtMs)
         {

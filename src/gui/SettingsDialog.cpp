@@ -9,6 +9,7 @@
 #include "IcomRC28SettingsPanel.h"
 #endif
 
+#include <algorithm>
 #include <QAbstractItemView>
 #include <QFont>
 #include <QHBoxLayout>
@@ -163,7 +164,7 @@ class SettingsNavigationDelegate : public QStyledItemDelegate
             const QString text = index.data(Qt::DisplayRole).toString();
             const int highlightWidth = itemOption.fontMetrics.horizontalAdvance(text) + 6;
             const QRect highlightRect(itemOption.rect.left(), itemOption.rect.top(),
-                                      qMin(highlightWidth, itemOption.rect.width()), itemOption.rect.height());
+                                      std::min(highlightWidth, itemOption.rect.width()), itemOption.rect.height());
             painter->fillRect(highlightRect, QColor(UiTheme::Color::AccentDark));
             itemOption.state.setFlag(QStyle::State_Selected, false);
             itemOption.state.setFlag(QStyle::State_HasFocus, false);

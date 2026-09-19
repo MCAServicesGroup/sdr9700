@@ -59,7 +59,7 @@ class Ax25Decoder
     void acceptBit(HdlcState& state, bool bit, QVector<Ax25Frame>& frames);
     void finishFrame(const QVector<bool>& rawBits, QVector<Ax25Frame>& frames);
     void acceptTone(TimingLane& lane, bool tone, QVector<Ax25Frame>& frames);
-    bool isDistinctCandidate(quint64* lastSampleIndex, bool* haveSample);
+    bool isDistinctCandidate(quint64* lastSampleIndex, bool* haveSample) const;
 
     int m_sampleRate{0};
     int m_samplesPerSymbol{0};

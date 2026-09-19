@@ -1,4 +1,6 @@
 #include "Commander.h"
+#include <cmath>
+#include <cstring>
 #include <QDebug>
 #include <QMetaType>
 #include <QSemaphore>
@@ -118,7 +120,7 @@ Commander::Commander(quint8 guid[GUIDLEN], RadioCommander* parent) : RadioComman
 {
     Q_ASSERT(guid != nullptr);
     qInfo(logRadio()).noquote() << "creating instance of Commander() with GUID";
-    memcpy(this->guid, guid, GUIDLEN);
+    std::memcpy(this->guid, guid, GUIDLEN);
     m_pendingCommandClock.start();
     m_scheduledCommandTimer = new QTimer(this);
     m_scheduledCommandTimer->setSingleShot(true);
@@ -729,7 +731,7 @@ void Commander::rememberPendingReply(Funcs func, uchar receiver)
     m_pendingReplies.append(PendingReply{func, receiver, now, now + lifetimeMs});
     m_correlationDiagnostics.pendingReplies = m_pendingReplies.size();
     m_correlationDiagnostics.pendingReplyHighWaterMark =
-        qMax(m_correlationDiagnostics.pendingReplyHighWaterMark, m_pendingReplies.size());
+        std::max(m_correlationDiagnostics.pendingReplyHighWaterMark, m_pendingReplies.size());
     if (m_pendingReplies.size() > kMaxPendingReplies)
     {
         const qsizetype dropped = m_pendingReplies.size() - kMaxPendingReplies;
@@ -1571,7 +1573,7 @@ Commander::ReplyParseResult Commander::parseLevelMeterReply(Funcs func, QVariant
             return ReplyParseResult::Malformed;
         }
         uchar level = bcdHexToUChar(payloadIn.at(0), payloadIn.at(1));
-        value.setValue<ushort>(round((level / 6.071) + 6));
+        value.setValue<ushort>(static_cast<ushort>(std::lround((level / 6.071) + 6)));
         return ReplyParseResult::Parsed;
     }
     case funcCwPitch:
@@ -1581,7 +1583,7 @@ Commander::ReplyParseResult Commander::parseLevelMeterReply(Funcs func, QVariant
             return ReplyParseResult::Malformed;
         }
         uchar level = bcdHexToUChar(payloadIn.at(0), payloadIn.at(1));
-        value.setValue<ushort>(round((((600.0 / 255.0) * level) + 300) / 5.0) * 5.0);
+        value.setValue<ushort>(static_cast<ushort>(std::lround((((600.0 / 255.0) * level) + 300) / 5.0) * 5.0));
         return ReplyParseResult::Parsed;
     }
     // CI-V group 15: meter readings.
@@ -2848,7 +2850,7 @@ void Commander::determineRadioCaps()
     }
 
     // Preserve the GUID reported by the selected radio.
-    memcpy(radioCaps.guid, this->guid, GUIDLEN);
+    std::memcpy(radioCaps.guid, this->guid, GUIDLEN);
 
     haveRadioCaps = true;
     queue->setRadioCaps(&radioCaps);
@@ -2935,7 +2937,7 @@ bool Commander::parseSpectrum(ScopeData& d, uchar receiver)
     // oversized retained ScopeData buffer.
     const auto appendScopePixels = [this, &d](int payloadOffset)
     {
-        const int remaining = qMax(0, static_cast<int>(radioCaps.spectLenMax) - d.data.size());
+        const int remaining = std::max(0, static_cast<int>(radioCaps.spectLenMax) - static_cast<int>(d.data.size()));
         if (remaining > 0 && payloadOffset < payloadIn.size())
         {
             d.data.append(payloadIn.mid(payloadOffset, remaining));
@@ -3164,7 +3166,7 @@ quint8 Commander::bcdHexToUChar(quint8 hundreds, quint8 tensunits)
     {
         qWarning(logRadio()).noquote() << "bcdHexToUChar: decoded value" << rtnVal << "exceeds quint8 range; clamping";
     }
-    return static_cast<quint8>(qMin(rtnVal, 255));
+    return static_cast<quint8>(std::min(rtnVal, 255));
 }
 
 QByteArray Commander::bcdEncodeInt(quint16 num)
@@ -3665,22 +3667,28 @@ void Commander::parseMemoryField(const MemParserFormat& format, const QByteArray
         memory.duplexOffsetB.Hz = parseFreqDataToInt(data);
         break;
     case 't':
-        memcpy(memory.UR, data.data(), qMin(int(sizeof memory.UR), data.size()));
+        std::memcpy(memory.UR, data.data(),
+                    std::min<std::size_t>(sizeof memory.UR, static_cast<std::size_t>(data.size())));
         break;
     case 'T':
-        memcpy(memory.URB, data.data(), qMin(int(sizeof memory.URB), data.size()));
+        std::memcpy(memory.URB, data.data(),
+                    std::min<std::size_t>(sizeof memory.URB, static_cast<std::size_t>(data.size())));
         break;
     case 'u':
-        memcpy(memory.R1, data.data(), qMin(int(sizeof memory.R1), data.size()));
+        std::memcpy(memory.R1, data.data(),
+                    std::min<std::size_t>(sizeof memory.R1, static_cast<std::size_t>(data.size())));
         break;
     case 'U':
-        memcpy(memory.R1B, data.data(), qMin(int(sizeof memory.R1B), data.size()));
+        std::memcpy(memory.R1B, data.data(),
+                    std::min<std::size_t>(sizeof memory.R1B, static_cast<std::size_t>(data.size())));
         break;
     case 'v':
-        memcpy(memory.R2, data.data(), qMin(int(sizeof memory.R2), data.size()));
+        std::memcpy(memory.R2, data.data(),
+                    std::min<std::size_t>(sizeof memory.R2, static_cast<std::size_t>(data.size())));
         break;
     case 'V':
-        memcpy(memory.R2B, data.data(), qMin(int(sizeof memory.R2B), data.size()));
+        std::memcpy(memory.R2B, data.data(),
+                    std::min<std::size_t>(sizeof memory.R2B, static_cast<std::size_t>(data.size())));
         break;
     case 'w': // Tuning step
         if (bool(data[0]))
@@ -3709,7 +3717,8 @@ void Commander::parseMemoryField(const MemParserFormat& format, const QByteArray
         {
             memory.scan = 0;
         }
-        memcpy(memory.name, data.data(), qMin(int(sizeof memory.name), data.size()));
+        std::memcpy(memory.name, data.data(),
+                    std::min<std::size_t>(sizeof memory.name, static_cast<std::size_t>(data.size())));
         break;
     case 'Z': // Mode-dependent extension block.
         for (const auto& m : radioCaps.modes)
@@ -3767,13 +3776,13 @@ void Commander::initializeMemoryForParsing(MemoryType& memory) const
     memory.duplexOffset = memory.frequency;
     memory.duplexOffsetB = memory.frequency;
     memory.scan = 0xfe;
-    memset(memory.UR, 0x0, sizeof(memory.UR));
-    memset(memory.URB, 0x0, sizeof(memory.URB));
-    memset(memory.R1, 0x0, sizeof(memory.R1));
-    memset(memory.R1B, 0x0, sizeof(memory.R1B));
-    memset(memory.R2, 0x0, sizeof(memory.R2));
-    memset(memory.R2B, 0x0, sizeof(memory.R2B));
-    memset(memory.name, 0x0, sizeof(memory.name));
+    std::memset(memory.UR, 0x0, sizeof(memory.UR));
+    std::memset(memory.URB, 0x0, sizeof(memory.URB));
+    std::memset(memory.R1, 0x0, sizeof(memory.R1));
+    std::memset(memory.R1B, 0x0, sizeof(memory.R1B));
+    std::memset(memory.R2, 0x0, sizeof(memory.R2));
+    std::memset(memory.R2B, 0x0, sizeof(memory.R2B));
+    std::memset(memory.name, 0x0, sizeof(memory.name));
 }
 
 bool Commander::parseMemory(QVector<MemParserFormat>* memParser, MemoryType* mem)
@@ -4057,14 +4066,13 @@ bool Commander::appendSetCommandValue(Funcs func, const QVariant& value, uchar r
         }
         else if (func == funcKeySpeed)
         {
-            ushort wpm = round((value.value<ushort>() - 6) * (6.071));
+            const ushort wpm = static_cast<ushort>(std::lround((value.value<ushort>() - 6) * 6.071));
             qDebug(logRadio()).noquote() << "Sending key speed orig:" << value.value<ushort>() << "sent:" << wpm;
             payload.append(bcdEncodeInt(wpm));
         }
         else if (func == funcCwPitch)
         {
-            ushort pitch = 0;
-            pitch = ceil((value.value<ushort>() - 300) * (255.0 / 600.0));
+            const ushort pitch = static_cast<ushort>(std::ceil((value.value<ushort>() - 300) * (255.0 / 600.0)));
             payload.append(bcdEncodeInt(pitch));
         }
         else
@@ -4344,9 +4352,9 @@ bool Commander::appendSetCommandValue(Funcs func, const QVariant& value, uchar r
             case 'V':
                 payload.append(QByteArray(mem.R2B).leftJustified(parse.len, ' ', true));
                 break;
-            case 'w':                                                          // Tuning step
+            case 'w':                                                              // Tuning step
                 payload.append(quint8(mem.tuningStep != 0 ? 1 : 0));
-                payload.append(bcdEncodeChar(qMax(uchar(1), mem.tuningStep))); // 0 is invalid.
+                payload.append(bcdEncodeChar(std::max(uchar(1), mem.tuningStep))); // 0 is invalid.
                 payload.append(bcdEncodeInt(mem.progTs));
                 break;
             case 'x': // Attenuator & Preamp

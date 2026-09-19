@@ -185,7 +185,7 @@ void SpectrumScopeDisplay::updateSpanComboGeometry()
     {
         return;
     }
-    const int x = qMax(kSpanComboMargin, width() - kSpanComboMargin - m_spanCombo->width());
+    const int x = std::max(kSpanComboMargin, width() - kSpanComboMargin - m_spanCombo->width());
     m_spanCombo->move(x, kSpanComboMargin);
     m_spanCombo->raise();
 }
@@ -219,15 +219,15 @@ void SpectrumScopeDisplay::updatePanScrollBar()
     const double minCenterMhz = panStartMhz + halfBandwidthMhz;
     const double maxCenterMhz = panEndMhz - halfBandwidthMhz;
     const bool canPan = maxCenterMhz > minCenterMhz;
-    const double centerMhz = qBound(qMin(minCenterMhz, maxCenterMhz), (visibleStartMhz + visibleEndMhz) / 2.0,
-                                    qMax(minCenterMhz, maxCenterMhz));
+    const double centerMhz = std::clamp((visibleStartMhz + visibleEndMhz) / 2.0, std::min(minCenterMhz, maxCenterMhz),
+                                        std::max(minCenterMhz, maxCenterMhz));
 
     const QSignalBlocker blocker(m_panScrollBar);
-    m_panScrollBar->setRange(scrollUnitForMhz(qMin(minCenterMhz, maxCenterMhz)),
-                             scrollUnitForMhz(qMax(minCenterMhz, maxCenterMhz)));
+    m_panScrollBar->setRange(scrollUnitForMhz(std::min(minCenterMhz, maxCenterMhz)),
+                             scrollUnitForMhz(std::max(minCenterMhz, maxCenterMhz)));
     const int pageStep = scrollUnitsForMhzDelta(bandwidthMhz);
     m_panScrollBar->setPageStep(pageStep);
-    m_panScrollBar->setSingleStep(qMax(1, pageStep / 100));
+    m_panScrollBar->setSingleStep(std::max(1, pageStep / 100));
     m_panScrollBar->setValue(scrollUnitForMhz(centerMhz));
     m_panScrollBar->setEnabled(!m_interactionLocked && canPan);
 }
@@ -239,17 +239,17 @@ void SpectrumScopeDisplay::updateChildGeometry()
         return;
     }
 
-    const int availablePlotHeight = qMax(0, height() - SpectrumScopeCanvas::scaleHeight() - panScrollBarHeight());
+    const int availablePlotHeight = std::max(0, height() - SpectrumScopeCanvas::scaleHeight() - panScrollBarHeight());
     const int spectrumHeight = availablePlotHeight / 2;
     const int spectrumScopeHeight = spectrumHeight + SpectrumScopeCanvas::scaleHeight();
     const int splitTop = spectrumScopeHeight;
     const int waterfallTop = splitTop + panScrollBarHeight();
-    const int waterfallHeight = qMax(0, height() - waterfallTop);
+    const int waterfallHeight = std::max(0, height() - waterfallTop);
     constexpr int plotLeft = 0;
 
     m_spectrumScopeCanvas->setGeometry(0, 0, width(), spectrumScopeHeight);
-    m_panScrollBar->setGeometry(plotLeft, splitTop, qMax(0, width() - plotLeft), panScrollBarHeight());
-    m_waterfallCanvas->setGeometry(plotLeft, waterfallTop, qMax(0, width() - plotLeft), waterfallHeight);
+    m_panScrollBar->setGeometry(plotLeft, splitTop, std::max(0, width() - plotLeft), panScrollBarHeight());
+    m_waterfallCanvas->setGeometry(plotLeft, waterfallTop, std::max(0, width() - plotLeft), waterfallHeight);
     m_waterfallController->setCanvasSize(m_waterfallCanvas->size());
     updateSpanComboGeometry();
 }

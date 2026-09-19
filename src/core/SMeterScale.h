@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <QtGlobal>
 #include <array>
 
@@ -34,7 +35,7 @@ inline int sMeterDisplayValue(int rawValue)
         {
             const SMeterScalePoint& lower = kSMeterScalePoints[index - 1];
             const double fraction = static_cast<double>(rawValue - lower.raw) / (upper.raw - lower.raw);
-            return qRound(lower.display + fraction * (upper.display - lower.display));
+            return static_cast<int>(std::lround(lower.display + fraction * (upper.display - lower.display)));
         }
     }
     return kSMeterScalePoints.back().display;

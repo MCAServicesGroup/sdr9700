@@ -9,6 +9,9 @@
 #include "models/VfoModel.h"
 #include "models/RadioState.h"
 
+#include <utility>
+#include <algorithm>
+#include <cmath>
 #include <QAction>
 #include <QComboBox>
 #include <QHBoxLayout>
@@ -160,7 +163,7 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                     switch (func)
                     {
                     case funcAGCTimeConstant:
-                        m_agcMode = qBound(0, value.toInt(), 3);
+                        m_agcMode = std::clamp(value.toInt(), 0, 3);
                         updateReceiverControlDisplay();
                         return;
                     case funcAttenuator:
@@ -172,7 +175,7 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                         updateReceiverControlDisplay();
                         return;
                     case funcNBLevel:
-                        m_nbLevel = qBound(1, qRound(value.toInt() * 9.0 / 255.0) + 1, 10);
+                        m_nbLevel = std::clamp(static_cast<int>(std::lround(value.toInt() * 9.0 / 255.0)) + 1, 1, 10);
                         m_nbLevelReceived = true;
                         updateReceiverControlDisplay();
                         return;
@@ -191,25 +194,25 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
                         updateReceiverControlDisplay();
                         return;
                     case funcNRLevel:
-                        m_nrLevel = qBound(1, qRound(value.toInt() * 14.0 / 255.0) + 1, 15);
+                        m_nrLevel = std::clamp(static_cast<int>(std::lround(value.toInt() * 14.0 / 255.0)) + 1, 1, 15);
                         m_nrLevelReceived = true;
                         updateReceiverControlDisplay();
                         return;
                     case funcPreamp:
-                        m_preampLevel = qBound(0, value.toInt(), 3);
+                        m_preampLevel = std::clamp(value.toInt(), 0, 3);
                         updateReceiverControlDisplay();
                         return;
                     case funcRFPower:
                         if (m_vfo == Vfo::Main)
                         {
-                            m_txPower = qBound(0, value.toInt(), 255);
+                            m_txPower = std::clamp(value.toInt(), 0, 255);
                             updateReceiverControlDisplay();
                         }
                         return;
                     case funcSMeter:
                         if (stateReady())
                         {
-                            m_display->setSMeterValue(qBound(0, value.toInt(), 255));
+                            m_display->setSMeterValue(std::clamp(value.toInt(), 0, 255));
                         }
                         return;
                     default:
@@ -482,7 +485,7 @@ void VfoController::setTransmitting(bool transmitting)
 
 void VfoController::setLanModLevel(int value)
 {
-    m_lanModLevel = qBound(0, value, 255);
+    m_lanModLevel = std::clamp(value, 0, 255);
     if (m_vfo == Vfo::Main)
     {
         m_display->setReceiverControlState(
@@ -498,7 +501,7 @@ void VfoController::requestReceiverLevel(Funcs func, int level)
         return;
     }
 
-    const int boundedLevel = qBound(0, level, 255);
+    const int boundedLevel = std::clamp(level, 0, 255);
     if (func == funcRfGain)
     {
         m_pendingRfGain = boundedLevel;
@@ -520,7 +523,7 @@ void VfoController::applyReceiverLevelConfirmation(Funcs func, const QVariant& v
         return;
     }
 
-    const int level = qBound(0, value.toInt(), 255);
+    const int level = std::clamp(value.toInt(), 0, 255);
     std::optional<int>& pending = func == funcRfGain ? m_pendingRfGain : m_pendingSquelch;
     const char* const control = func == funcRfGain ? "RFG" : "SQL";
     if (pending.has_value() && level != *pending)
@@ -1077,9 +1080,9 @@ void VfoController::showReceiverControlMenu(const QString& control)
             return;
         }
         bool firstMode = true;
-        for (const auto& item : {qMakePair(QStringLiteral("FAST"), QStringLiteral("fast")),
-                                 qMakePair(QStringLiteral("MID"), QStringLiteral("mid")),
-                                 qMakePair(QStringLiteral("SLOW"), QStringLiteral("slow"))})
+        for (const auto& item : {std::pair{QStringLiteral("FAST"), QStringLiteral("fast")},
+                                 std::pair{QStringLiteral("MID"), QStringLiteral("mid")},
+                                 std::pair{QStringLiteral("SLOW"), QStringLiteral("slow")}})
         {
             if (!firstMode)
             {

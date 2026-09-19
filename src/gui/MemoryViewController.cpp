@@ -11,6 +11,7 @@
 #include "UiTheme.h"
 #include "UtilityWindow.h"
 
+#include <algorithm>
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QGroupBox>
@@ -364,8 +365,8 @@ void MemoryViewController::updateTableInteraction()
 void MemoryViewController::setProgress(const QString& label, int value, int maximum)
 {
     m_progressLabel = label;
-    m_progressValue = qBound(0, value, maximum);
-    m_progressMaximum = qMax(0, maximum);
+    m_progressValue = std::clamp(value, 0, maximum);
+    m_progressMaximum = std::max(0, maximum);
     if (m_owner->m_window->m_memoryCountLabel)
     {
         m_owner->m_window->m_memoryCountLabel->setText(
