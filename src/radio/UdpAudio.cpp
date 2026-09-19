@@ -300,6 +300,13 @@ void UdpAudio::getRxLevels(quint16 amplitude, quint16 amplitudeRMS, quint16 late
 void UdpAudio::getTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency,
                           quint16 measuredLatency, bool under, bool over)
 {
+    // A device replacement can leave an already-posted signal from the old
+    // capture worker in this event queue. Do not let that stale sample make a
+    // restarted meter valid before the replacement produces its first block.
+    if (sender() != txaudio)
+    {
+        return;
+    }
     emit haveTxMeter(block, configuredLatency, measuredLatency, under, over);
 }
 

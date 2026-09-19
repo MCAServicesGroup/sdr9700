@@ -56,4 +56,5 @@ class MetersDialog : public sdr9700::ui::UtilityWindow
     MeterRow m_currentMeter;
     MeterRow m_txAudioAverageMeter;
     MeterRow m_txAudioPeakMeter;
+    QLabel* m_txAudioStateLabel{nullptr};
 };
