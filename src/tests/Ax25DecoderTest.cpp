@@ -93,6 +93,25 @@ QByteArray pcmForTones(const QVector<bool>& tones, int channels)
     }
     return pcm;
 }
+
+QByteArray opposingStereoPcmForTones(const QVector<bool>& tones)
+{
+    QByteArray pcm = pcmForTones(tones, 1);
+    QByteArray stereo;
+    stereo.reserve(pcm.size() * 2);
+    for (qsizetype offset = 0; offset + 1 < pcm.size(); offset += 2)
+    {
+        const quint8 low = static_cast<quint8>(pcm.at(offset));
+        const quint8 high = static_cast<quint8>(pcm.at(offset + 1));
+        const qint16 sample = static_cast<qint16>(low | (static_cast<quint16>(high) << 8));
+        const qint16 opposite = static_cast<qint16>(-sample);
+        stereo.append(pcm.at(offset));
+        stereo.append(pcm.at(offset + 1));
+        stereo.append(static_cast<char>(opposite & 0xff));
+        stereo.append(static_cast<char>((static_cast<quint16>(opposite) >> 8) & 0xff));
+    }
+    return stereo;
+}
 } // namespace
 
 class Ax25DecoderTest : public QObject
@@ -107,6 +126,7 @@ class Ax25DecoderTest : public QObject
     void preservesRepeatedDigipeaterState();
     void acceptsLegitimateRepeatedFrames();
     void decodesStereoAudio();
+    void decodesSelectedStereoReceiverWithoutMixing();
 };
 
 void Ax25DecoderTest::crcKnownCheck()
@@ -196,11 +216,30 @@ void Ax25DecoderTest::decodesStereoAudio()
     frame.append(static_cast<char>(fcs >> 8));
 
     Ax25Decoder decoder;
-    const QVector<Ax25Frame> decoded = decoder.processPcm16(pcmForTones(nrziTones(hdlcBits(frame)), 2), 48000, 2);
+    const QVector<Ax25Frame> decoded = decoder.processPcm16(pcmForTones(nrziTones(hdlcBits(frame)), 2), 48000, 2, 0);
     QVERIFY(!decoded.isEmpty());
     QCOMPARE(decoded.first().payload, QStringLiteral("Audio test"));
     QVERIFY(decoder.stats().audioLevel > 0);
     QCOMPARE(decoder.stats().candidates, quint64(1));
+}
+
+void Ax25DecoderTest::decodesSelectedStereoReceiverWithoutMixing()
+{
+    QByteArray frame = encodedAddress("APRS", 0, false) + encodedAddress("N0CALL", 0, true);
+    frame.append(QByteArray::fromHex("03f0"));
+    frame.append("Selected receiver");
+    const quint16 fcs = Ax25Decoder::frameCheckSequence(frame);
+    frame.append(static_cast<char>(fcs & 0xff));
+    frame.append(static_cast<char>(fcs >> 8));
+    const QByteArray pcm = opposingStereoPcmForTones(nrziTones(hdlcBits(frame)));
+
+    for (const int receiverChannel : {0, 1})
+    {
+        Ax25Decoder decoder;
+        const QVector<Ax25Frame> decoded = decoder.processPcm16(pcm, 48000, 2, receiverChannel);
+        QVERIFY(!decoded.isEmpty());
+        QCOMPARE(decoded.first().payload, QStringLiteral("Selected receiver"));
+    }
 }
 
 QTEST_APPLESS_MAIN(Ax25DecoderTest)

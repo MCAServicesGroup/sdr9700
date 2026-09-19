@@ -77,7 +77,7 @@ class RadioModel : public QObject
     void networkQualityChanged(int rttMs);
     void sessionHeartbeat();
     void radioMemoryReceived(MemoryType memory);
-    void audioDataReady(const QByteArray& pcm, int sampleRate, int channelCount);
+    void audioDataReady(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel);
     void spectrumActivity();
 
   private slots:

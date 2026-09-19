@@ -178,5 +178,7 @@ class IRadioBackend : public QObject
 
     void txAudioMeterChanged(const sdr9700::audio::TxAudioMeterBlock& block);
 
-    void audioDataReady(const QByteArray& pcm, int sampleRate, int channelCount);
+    // Stereo LAN audio keeps MAIN and SUB independent. receiverChannel names
+    // the operator-selected path that radio-signal consumers should inspect.
+    void audioDataReady(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel);
 };
