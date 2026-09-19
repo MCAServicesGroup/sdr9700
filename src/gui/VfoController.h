@@ -29,6 +29,7 @@ class VfoController : public QObject
     void setUserInteractionEnabled(bool enabled);
     void setTuningInteractionEnabled(bool enabled);
     void setSelected(bool selected);
+    void setTransmitRequested(bool transmitting);
     void setTransmitting(bool transmitting);
     void setLanModLevel(int value);
     void captureExchangeableControlState();
@@ -120,6 +121,9 @@ class VfoController : public QObject
     ushort m_fallbackDtcsCode{23};
     bool m_xfcEnabled{false};
     bool m_compressorEnabled{false};
+    bool m_transmitRequested{false};
+    bool m_transmitting{false};
+    bool m_holdTransmitFrequencyDisplay{false};
     bool m_operatingEnabled{true};
     bool m_userInteractionEnabled{false};
     bool m_initialStatePublished{false};

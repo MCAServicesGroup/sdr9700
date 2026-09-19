@@ -75,6 +75,10 @@ class FakeRadioBackend : public IRadioBackend
     bool setPtt(bool value) override
     {
         ptt = value;
+        if (pttAccepted)
+        {
+            emit pttRequestAccepted(value);
+        }
         return pttAccepted;
     }
     void setTxPower(int value) override { txPower = value; }
@@ -253,6 +257,7 @@ class VfoBackendTest : public QObject
     void radioStateKeepsReceiverAndBandRecallIsolated();
     void radioStateInvalidatesLiveStateButKeepsSessionRecallSeparate();
     void vfoDisplayConsumesConfirmedRadioStateWithoutReceiverBleed();
+    void keepsTransmitFrequencyLabelStableAcrossRepeaterPtt();
     void filtersMenuKeepsControlColumnsAligned();
     void levelMenuUsesSameRoundedPercentageAsControl_data();
     void levelMenuUsesSameRoundedPercentageAsControl();
@@ -856,6 +861,56 @@ void VfoBackendTest::vfoDisplayConsumesConfirmedRadioStateWithoutReceiverBleed()
     emit backend.radioValueUpdated(funcNoiseReduction, true, 0);
     QCOMPARE(mainFiltersButton->text(), QStringLiteral("FILTERS"));
     QCOMPARE(mainFiltersButton->property("active"), QVariant(false));
+}
+
+void VfoBackendTest::keepsTransmitFrequencyLabelStableAcrossRepeaterPtt()
+{
+    FakeRadioBackend backend;
+    sdr9700::RadioState state(&backend);
+    QWidget parent;
+    VfoController controller(Vfo::Main, &backend, &state, &parent);
+    VfoController subController(Vfo::Sub, &backend, &state, &parent);
+    VfoSelectionController selection(&backend, &controller, &subController, &parent);
+    auto* transmitFrequency = controller.display()->findChild<QLabel*>(QStringLiteral("vfoTransmitFrequency"));
+    QVERIFY(transmitFrequency != nullptr);
+
+    Frequency frequency;
+    frequency.Hz = 147260000;
+    ModeInfo mode;
+    mode.mk = modeFM;
+    mode.name = QStringLiteral("FM");
+    mode.filter = 1;
+    Frequency offset;
+    offset.Hz = 600000;
+    emit backend.radioValueConfirmed(funcFreqGet, QVariant::fromValue(frequency), 0);
+    emit backend.radioValueConfirmed(funcModeGet, QVariant::fromValue(mode), 0);
+    emit backend.radioValueConfirmed(funcSplitStatus, QVariant::fromValue(dmDupPlus), 0);
+    emit backend.radioValueConfirmed(funcReadFreqOffset, QVariant::fromValue(offset), 0);
+    QTRY_COMPARE(transmitFrequency->text(), QStringLiteral("TX: 147.860.000"));
+
+    // The accepted request precedes both the shifted frequency and confirmed
+    // PTT-on readback in the physical-radio sequence.
+    QVERIFY(backend.setPtt(true));
+    frequency.Hz = 147860000;
+    emit backend.radioValueConfirmed(funcSelectedFreq, QVariant::fromValue(frequency), 0);
+    QCOMPARE(controller.display()->frequencyText(), QStringLiteral("147.860.000"));
+    QCOMPARE(transmitFrequency->text(), QStringLiteral("TX: 147.860.000"));
+
+    emit backend.pttChanged(true);
+    QVERIFY(backend.setPtt(false));
+    emit backend.pttChanged(false);
+    emit backend.radioValueConfirmed(funcReadFreqOffset, QVariant::fromValue(offset), 0);
+    QCOMPARE(transmitFrequency->text(), QStringLiteral("TX: 147.860.000"));
+
+    frequency.Hz = 147260000;
+    emit backend.radioValueConfirmed(funcSelectedFreq, QVariant::fromValue(frequency), 0);
+    QCOMPARE(transmitFrequency->text(), QStringLiteral("TX: 147.860.000"));
+
+    // The first confirmed receive frequency releases the hold so later tuning
+    // updates the derived transmit frequency normally.
+    frequency.Hz = 147270000;
+    emit backend.radioValueConfirmed(funcSelectedFreq, QVariant::fromValue(frequency), 0);
+    QCOMPARE(transmitFrequency->text(), QStringLiteral("TX: 147.870.000"));
 }
 
 void VfoBackendTest::radioStateKeepsReceiverAndBandRecallIsolated()

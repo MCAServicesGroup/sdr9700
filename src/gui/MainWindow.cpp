@@ -1919,6 +1919,7 @@ void MainWindow::onPttReleased()
     {
         return;
     }
+    qDebug(logRadio()).noquote() << "PTT UI button release event";
     m_pttActive = false;
     m_vfo->setPtt(false);
     if (m_pttBtn && !m_vfoPttReady)
