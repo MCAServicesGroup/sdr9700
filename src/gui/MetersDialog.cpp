@@ -53,6 +53,26 @@ const char* transmitAudioFill(sdr9700::audio::TxAudioMeterState state)
     return UiTheme::Color::TextStatusLabel;
 }
 
+QString transmitAudioStateText(sdr9700::audio::TxAudioMeterState state)
+{
+    switch (state)
+    {
+    case sdr9700::audio::TxAudioMeterState::Invalid:
+        return QStringLiteral("Unavailable");
+    case sdr9700::audio::TxAudioMeterState::NoActivity:
+        return QStringLiteral("No activity");
+    case sdr9700::audio::TxAudioMeterState::SignalPresent:
+        return QStringLiteral("Signal present");
+    case sdr9700::audio::TxAudioMeterState::RecommendedHeadroom:
+        return QStringLiteral("Recommended local headroom");
+    case sdr9700::audio::TxAudioMeterState::NearFullScale:
+        return QStringLiteral("Near full scale");
+    case sdr9700::audio::TxAudioMeterState::FullScaleDetected:
+        return QStringLiteral("Full-scale samples detected");
+    }
+    return QStringLiteral("Unavailable");
+}
+
 QString meterStyle(const QString& fill)
 {
     return QStringLiteral("QProgressBar {"
@@ -131,17 +151,30 @@ MetersDialog::MetersDialog(QWidget* parent) : sdr9700::ui::UtilityWindow(QString
     root->addWidget(content);
 
     auto* audioGrid = createMeterSection(contentLayout, QStringLiteral("Audio"), QStringLiteral("audioMeters"));
+    auto* localInputLabel = new QLabel(QStringLiteral("Local processed input"), this);
+    localInputLabel->setAccessibleName(QStringLiteral("Local processed input"));
+    localInputLabel->setStyleSheet(
+        QStringLiteral("QLabel { color: %1; font-size: 12px; }").arg(UiTheme::Color::TextBright));
+    audioGrid->addWidget(localInputLabel, 0, 0, 1, 3);
     m_txAudioAverageMeter = addMeterRow(
-        audioGrid, 0, QStringLiteral("Audio Average"),
+        audioGrid, 1, QStringLiteral("Average"),
         QStringLiteral("Local processed input average level in dBFS, including before PTT. Recommended -24 to -12 "
                        "dBFS. This is a local recording level, not radio drive: use the ALC meter for transmit "
                        "drive on SSB."));
     m_txAudioPeakMeter = addMeterRow(
-        audioGrid, 1, QStringLiteral("Audio Peak"),
+        audioGrid, 2, QStringLiteral("Peak"),
         QStringLiteral("Local processed input peak level in dBFS, including before PTT. Recommended -12 to -3 dBFS; "
                        "-1 dBFS and above is near full scale. This is a local recording level, not radio drive."));
+    m_txAudioAverageMeter.bar->setAccessibleName(QStringLiteral("Local processed input average"));
+    m_txAudioPeakMeter.bar->setAccessibleName(QStringLiteral("Local processed input peak"));
+    m_txAudioStateLabel = new QLabel(this);
+    m_txAudioStateLabel->setObjectName(QStringLiteral("txAudioState"));
+    m_txAudioStateLabel->setAccessibleName(QStringLiteral("Local processed input state"));
+    m_txAudioStateLabel->setStyleSheet(
+        QStringLiteral("QLabel { color: %1; font-size: 12px; }").arg(UiTheme::Color::TextMuted));
+    audioGrid->addWidget(m_txAudioStateLabel, 3, 1, 1, 2);
     m_compressionMeter =
-        addMeterRow(audioGrid, 2, QStringLiteral("Compression"), QStringLiteral("Transmit compression"));
+        addMeterRow(audioGrid, 4, QStringLiteral("Compression"), QStringLiteral("Transmit compression"));
 
     auto* radioGrid = createMeterSection(contentLayout, QStringLiteral("Radio"), QStringLiteral("radioMeters"));
     m_currentMeter =
@@ -323,10 +356,10 @@ void MetersDialog::setTransmitAudioMeter(sdr9700::audio::TxAudioMeterState state
     // converter failure, or an audio-device restart. Digital silence is a real
     // measurement and reads at the floor instead.
     const QString averageText = invalid  ? QStringLiteral("--")
-                                : silent ? QStringLiteral("quiet")
+                                : silent ? QStringLiteral("No activity")
                                          : QStringLiteral("%1 dB").arg(rmsDb, 0, 'f', 1);
     QString peakText = invalid  ? QStringLiteral("--")
-                       : silent ? QStringLiteral("quiet")
+                       : silent ? QStringLiteral("No activity")
                                 : QStringLiteral("%1 dB").arg(peakDb, 0, 'f', 1);
     if (fullScaleCount > 0)
     {
@@ -335,6 +368,10 @@ void MetersDialog::setTransmitAudioMeter(sdr9700::audio::TxAudioMeterState state
 
     setMeterRow(m_txAudioAverageMeter, invalid ? 0 : dbBarValue(rmsDb), averageText);
     setMeterRow(m_txAudioPeakMeter, invalid ? 0 : dbBarValue(peakDb), peakText);
+    if (m_txAudioStateLabel)
+    {
+        m_txAudioStateLabel->setText(transmitAudioStateText(state));
+    }
 
     const char* const averageFill =
         (state == sdr9700::audio::TxAudioMeterState::RecommendedHeadroom &&

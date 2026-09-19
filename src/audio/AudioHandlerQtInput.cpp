@@ -3,9 +3,10 @@
 bool AudioHandlerQtInput::openDevice() noexcept
 {
     audioInput = new QAudioSource(deviceInfo, nativeFormat, this);
-    connect(audioInput, &QAudioSource::stateChanged, this, &AudioHandlerQtInput::stateChanged);
+    connect(audioInput, &QAudioSource::stateChanged, this, &AudioHandlerQtInput::onInputStateChanged);
 
     connect(converter, &AudioConverter::converted, this, &AudioHandlerQtInput::onConverted);
+    connect(converter, &AudioConverter::conversionFailed, this, &AudioHandlerQtInput::invalidateTransmitMeter);
 
     audioInput->setBufferSize(nativeFormat.bytesForDuration(setupData.latency * 1000));
 
@@ -117,6 +118,21 @@ void AudioHandlerQtInput::onConverted(const audioPacket& audio)
     // step, which cannot support a truthful dBFS display.
     emit haveTxMeter(audio.inputMeter, setupData.latency, static_cast<quint16>(latencyMs()), isUnderrun.load(),
                      isOverrun.load());
+}
+
+void AudioHandlerQtInput::onInputStateChanged(QAudio::State state)
+{
+    stateChanged(state);
+    if (state == QAudio::StoppedState && audioInput && audioInput->error() != QAudio::NoError &&
+        !disposed.load(std::memory_order_acquire))
+    {
+        invalidateTransmitMeter();
+    }
+}
+
+void AudioHandlerQtInput::invalidateTransmitMeter()
+{
+    emit haveTxMeter({}, setupData.latency, static_cast<quint16>(latencyMs()), isUnderrun.load(), isOverrun.load());
 }
 
 QAudioFormat AudioHandlerQtInput::getNativeFormat()

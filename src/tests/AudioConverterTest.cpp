@@ -19,6 +19,7 @@ class AudioConverterTest : public QObject
     void rejectsConversionBeforeInitialization();
     void rejectsMalformedSampleData_data();
     void rejectsMalformedSampleData();
+    void processReportsRuntimeConversionFailure();
     void stereoInputAveragesBothChannels();
     void monoInputDuplicatesToBothChannels();
     void monoMixDuplicatesToStereoOnlyOutput();
@@ -31,6 +32,7 @@ class AudioConverterTest : public QObject
     void monitorsMicrophoneBeforePttWithoutQueuingTransmitAudio();
     void addsOneFrameOfOutputPrefillHeadroom();
     void measuresStereoOutputChannelsIndependently();
+    void measuresTransmitInputAfterGainAndChannelMix();
 };
 
 namespace
@@ -100,6 +102,25 @@ void AudioConverterTest::rejectsMalformedSampleData()
     packet.data = QByteArray(byteCount, '\0');
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(warningPattern));
     QVERIFY(!converter.convert(packet));
+}
+
+void AudioConverterTest::processReportsRuntimeConversionFailure()
+{
+    const QAudioFormat format = audioFormat(1, QAudioFormat::Int16);
+    AudioConverter converter;
+    QVERIFY(converter.init(format, LPCM, format, LPCM, 7, 4));
+    QSignalSpy failureSpy(&converter, &AudioConverter::conversionFailed);
+    QSignalSpy completedSpy(&converter, &AudioConverter::conversionCycleFinished);
+    QSignalSpy convertedSpy(&converter, &AudioConverter::converted);
+
+    audioPacket packet;
+    packet.data = QByteArray(1, '\0');
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("Dropping malformed Int16 audio packet.*")));
+    converter.process(packet);
+
+    QCOMPARE(failureSpy.count(), 1);
+    QCOMPARE(completedSpy.count(), 1);
+    QCOMPARE(convertedSpy.count(), 0);
 }
 
 void AudioConverterTest::stereoInputAveragesBothChannels()
@@ -332,6 +353,38 @@ void AudioConverterTest::measuresStereoOutputChannelsIndependently()
     QVERIFY(peaks.channel1 > 0.03F);
     QVERIFY(peaks.channel1 < 0.031F);
     QVERIFY(!sdr9700::audio::stereoChannelPeaks(QByteArray(3, '\0'), QAudioFormat::Int16).valid);
+}
+
+void AudioConverterTest::measuresTransmitInputAfterGainAndChannelMix()
+{
+    const QAudioFormat input = audioFormat(2, QAudioFormat::Int16);
+    const QAudioFormat output = audioFormat(1, QAudioFormat::Int16);
+    AudioConverter converter;
+    QVERIFY(converter.init(input, LPCM, output, LPCM, 7, 4, false, true));
+
+    audioPacket converted;
+    connect(&converter, &AudioConverter::converted, this,
+            [&converted](const audioPacket& result) { converted = result; });
+
+    const qint16 cancellingSamples[] = {16000, -16000, -8000, 8000};
+    audioPacket cancellingPacket;
+    cancellingPacket.volume = 0.5;
+    cancellingPacket.data = QByteArray(reinterpret_cast<const char*>(cancellingSamples), sizeof(cancellingSamples));
+    QVERIFY(converter.convert(cancellingPacket));
+    QVERIFY(converted.inputMeter.valid);
+    QCOMPARE(converted.inputMeter.sampleCount, 2U);
+    QCOMPARE(converted.inputMeter.peak, 0.0F);
+    QCOMPARE(converted.inputMeter.sumSquares, 0.0);
+
+    const qint16 matchingSamples[] = {16384, 16384, -16384, -16384};
+    audioPacket matchingPacket;
+    matchingPacket.volume = 0.5;
+    matchingPacket.data = QByteArray(reinterpret_cast<const char*>(matchingSamples), sizeof(matchingSamples));
+    QVERIFY(converter.convert(matchingPacket));
+    QVERIFY(converted.inputMeter.valid);
+    QCOMPARE(converted.inputMeter.sampleCount, 2U);
+    QVERIFY(qAbs(converted.inputMeter.peak - 0.25F) < 0.0001F);
+    QVERIFY(qAbs(converted.inputMeter.sumSquares - 0.125) < 0.0001);
 }
 
 QTEST_GUILESS_MAIN(AudioConverterTest)

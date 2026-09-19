@@ -41,6 +41,7 @@ class OfflinePoliciesTest : public QObject
     void requiresConsecutiveHighSwrReadings();
     void resetsTransmitSafetyWhenNotTransmitting();
     void convertsMagnitudeToBoundedDbfs();
+    void pinsTransmitMeterContractConstants();
     void aggregatesTransmitMeterBlocksByEnergy();
     void holdsTransmitMeterActivityAcrossSpeechGaps();
     void holdsAndDecaysTransmitMeterPeak();
@@ -582,6 +583,25 @@ void OfflinePoliciesTest::convertsMagnitudeToBoundedDbfs()
     // Post-mix samples are not clamped to unity, but the nominal scale is not
     // extended above 0 dBFS.
     QCOMPARE(dbfsFromMagnitude(2.0), kMeterDisplayCeilingDb);
+}
+
+void OfflinePoliciesTest::pinsTransmitMeterContractConstants()
+{
+    using namespace sdr9700::audio;
+    QCOMPARE(kFullScaleMagnitude, 1.0F);
+    QCOMPARE(kMeterDisplayFloorDb, -60.0);
+    QCOMPARE(kMeterDisplayCeilingDb, 0.0);
+    QCOMPARE(kHeadroomRmsMinDb, -24.0);
+    QCOMPARE(kHeadroomRmsMaxDb, -12.0);
+    QCOMPARE(kHeadroomPeakMinDb, -12.0);
+    QCOMPARE(kHeadroomPeakMaxDb, -3.0);
+    QCOMPARE(kNearFullScaleDb, -1.0);
+    QCOMPARE(kActivityOnDb, -50.0);
+    QCOMPARE(kActivityOffDb, -55.0);
+    QCOMPARE(kActivityOffHoldMs, 1500);
+    QCOMPARE(kPeakHoldMs, 1000);
+    QCOMPARE(kPeakDecayDbPerSec, 20.0);
+    QCOMPARE(kFullScaleCountHoldMs, 3000);
 }
 
 void OfflinePoliciesTest::aggregatesTransmitMeterBlocksByEnergy()
