@@ -3,6 +3,8 @@
 #include "SettingsPanelStyle.h"
 #include "UiTheme.h"
 
+#include <algorithm>
+#include <cmath>
 #include <QFontDatabase>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -30,8 +32,10 @@ constexpr double kCurrentMeterMax = 20.0;
 int dbBarValue(double db)
 {
     constexpr double kRangeDb = sdr9700::audio::kMeterDisplayCeilingDb - sdr9700::audio::kMeterDisplayFloorDb;
-    const double bounded = qBound(sdr9700::audio::kMeterDisplayFloorDb, db, sdr9700::audio::kMeterDisplayCeilingDb);
-    return qBound(0, qRound((bounded - sdr9700::audio::kMeterDisplayFloorDb) / kRangeDb * kMeterScale), kMeterScale);
+    const double bounded = std::clamp(db, sdr9700::audio::kMeterDisplayFloorDb, sdr9700::audio::kMeterDisplayCeilingDb);
+    return std::clamp(
+        static_cast<int>(std::lround((bounded - sdr9700::audio::kMeterDisplayFloorDb) / kRangeDb * kMeterScale)), 0,
+        kMeterScale);
 }
 
 const char* transmitAudioFill(sdr9700::audio::TxAudioMeterState state)
@@ -92,22 +96,22 @@ int scaledValue(double value, double maximum)
     {
         return 0;
     }
-    return qBound(0, qRound(value / maximum * kMeterScale), kMeterScale);
+    return std::clamp(static_cast<int>(std::lround(value / maximum * kMeterScale)), 0, kMeterScale);
 }
 
 QString sMeterText(int value)
 {
-    const int bounded = qBound(0, value, kSMeterMax);
+    const int bounded = std::clamp(value, 0, kSMeterMax);
     if (bounded <= kS9MeterValue)
     {
-        const int sUnits = qBound(0, qRound(static_cast<double>(bounded) / kS9MeterValue * 9.0), 9);
+        const int sUnits =
+            std::clamp(static_cast<int>(std::lround(static_cast<double>(bounded) / kS9MeterValue * 9.0)), 0, 9);
         return QStringLiteral("S%1").arg(sUnits);
     }
 
-    const int plusDb = qBound(
-        0,
-        qRound(static_cast<double>(bounded - kS9MeterValue) / static_cast<double>(kSMeterMax - kS9MeterValue) * 60.0),
-        60);
+    const int plusDb = std::clamp(static_cast<int>(std::lround(static_cast<double>(bounded - kS9MeterValue) /
+                                                               static_cast<double>(kSMeterMax - kS9MeterValue) * 60.0)),
+                                  0, 60);
     return QStringLiteral("S9+%1").arg(plusDb);
 }
 
@@ -200,7 +204,7 @@ void MetersDialog::setMeterRow(const MeterRow& row, int value, const QString& te
 {
     if (row.bar)
     {
-        row.bar->setValue(qBound(0, value, kMeterScale));
+        row.bar->setValue(std::clamp(value, 0, kMeterScale));
     }
     if (row.valueLabel)
     {
@@ -246,7 +250,7 @@ void MetersDialog::setSMeter(int value)
 
 void MetersDialog::setPowerMeter(double watts)
 {
-    const double bounded = qBound(0.0, watts, kPowerMeterMaxWatts);
+    const double bounded = std::clamp(watts, 0.0, kPowerMeterMaxWatts);
     setMeterRow(m_powerMeter, scaledValue(bounded, kPowerMeterMaxWatts),
                 QStringLiteral("%1 W").arg(bounded, 0, 'f', 1));
 }
@@ -258,7 +262,7 @@ void MetersDialog::clearPowerMeter()
 
 void MetersDialog::setSwr(double swr)
 {
-    const double bounded = qBound(kSwrMeterMin, swr, kSwrMeterMax);
+    const double bounded = std::clamp(swr, kSwrMeterMin, kSwrMeterMax);
     setMeterRow(m_swrMeter, scaledValue(bounded - kSwrMeterMin, kSwrMeterMax - kSwrMeterMin),
                 QStringLiteral("%1").arg(bounded, 0, 'f', 2));
 }
@@ -270,7 +274,7 @@ void MetersDialog::clearSwr()
 
 void MetersDialog::setAlc(double alc)
 {
-    const double bounded = qBound(0.0, alc, kAlcMeterMax);
+    const double bounded = std::clamp(alc, 0.0, kAlcMeterMax);
     setMeterRow(m_alcMeter, scaledValue(bounded, kAlcMeterMax), QStringLiteral("%1").arg(bounded, 0, 'f', 2));
 }
 
@@ -281,7 +285,7 @@ void MetersDialog::clearAlc()
 
 void MetersDialog::setCompressionMeter(double db)
 {
-    const double bounded = qBound(0.0, db, kCompressionMeterMaxDb);
+    const double bounded = std::clamp(db, 0.0, kCompressionMeterMaxDb);
     setMeterRow(m_compressionMeter, scaledValue(bounded, kCompressionMeterMaxDb),
                 QStringLiteral("%1 dB").arg(bounded, 0, 'f', 1));
 }
@@ -293,7 +297,7 @@ void MetersDialog::clearCompressionMeter()
 
 void MetersDialog::setVoltageMeter(double volts)
 {
-    const double bounded = qBound(0.0, volts, kVoltageMeterMax);
+    const double bounded = std::clamp(volts, 0.0, kVoltageMeterMax);
     setMeterRow(m_voltageMeter, scaledValue(bounded, kVoltageMeterMax), QStringLiteral("%1 V").arg(bounded, 0, 'f', 1));
 }
 
@@ -304,7 +308,7 @@ void MetersDialog::clearVoltageMeter()
 
 void MetersDialog::setCurrentMeter(double amps)
 {
-    const double bounded = qBound(0.0, amps, kCurrentMeterMax);
+    const double bounded = std::clamp(amps, 0.0, kCurrentMeterMax);
     setMeterRow(m_currentMeter, scaledValue(bounded, kCurrentMeterMax), QStringLiteral("%1 A").arg(bounded, 0, 'f', 1));
 }
 

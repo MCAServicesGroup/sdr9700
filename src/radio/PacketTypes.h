@@ -2,6 +2,7 @@
 // backed by received datagrams, and outgoing packet instances are zeroed before
 // individual protocol fields are written.
 #pragma once
+#include <algorithm>
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QObject>
@@ -484,7 +485,7 @@ static_assert(sizeof(rtp_header) == 12);
 
 inline int boundedCapabilityRadioCount(int advertisedRadios, int availableRadios) noexcept
 {
-    return qMin(qMin(qMax(advertisedRadios, 0), qMax(availableRadios, 0)), MAX_CAPABILITY_RADIOS);
+    return std::min(std::min(std::max(advertisedRadios, 0), std::max(availableRadios, 0)), MAX_CAPABILITY_RADIOS);
 }
 
 template <typename Packet> std::optional<Packet> decodePacket(QByteArrayView bytes)

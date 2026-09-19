@@ -4,6 +4,7 @@
 #include "VfoSMeter.h"
 #include "UiTheme.h"
 
+#include <cmath>
 #include <QFocusEvent>
 #include <QImage>
 #include <QLabel>
@@ -266,9 +267,9 @@ void VfoDisplayTest::controllersKeepIndependentIdentityAndFrequency()
         mainController.display()->findChild<QPushButton*>(QStringLiteral("vfoBandButton"))->geometry().left() -
         txPowerButton->geometry().right() - 1;
     QVERIFY(identityToTxGap > 6);
-    QVERIFY(qAbs(txToModGap - identityToTxGap) <= 1);
+    QVERIFY(std::abs(txToModGap - identityToTxGap) <= 1);
     QCOMPARE(txPowerButton->geometry().left() - lanModButton->geometry().right() - 1, 6);
-    QVERIFY(qAbs(powerToBandGap - identityToTxGap) <= 1);
+    QVERIFY(std::abs(powerToBandGap - identityToTxGap) <= 1);
     QCOMPARE(
         modeButton->geometry().left() -
             mainController.display()->findChild<QPushButton*>(QStringLiteral("vfoBandButton"))->geometry().right() - 1,

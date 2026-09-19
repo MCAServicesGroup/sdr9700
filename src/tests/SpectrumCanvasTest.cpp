@@ -126,7 +126,7 @@ void SpectrumCanvasTest::emitsFrequencyForClickWithoutDrag()
     QSignalSpy clickSpy(&canvas, &SpectrumScopeCanvas::frequencyClicked);
     QTest::mouseClick(&canvas, Qt::LeftButton, Qt::NoModifier, QPoint(canvas.freqToX(146.0), 80));
     QCOMPARE(clickSpy.count(), 1);
-    QVERIFY(qAbs(clickSpy.takeFirst().at(0).toDouble() - 146.0) < 0.02);
+    QVERIFY(std::abs(clickSpy.takeFirst().at(0).toDouble() - 146.0) < 0.02);
 }
 
 void SpectrumCanvasTest::ignoresClicksOutsidePlotAndWhileLocked()
@@ -224,7 +224,7 @@ void SpectrumCanvasTest::keepsCachedProjectionWithinSubpixelTolerance()
         const double level = tenth / 10.0;
         const double exactProjection = std::pow(level / 160.0, kExponent) * kCeiling;
         const double exactY = kTopInset + (1.0 - exactProjection) * drawableHeight;
-        QVERIFY2(qAbs(canvas.levelToY(float(level), 0, kPlotHeight) - exactY) < 0.25,
+        QVERIFY2(std::abs(canvas.levelToY(float(level), 0, kPlotHeight) - exactY) < 0.25,
                  qPrintable(QStringLiteral("Projection drifted at level %1").arg(level)));
     }
 }
@@ -254,10 +254,10 @@ void SpectrumCanvasTest::keepsHorizontalGridDivisionsEven()
         gridRows.append(canvas.gridLevelToY(float(level), 0, kPlotHeight));
     }
 
-    const double firstGap = qAbs(gridRows[1] - gridRows[0]);
+    const double firstGap = std::abs(gridRows[1] - gridRows[0]);
     for (int index = 2; index < gridRows.size(); ++index)
     {
-        QVERIFY(qAbs(qAbs(gridRows[index] - gridRows[index - 1]) - firstGap) < 0.001);
+        QVERIFY(std::abs(std::abs(gridRows[index] - gridRows[index - 1]) - firstGap) < 0.001);
     }
 
     // Signal samples retain their independent calibrated transfer function.
@@ -372,10 +372,10 @@ void SpectrumCanvasTest::colorsTraceBySignalIntensity()
         QColor strongest;
         int strongestChannel = -1;
         const int x = rendered.width() / 3;
-        for (int y = qMax(0, expectedRow - 3); y <= qMin(rendered.height() - 1, expectedRow + 3); ++y)
+        for (int y = std::max(0, expectedRow - 3); y <= std::min(rendered.height() - 1, expectedRow + 3); ++y)
         {
             const QColor candidate = rendered.pixelColor(x, y);
-            const int channel = qMax(candidate.red(), qMax(candidate.green(), candidate.blue()));
+            const int channel = std::max(candidate.red(), std::max(candidate.green(), candidate.blue()));
             if (channel > strongestChannel)
             {
                 strongest = candidate;

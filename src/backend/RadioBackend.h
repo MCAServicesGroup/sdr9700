@@ -4,6 +4,7 @@
 #include "Types.h"
 #include "UdpBase.h"
 #include "AudioConverter.h"
+#include <utility>
 #include <QAudioDevice>
 #include <QElapsedTimer>
 #include <QThread>

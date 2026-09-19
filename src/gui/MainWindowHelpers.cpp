@@ -1,5 +1,6 @@
 #include "MainWindowHelpers.h"
 
+#include <algorithm>
 #include <QFontMetrics>
 #include <QPainter>
 #include <QStringList>
@@ -74,7 +75,7 @@ void TwoLineButton::paintEvent(QPaintEvent* event)
     const QFontMetrics secondaryMetrics(secondaryFont);
     constexpr int kLineSpacing = 1;
     const int textHeight = primaryMetrics.height() + kLineSpacing + secondaryMetrics.height();
-    const int textTop = content.top() + qMax(0, (content.height() - textHeight) / 2);
+    const int textTop = content.top() + std::max(0, (content.height() - textHeight) / 2);
     const QRect primaryRect(content.left(), textTop, content.width(), primaryMetrics.height());
     const QRect secondaryRect(content.left(), primaryRect.bottom() + 1 + kLineSpacing, content.width(),
                               secondaryMetrics.height());
@@ -153,12 +154,11 @@ QColor colorSetting(const char* key, const QColor& defaultColor)
 
 int spectrumScopeGridDensitySetting()
 {
-    return qBound(
-        0,
+    return std::clamp(
         AppSettings::instance()
             .value(QString::fromLatin1(kSpectrumScopeGridDensitySettingsKey), kDefaultSpectrumScopeGridDensity)
             .toInt(),
-        2);
+        0, 2);
 }
 
 bool availableScreenContains(const QRect& rect)
@@ -189,10 +189,10 @@ QRect availableGeometryFor(const QRect& rect)
 QRect centeredRectInAvailableGeometry(QSize size, const QRect& available)
 {
     const int targetWidth = available.width() >= UiTheme::Size::MainWindowMinWidth
-                                ? qBound(UiTheme::Size::MainWindowMinWidth, size.width(), available.width())
+                                ? std::clamp(size.width(), UiTheme::Size::MainWindowMinWidth, available.width())
                                 : available.width();
     const int targetHeight = available.height() >= UiTheme::Size::MainWindowMinHeight
-                                 ? qBound(UiTheme::Size::MainWindowMinHeight, size.height(), available.height())
+                                 ? std::clamp(size.height(), UiTheme::Size::MainWindowMinHeight, available.height())
                                  : available.height();
     size = QSize(targetWidth, targetHeight);
 
@@ -203,7 +203,7 @@ QRect centeredRectInAvailableGeometry(QSize size, const QRect& available)
 
 int appVolumeSettingValue()
 {
-    return qBound(0, AppSettings::instance().value(QStringLiteral("volumeLevel"), 128).toInt(), 255);
+    return std::clamp(AppSettings::instance().value(QStringLiteral("volumeLevel"), 128).toInt(), 0, 255);
 }
 
 QString bandLabelForHz(quint64 hz)

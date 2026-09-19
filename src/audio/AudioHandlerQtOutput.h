@@ -1,6 +1,8 @@
 #pragma once
 #include "AudioHandlerBase.h"
 
+#include <algorithm>
+
 namespace sdr9700::audio
 {
 struct StereoChannelPeaks
@@ -15,19 +17,19 @@ constexpr int kOutputBufferCapacityHeadroomMs = 40;
 
 inline int outputBufferDurationMs(int configuredLatencyMs)
 {
-    return qMax(0, configuredLatencyMs) + kOutputBufferCapacityHeadroomMs;
+    return std::max(0, configuredLatencyMs) + kOutputBufferCapacityHeadroomMs;
 }
 
 inline int outputPrefillBytes(const QAudioFormat& format, int bufferSize, int configuredLatencyMs)
 {
-    const int boundedBufferSize = qMax(0, bufferSize);
-    const int boundedLatencyMs = qMax(0, configuredLatencyMs);
-    const int prefillDurationMs = qMin(boundedLatencyMs, boundedLatencyMs / 2 + kOutputPrefillHeadroomMs);
+    const int boundedBufferSize = std::max(0, bufferSize);
+    const int boundedLatencyMs = std::max(0, configuredLatencyMs);
+    const int prefillDurationMs = std::min(boundedLatencyMs, boundedLatencyMs / 2 + kOutputPrefillHeadroomMs);
     const qint64 targetBytes = format.bytesForDuration(prefillDurationMs * 1000LL);
     const qint64 reservedBytes = format.bytesForDuration(kOutputPrefillHeadroomMs * 1000LL);
-    const int bytesPerFrame = qMax(1, format.bytesPerFrame());
-    const qint64 availablePrefillBytes = qMax<qint64>(0, boundedBufferSize - reservedBytes);
-    const int boundedTargetBytes = static_cast<int>(qMin(availablePrefillBytes, qMax<qint64>(0, targetBytes)));
+    const int bytesPerFrame = std::max(1, format.bytesPerFrame());
+    const qint64 availablePrefillBytes = std::max<qint64>(0, boundedBufferSize - reservedBytes);
+    const int boundedTargetBytes = static_cast<int>(std::min(availablePrefillBytes, std::max<qint64>(0, targetBytes)));
     return boundedTargetBytes - boundedTargetBytes % bytesPerFrame;
 }
 

@@ -88,7 +88,8 @@ class SpectrumToolbar : public QWidget
             std::accumulate(m_leadingControls.cbegin(), m_leadingControls.cend(), 0,
                             [](int width, const QWidget* control) { return width + (control ? control->width() : 0); });
         const int availableWidth = x - bounds.x();
-        const int gap = qMax(0, (availableWidth - controlsWidth) / (m_leadingControls.size() + 1));
+        const int gap =
+            std::max(0, (availableWidth - controlsWidth) / (static_cast<int>(m_leadingControls.size()) + 1));
         int controlX = bounds.x() + gap;
         for (QWidget* control : m_leadingControls)
         {
@@ -169,7 +170,7 @@ void SpectrumScopeController::buildSpectrumScope(QVBoxLayout* vbox)
                 {
                     return;
                 }
-                m_window->m_lanModValue = qBound(0, value, 255);
+                m_window->m_lanModValue = std::clamp(value, 0, 255);
                 AppSettings::instance().setValueDeferred(QStringLiteral("LANModLevel"), m_window->m_lanModValue);
                 m_window->m_model->setLanModLevel(m_window->m_lanModValue);
             });

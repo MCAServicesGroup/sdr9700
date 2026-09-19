@@ -1,4 +1,5 @@
 #include "RadioCommander.h"
+#include <cstring>
 #include <QDebug>
 
 #include "RadioIdentities.h"
@@ -16,7 +17,7 @@ RadioCommander::RadioCommander(quint8 guid[GUIDLEN], QObject* parent) : QObject(
 {
 
     qInfo(logRadio()).noquote() << "creating instance of RadioCommander(guid)";
-    memcpy(this->guid, guid, GUIDLEN);
+    std::memcpy(this->guid, guid, GUIDLEN);
     queue = CachingQueue::getInstance();
 }
 

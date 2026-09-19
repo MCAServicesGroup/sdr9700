@@ -3,6 +3,7 @@
 #include "AppSettings.h"
 #include "SettingsPanelStyle.h"
 
+#include <algorithm>
 #include <QAudioDevice>
 #include <QComboBox>
 #include <QFormLayout>
@@ -53,7 +54,7 @@ AudioDevicesSettingsPanel::AudioDevicesSettingsPanel(QWidget* parent) : QWidget(
     m_outputChannelsCombo->addItem(QStringLiteral("Stereo (MAIN left, SUB right)"), 2);
 
     const QByteArray savedOut = QByteArray::fromBase64(settings.value("audioOutputDeviceID").toString().toLatin1());
-    const int savedOutputChannels = qBound(1, settings.value("audioOutputChannels", 2).toInt(), 2);
+    const int savedOutputChannels = std::clamp(settings.value("audioOutputChannels", 2).toInt(), 1, 2);
     repopulateDeviceCombo(m_outputCombo, QMediaDevices::audioOutputs(), savedOut, QMediaDevices::defaultAudioOutput());
     if (const int idx = m_outputChannelsCombo->findData(savedOutputChannels); idx >= 0)
     {
@@ -115,7 +116,7 @@ AudioDevicesSettingsPanel::AudioDevicesSettingsPanel(QWidget* parent) : QWidget(
             [this](int)
             {
                 AppSettings::instance().setValue("audioOutputChannels",
-                                                 qBound(1, m_outputChannelsCombo->currentData().toInt(), 2));
+                                                 std::clamp(m_outputChannelsCombo->currentData().toInt(), 1, 2));
                 updateCodecPendingState();
                 emit audioSettingsChanged();
             });
@@ -127,7 +128,7 @@ AudioDevicesSettingsPanel::AudioDevicesSettingsPanel(QWidget* parent) : QWidget(
 void AudioDevicesSettingsPanel::setAudioConnectionState(bool connected, int activeOutputChannels)
 {
     m_audioConnected = connected;
-    m_activeOutputChannels = qBound(1, activeOutputChannels, 2);
+    m_activeOutputChannels = std::clamp(activeOutputChannels, 1, 2);
     updateCodecPendingState();
 }
 

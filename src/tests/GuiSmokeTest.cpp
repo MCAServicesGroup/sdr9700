@@ -5,6 +5,7 @@
 #include "AppSettings.h"
 #include "MainWindowHelpers.h"
 
+#include <cmath>
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QLabel>
@@ -302,7 +303,7 @@ void GuiSmokeTest::codecNoticeKeepsLayoutStable()
     QVERIFY(hint != nullptr);
     QCOMPARE(comboGeometry.top() - geometryInDialog(outputDevice).bottom() - 1, 13);
     const QRect labelGeometry = geometryInDialog(codecLabel);
-    QVERIFY2(qAbs(labelGeometry.center().y() - comboGeometry.center().y()) <= 1,
+    QVERIFY2(std::abs(labelGeometry.center().y() - comboGeometry.center().y()) <= 1,
              "Codec label must be vertically centered on its combo box, not on the notice area");
     const QRect fieldGeometry = geometryInDialog(channels->parentWidget());
     const QRect windowGeometry = dialog.geometry();

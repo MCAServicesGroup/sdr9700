@@ -1,5 +1,6 @@
 #include "MeterController.h"
 
+#include <algorithm>
 #include <QTimer>
 #include <QtGlobal>
 
@@ -66,14 +67,14 @@ void MeterController::resetReceiveMeter()
 
 void MeterController::setSMeter(int value)
 {
-    m_snapshot.sMeter = qBound(0, value, 255);
+    m_snapshot.sMeter = std::clamp(value, 0, 255);
     m_snapshot.sMeterValid = true;
     scheduleFlush();
 }
 
 void MeterController::setPowerMeter(double watts)
 {
-    m_snapshot.powerWatts = qBound(0.0, watts, 120.0);
+    m_snapshot.powerWatts = std::clamp(watts, 0.0, 120.0);
     m_snapshot.powerValid = true;
     if (m_snapshot.powerWatts == 0.0)
     {
@@ -85,35 +86,35 @@ void MeterController::setPowerMeter(double watts)
 
 void MeterController::setSwr(double swr)
 {
-    m_snapshot.swr = qBound(1.0, swr, 6.0);
+    m_snapshot.swr = std::clamp(swr, 1.0, 6.0);
     m_snapshot.swrValid = m_snapshot.powerValid && m_snapshot.powerWatts > 0.0;
     scheduleFlush();
 }
 
 void MeterController::setAlc(double alc)
 {
-    m_snapshot.alc = qBound(0.0, alc, 2.0);
+    m_snapshot.alc = std::clamp(alc, 0.0, 2.0);
     m_snapshot.alcValid = true;
     scheduleFlush();
 }
 
 void MeterController::setCompressionMeter(double db)
 {
-    m_snapshot.compressionDb = qBound(0.0, db, 25.5);
+    m_snapshot.compressionDb = std::clamp(db, 0.0, 25.5);
     m_snapshot.compressionValid = true;
     scheduleFlush();
 }
 
 void MeterController::setVoltageMeter(double volts)
 {
-    m_snapshot.voltageVolts = qBound(0.0, volts, 16.0);
+    m_snapshot.voltageVolts = std::clamp(volts, 0.0, 16.0);
     m_snapshot.voltageValid = true;
     scheduleFlush();
 }
 
 void MeterController::setCurrentMeter(double amps)
 {
-    m_snapshot.currentAmps = qBound(0.0, amps, 20.0);
+    m_snapshot.currentAmps = std::clamp(amps, 0.0, 20.0);
     m_snapshot.currentValid = true;
     scheduleFlush();
 }

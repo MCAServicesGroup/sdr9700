@@ -12,6 +12,7 @@
 #include "models/RadioModel.h"
 #include "models/VfoModel.h"
 
+#include <algorithm>
 #include <QComboBox>
 #include <QDialog>
 #include <QDoubleSpinBox>
@@ -63,7 +64,7 @@ void MemoryEditorForm::show(const QString& memoryId)
         screen ? screen->availableGeometry().size() : QSize(kMemoryEditorDialogWidth, kMemoryEditorDialogHeight);
     const QSize dialogSize = memoryEditorDialogSize(availableSize);
     dialog.resize(dialogSize);
-    dialog.setMinimumSize(qMin(440, dialogSize.width()), qMin(400, dialogSize.height()));
+    dialog.setMinimumSize(std::min(440, dialogSize.width()), std::min(400, dialogSize.height()));
     dialog.setMaximumSize(dialogSize);
     QWidget* parent = &dialog;
 
@@ -398,7 +399,7 @@ void MemoryEditorForm::show(const QString& memoryId)
         {
             dtcsRxPresetBtn->setText(QStringLiteral("NONE"));
             dtcsRxSpin->setValue(0);
-            dtcsRxPolarityCombo->setCurrentIndex(qMax(0, dtcsRxPolarityCombo->findData(0)));
+            dtcsRxPolarityCombo->setCurrentIndex(std::max(0, dtcsRxPolarityCombo->findData(0)));
         }
     };
     auto setDtcsRxPick = [dtcsRxPresetBtn, dtcsRxSpin](ushort v, const QString& label)
@@ -552,9 +553,9 @@ void MemoryEditorForm::show(const QString& memoryId)
                 return;
             }
         }
-        customOffsetModeCombo->setCurrentIndex(qMax(0, customOffsetModeCombo->findData(mode)));
+        customOffsetModeCombo->setCurrentIndex(std::max(0, customOffsetModeCombo->findData(mode)));
         customOffsetSpin->setValue(offsetHz / 1000000.0);
-        offsetCombo->setCurrentIndex(qMax(0, offsetCombo->findData(kMemoryOffsetCustom)));
+        offsetCombo->setCurrentIndex(std::max(0, offsetCombo->findData(kMemoryOffsetCustom)));
     };
 
     auto updateCustomOffsetVisibility =
@@ -603,12 +604,12 @@ void MemoryEditorForm::show(const QString& memoryId)
             nameEdit->setText(memoryFrequencyLabel(currentFrequencyHz));
         }
         modeCombo->setCurrentIndex(
-            qMax(0, modeCombo->findData(modeRegisterFromLabel(m_owner->m_window->m_vfo->mode()))));
+            std::max(0, modeCombo->findData(modeRegisterFromLabel(m_owner->m_window->m_vfo->mode()))));
         populateOffsetOptions();
         setOffsetSelection(m_owner->m_window->m_duplexMode, m_owner->m_window->m_repeaterOffsetHz);
         updateCustomOffsetVisibility();
         const MemoryToneFamily toneFamily = memoryToneFamilyForMode(m_owner->m_window->m_toneAccessMode);
-        toneOptionCombo->setCurrentIndex(qMax(0, toneOptionCombo->findData(toneFamily)));
+        toneOptionCombo->setCurrentIndex(std::max(0, toneOptionCombo->findData(toneFamily)));
         populateToneValues();
         updateConditionalSections();
         if (m_owner->m_window->m_toneAccessMode != ratrNN)
@@ -887,23 +888,23 @@ void MemoryEditorForm::show(const QString& memoryId)
         nameEdit->setText(memory.name);
         frequencyEdit->setText(memoryFrequencyLabel(memory.receiveHz));
         setMemoryLocationBand(group, channel);
-        modeCombo->setCurrentIndex(qMax(0, modeCombo->findData(memory.mode)));
-        filterCombo->setCurrentIndex(qMax(0, filterCombo->findData(memory.filter)));
-        dataModeCombo->setCurrentIndex(qMax(0, dataModeCombo->findData(memory.dataMode)));
-        scanGroupCombo->setCurrentIndex(qMax(0, scanGroupCombo->findData(memory.scan)));
+        modeCombo->setCurrentIndex(std::max(0, modeCombo->findData(memory.mode)));
+        filterCombo->setCurrentIndex(std::max(0, filterCombo->findData(memory.filter)));
+        dataModeCombo->setCurrentIndex(std::max(0, dataModeCombo->findData(memory.dataMode)));
+        scanGroupCombo->setCurrentIndex(std::max(0, scanGroupCombo->findData(memory.scan)));
         populateOffsetOptions();
         setOffsetSelection(static_cast<duplexMode_t>(memory.duplexMode), memory.offsetHz);
         updateCustomOffsetVisibility();
         const auto toneModeForEditor = static_cast<rptAccessTxRx_t>(memory.toneMode);
         toneOptionCombo->setCurrentIndex(
-            qMax(0, toneOptionCombo->findData(memoryToneFamilyForMode(toneModeForEditor))));
+            std::max(0, toneOptionCombo->findData(memoryToneFamilyForMode(toneModeForEditor))));
         toneEdit->setText(memory.tone);
         tsqlEdit->setText(memory.tsql);
-        dsqlCombo->setCurrentIndex(qMax(0, dsqlCombo->findData(memory.dsql)));
+        dsqlCombo->setCurrentIndex(std::max(0, dsqlCombo->findData(memory.dsql)));
         dtcsSpin->setValue(memory.dtcs);
         dtcsRxSpin->setValue(memory.dtcsB);
-        dtcsPolarityCombo->setCurrentIndex(qMax(0, dtcsPolarityCombo->findData(memory.dtcsPolarity)));
-        dtcsRxPolarityCombo->setCurrentIndex(qMax(0, dtcsRxPolarityCombo->findData(memory.dtcsPolarityB)));
+        dtcsPolarityCombo->setCurrentIndex(std::max(0, dtcsPolarityCombo->findData(memory.dtcsPolarity)));
+        dtcsRxPolarityCombo->setCurrentIndex(std::max(0, dtcsRxPolarityCombo->findData(memory.dtcsPolarityB)));
         dvSqlSpin->setValue(memory.dvSql);
         urEdit->setText(memory.urCall);
         r1Edit->setText(memory.r1Call);

@@ -3,6 +3,7 @@
 #include "SMeterScale.h"
 #include "UiTheme.h"
 
+#include <algorithm>
 #include <QEvent>
 #include <QPainter>
 #include <cmath>
@@ -47,7 +48,7 @@ constexpr PowerMark kPowerMarks[] = {{"1", 1.0, 0.060},    {"5", 5.0, 0.180},   
 
 double powerFractionOn100WScale(double watts)
 {
-    const double bounded = qBound(0.0, watts, 100.0);
+    const double bounded = std::clamp(watts, 0.0, 100.0);
     double previousWatts = 0.0;
     double previousFraction = 0.0;
     for (const PowerMark& mark : kPowerMarks)
@@ -65,22 +66,22 @@ double powerFractionOn100WScale(double watts)
 
 double powerFraction(double watts, double maxWatts)
 {
-    const double boundedMax = qBound(0.1, maxWatts, 100.0);
-    return qBound(0.0, powerFractionOn100WScale(qBound(0.0, watts, boundedMax)) / powerFractionOn100WScale(boundedMax),
-                  1.0);
+    const double boundedMax = std::clamp(maxWatts, 0.1, 100.0);
+    return std::clamp(
+        powerFractionOn100WScale(std::clamp(watts, 0.0, boundedMax)) / powerFractionOn100WScale(boundedMax), 0.0, 1.0);
 }
 
 QString signalText(int rawValue)
 {
-    const int bounded = qBound(0, rawValue, 255);
+    const int bounded = std::clamp(rawValue, 0, 255);
     if (bounded <= 120)
     {
-        return QStringLiteral("S%1").arg(qBound(0, qRound(bounded * 9.0 / 120.0), 9));
+        return QStringLiteral("S%1").arg(std::clamp(static_cast<int>(std::lround(bounded * 9.0 / 120.0)), 0, 9));
     }
 
     // Icom defines raw 0241 as S9+60. Preserve values through 0255 in
     // the model, but do not extrapolate the presentation beyond full scale.
-    const int plusDb = qRound(qMin(bounded - 120, 121) * 60.0 / 121.0);
+    const int plusDb = static_cast<int>(std::lround(std::min(bounded - 120, 121) * 60.0 / 121.0));
     return QStringLiteral("S9+%1").arg(plusDb, 2, 10, QLatin1Char('0'));
 }
 } // namespace
@@ -119,7 +120,7 @@ void VfoSMeter::refreshPaintFonts()
 
 void VfoSMeter::setRawValue(int value)
 {
-    const int bounded = qBound(0, value, 255);
+    const int bounded = std::clamp(value, 0, 255);
     if (m_rawValue == bounded)
     {
         return;
@@ -142,7 +143,7 @@ void VfoSMeter::advanceSignalDisplay()
     }
 
     const double delta = double(m_rawValue) - m_displayRawValue;
-    if (qAbs(delta) <= kSignalSnapRaw)
+    if (std::abs(delta) <= kSignalSnapRaw)
     {
         m_displayRawValue = m_rawValue;
         m_signalAnimationTimer.stop();
@@ -183,7 +184,7 @@ void VfoSMeter::setTransmitPowerMode(bool enabled)
 
 void VfoSMeter::setPowerWatts(double watts)
 {
-    const double bounded = qBound(0.0, watts, m_maxPowerWatts);
+    const double bounded = std::clamp(watts, 0.0, m_maxPowerWatts);
     if (qFuzzyCompare(m_powerWatts + 1.0, bounded + 1.0))
     {
         return;
@@ -198,13 +199,13 @@ void VfoSMeter::setPowerWatts(double watts)
 
 void VfoSMeter::setMaxPowerWatts(double watts)
 {
-    const double bounded = qBound(0.1, watts, 100.0);
+    const double bounded = std::clamp(watts, 0.1, 100.0);
     if (qFuzzyCompare(m_maxPowerWatts + 1.0, bounded + 1.0))
     {
         return;
     }
     m_maxPowerWatts = bounded;
-    m_powerWatts = qMin(m_powerWatts, m_maxPowerWatts);
+    m_powerWatts = std::min(m_powerWatts, m_maxPowerWatts);
     update();
 }
 
@@ -215,7 +216,7 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::TextAntialiasing, true);
 
-    const int meterRight = qMax(0, width() - kReadoutWidth - kReadoutGap - kMeterEndInset);
+    const int meterRight = std::max(0, width() - kReadoutWidth - kReadoutGap - kMeterEndInset);
     const QRect meterRect(0, height() - kSegmentHeight - 2, meterRight, kSegmentHeight);
     painter.fillRect(meterRect, QColor(4, 9, 13));
 
@@ -228,33 +229,37 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
             {
                 continue;
             }
-            const int x = qRound(powerFraction(mark.watts, m_maxPowerWatts) * qMax(0, meterRect.width() - 1));
+            const int x = static_cast<int>(
+                std::lround(powerFraction(mark.watts, m_maxPowerWatts) * std::max(0, meterRect.width() - 1)));
             painter.setPen(UiTheme::Color::TextStatusSecondaryQColor);
-            const QString label = qFuzzyCompare(mark.watts + 1.0, m_maxPowerWatts + 1.0)
-                                      ? QStringLiteral("%1W").arg(m_maxPowerWatts, 0, 'f',
-                                                                  m_maxPowerWatts == qRound(m_maxPowerWatts) ? 0 : 2)
-                                      : QString::fromLatin1(mark.label);
+            const QString label =
+                qFuzzyCompare(mark.watts + 1.0, m_maxPowerWatts + 1.0)
+                    ? QStringLiteral("%1W").arg(m_maxPowerWatts, 0, 'f',
+                                                m_maxPowerWatts == std::round(m_maxPowerWatts) ? 0 : 2)
+                    : QString::fromLatin1(mark.label);
             const int labelWidth = m_scaleMetrics.horizontalAdvance(label);
-            painter.drawText(qBound(0, x - labelWidth / 2, qMax(0, meterRect.width() - labelWidth - kLegendRightInset)),
-                             meterRect.top() - 6, label);
+            painter.drawText(
+                std::clamp(x - labelWidth / 2, 0, std::max(0, meterRect.width() - labelWidth - kLegendRightInset)),
+                meterRect.top() - 6, label);
         }
     }
     else
     {
         for (const MeterMark& mark : kMarks)
         {
-            const int x = qRound(mark.raw / 241.0 * qMax(0, meterRect.width() - 1));
+            const int x = static_cast<int>(std::lround(mark.raw / 241.0 * std::max(0, meterRect.width() - 1)));
             painter.setPen(mark.overS9 ? UiTheme::Color::DangerQColor : UiTheme::Color::TextStatusSecondaryQColor);
             const QString label = QString::fromLatin1(mark.label);
             const int labelWidth = m_scaleMetrics.horizontalAdvance(label);
-            painter.drawText(qBound(0, x - labelWidth / 2, qMax(0, meterRect.width() - labelWidth - kLegendRightInset)),
-                             meterRect.top() - 6, label);
+            painter.drawText(
+                std::clamp(x - labelWidth / 2, 0, std::max(0, meterRect.width() - labelWidth - kLegendRightInset)),
+                meterRect.top() - 6, label);
         }
     }
 
     const double meterFraction =
-        m_transmitPowerMode ? powerFraction(m_powerWatts, m_maxPowerWatts) : qMin(m_displayRawValue, 241.0) / 241.0;
-    const int activeWidth = qRound(meterFraction * meterRect.width());
+        m_transmitPowerMode ? powerFraction(m_powerWatts, m_maxPowerWatts) : std::min(m_displayRawValue, 241.0) / 241.0;
+    const int activeWidth = static_cast<int>(std::lround(meterFraction * meterRect.width()));
     for (int x = meterRect.left(); x + kSegmentWidth <= meterRect.right() + 1; x += kSegmentWidth + kSegmentGap)
     {
         const bool active = x - meterRect.left() < activeWidth;
@@ -266,7 +271,7 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
         }
         else if (active)
         {
-            const double segmentFraction = double(x - meterRect.left()) / qMax(1, meterRect.width() - 1);
+            const double segmentFraction = double(x - meterRect.left()) / std::max(1, meterRect.width() - 1);
             segmentColor = UiTheme::sMeterSignalColor(segmentFraction);
         }
         painter.fillRect(QRect(x, meterRect.top(), kSegmentWidth, meterRect.height()), segmentColor);
@@ -275,8 +280,8 @@ void VfoSMeter::paintEvent(QPaintEvent* event)
     const QRect readoutRect(width() - kReadoutWidth - 10, meterRect.top(), kReadoutWidth, kSegmentHeight);
     painter.setFont(m_readoutFont);
     painter.setPen(UiTheme::Color::TextPrimaryQColor);
-    const int displayedRawValue = qRound(m_displayRawValue);
-    const QString readout = m_transmitPowerMode     ? QStringLiteral("%1W").arg(qRound(m_powerWatts))
+    const int displayedRawValue = static_cast<int>(std::lround(m_displayRawValue));
+    const QString readout = m_transmitPowerMode     ? QStringLiteral("%1W").arg(std::lround(m_powerWatts))
                             : displayedRawValue > 0 ? signalText(displayedRawValue)
                                                     : QString();
     painter.drawText(readoutRect, Qt::AlignLeft | Qt::AlignVCenter, readout);

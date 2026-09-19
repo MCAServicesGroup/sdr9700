@@ -18,6 +18,7 @@
 #include "TxAudioMeterPolicy.h"
 #include "VfoReceiverCommandRoute.h"
 
+#include <utility>
 #include <QCoreApplication>
 #include <QTest>
 #include <array>
@@ -567,9 +568,9 @@ sdr9700::audio::TxAudioMeterBlock meterBlockAt(double peakDb, double rmsDb, quin
 void OfflinePoliciesTest::convertsMagnitudeToBoundedDbfs()
 {
     using namespace sdr9700::audio;
-    QVERIFY(qAbs(dbfsFromMagnitude(1.0) - 0.0) < 0.001);
-    QVERIFY(qAbs(dbfsFromMagnitude(0.5) - (-6.0206)) < 0.01);
-    QVERIFY(qAbs(dbfsFromMagnitude(0.1) - (-20.0)) < 0.01);
+    QVERIFY(std::abs(dbfsFromMagnitude(1.0) - 0.0) < 0.001);
+    QVERIFY(std::abs(dbfsFromMagnitude(0.5) - (-6.0206)) < 0.01);
+    QVERIFY(std::abs(dbfsFromMagnitude(0.1) - (-20.0)) < 0.01);
 
     // Digital silence has no logarithm and reports the floor; callers separate
     // true silence from "no measurement" through the block sample count.
@@ -596,10 +597,10 @@ void OfflinePoliciesTest::aggregatesTransmitMeterBlocksByEnergy()
     const TxAudioMeterBlock combined = aggregate(loud, quiet);
 
     QCOMPARE(combined.sampleCount, 960U);
-    QVERIFY(qAbs(double(combined.peak) - double(loud.peak)) < 1.0e-6);
+    QVERIFY(std::abs(double(combined.peak) - double(loud.peak)) < 1.0e-6);
 
     const double expectedRms = std::sqrt((loud.sumSquares + quiet.sumSquares) / 960.0);
-    QVERIFY(qAbs(blockRms(combined) - expectedRms) < 1.0e-9);
+    QVERIFY(std::abs(blockRms(combined) - expectedRms) < 1.0e-9);
 
     const double arithmeticMeanOfRms = (blockRms(loud) + blockRms(quiet)) / 2.0;
     QVERIFY(blockRms(combined) > arithmeticMeanOfRms);
@@ -645,21 +646,21 @@ void OfflinePoliciesTest::holdsAndDecaysTransmitMeterPeak()
     TxAudioMeterPresentation presentation;
 
     presentation.accept(meterBlockAt(-6.0, -18.0), 0);
-    QVERIFY(qAbs(presentation.heldPeakDb() - (-6.0)) < 0.1);
+    QVERIFY(std::abs(presentation.heldPeakDb() - (-6.0)) < 0.1);
 
     // Held flat for kPeakHoldMs even though the signal dropped.
     presentation.accept(meterBlockAt(-40.0, -40.0), 500);
-    QVERIFY(qAbs(presentation.heldPeakDb() - (-6.0)) < 0.1);
+    QVERIFY(std::abs(presentation.heldPeakDb() - (-6.0)) < 0.1);
     presentation.accept(meterBlockAt(-40.0, -40.0), 1000);
-    QVERIFY(qAbs(presentation.heldPeakDb() - (-6.0)) < 0.1);
+    QVERIFY(std::abs(presentation.heldPeakDb() - (-6.0)) < 0.1);
 
     // Then decays at kPeakDecayDbPerSec: 500 ms beyond the hold is 10 dB.
     presentation.accept(meterBlockAt(-40.0, -40.0), 1500);
-    QVERIFY(qAbs(presentation.heldPeakDb() - (-16.0)) < 0.5);
+    QVERIFY(std::abs(presentation.heldPeakDb() - (-16.0)) < 0.5);
 
     // A louder block re-arms the hold immediately.
     presentation.accept(meterBlockAt(-2.0, -12.0), 1600);
-    QVERIFY(qAbs(presentation.heldPeakDb() - (-2.0)) < 0.1);
+    QVERIFY(std::abs(presentation.heldPeakDb() - (-2.0)) < 0.1);
 }
 
 void OfflinePoliciesTest::holdsFullScaleIndicationForThreeSeconds()

@@ -4,6 +4,7 @@
 #include "SettingsPanelStyle.h"
 #include "UiTheme.h"
 
+#include <algorithm>
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
@@ -37,11 +38,10 @@ QColor storedColor(const char* key, const QColor& defaultColor)
 
 int storedGridDensity()
 {
-    return qBound(kMinGridDensity,
-                  AppSettings::instance()
-                      .value(QString::fromLatin1(kSpectrumScopeGridDensitySettingsKey), kDefaultGridDensity)
-                      .toInt(),
-                  kMaxGridDensity);
+    return std::clamp(AppSettings::instance()
+                          .value(QString::fromLatin1(kSpectrumScopeGridDensitySettingsKey), kDefaultGridDensity)
+                          .toInt(),
+                      kMinGridDensity, kMaxGridDensity);
 }
 } // namespace
 
@@ -273,7 +273,7 @@ void SpectrumScopeSettingsPanel::setGridLineColor(const QColor& color, bool pers
 
 void SpectrumScopeSettingsPanel::setGridDensity(int density, bool persist)
 {
-    const int normalized = qBound(kMinGridDensity, density, kMaxGridDensity);
+    const int normalized = std::clamp(density, kMinGridDensity, kMaxGridDensity);
     if (m_gridDensity == normalized)
     {
         return;

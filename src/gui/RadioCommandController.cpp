@@ -59,7 +59,7 @@ void RadioCommandController::toggleMute()
     }
     else
     {
-        const int restored = qBound(0, m_window->m_savedAfGain, 255);
+        const int restored = std::clamp(m_window->m_savedAfGain, 0, 255);
         m_window->m_currentAfGain = restored;
         if (m_window->m_titleBar)
         {
@@ -175,7 +175,7 @@ void RadioCommandController::showCustomOffsetDialog()
     offset->setRange(0.001, 99.999);
     offset->setSingleStep(0.005);
     offset->setSuffix(QStringLiteral(" MHz"));
-    offset->setValue(qMax<quint64>(1, m_window->m_repeaterOffsetHz) / 1000000.0);
+    offset->setValue(std::max<quint64>(1, m_window->m_repeaterOffsetHz) / 1000000.0);
 
     form->addRow(QStringLiteral("Direction"), direction);
     form->addRow(QStringLiteral("Offset"), offset);
@@ -363,11 +363,11 @@ void RadioCommandController::showCompressorMenu(const QPoint& position)
     panelLayout->setContentsMargins(8, 6, 8, 6);
     panelLayout->setSpacing(6);
 
-    auto levelText = [](int value) { return QStringLiteral("%1%").arg(qBound(0, value, 255) * 100 / 255); };
+    auto levelText = [](int value) { return QStringLiteral("%1%").arg(std::clamp(value, 0, 255) * 100 / 255); };
 
     const bool levelKnown = m_window->m_vfo->compressorLevelKnown();
     const bool compressorEnabled = m_window->m_vfo->compressorOn();
-    const int initialValue = compressorEnabled ? qMax(1, levelKnown ? m_window->m_vfo->compressorLevel() : 1) : 0;
+    const int initialValue = compressorEnabled ? std::max(1, levelKnown ? m_window->m_vfo->compressorLevel() : 1) : 0;
     auto* valueLabel = new QLabel(levelText(initialValue), panel);
     valueLabel->setObjectName(QStringLiteral("compressorLevelLabel"));
     valueLabel->setFixedWidth(30);
@@ -413,14 +413,14 @@ void RadioCommandController::showCompressorMenu(const QPoint& position)
                     return;
                 }
                 const QSignalBlocker block(slider);
-                slider->setValue(qMax(1, value));
+                slider->setValue(std::max(1, value));
                 valueLabel->setText(levelText(slider->value()));
             });
     connect(m_window->m_vfo, &VfoModel::compressorChanged, slider,
             [this, slider, valueLabel, levelText, requestedEnabled](bool enabled)
             {
                 *requestedEnabled = enabled;
-                const int value = enabled ? qMax(1, m_window->m_vfo->compressorLevel()) : 0;
+                const int value = enabled ? std::max(1, m_window->m_vfo->compressorLevel()) : 0;
                 const QSignalBlocker block(slider);
                 slider->setValue(value);
                 valueLabel->setText(levelText(value));
@@ -437,8 +437,8 @@ void RadioCommandController::showCompressorMenu(const QPoint& position)
 
 int RadioCommandController::tuningStepHz() const
 {
-    return qBound(
-        1, AppSettings::instance().value(QString::fromLatin1(kTuningStepHZSettingsKey), kDefaultTuningStepHZ).toInt(),
+    return std::clamp(
+        AppSettings::instance().value(QString::fromLatin1(kTuningStepHZSettingsKey), kDefaultTuningStepHZ).toInt(), 1,
         10000000);
 }
 

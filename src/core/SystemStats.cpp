@@ -45,7 +45,7 @@ std::optional<double> SystemStatsProvider::calculateCpuPercent(const CpuTicks& p
         return std::nullopt;
     }
 
-    return qBound(0.0, 100.0 * static_cast<double>(activeDelta) / static_cast<double>(totalDelta), 100.0);
+    return std::clamp(100.0 * static_cast<double>(activeDelta) / static_cast<double>(totalDelta), 0.0, 100.0);
 }
 
 std::optional<CpuTicks> SystemStatsProvider::readCpuTicks() const

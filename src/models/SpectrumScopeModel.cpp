@@ -33,12 +33,12 @@ double SpectrumScopeModel::constrainedBandwidth(double requestedBandwidthMhz) co
     double displayEndMhz = sourceEndMhz();
     if (m_hasFrequencyLimits)
     {
-        displayStartMhz = qMax(displayStartMhz, m_limitStartMhz);
-        displayEndMhz = qMin(displayEndMhz, m_limitEndMhz);
+        displayStartMhz = std::max(displayStartMhz, m_limitStartMhz);
+        displayEndMhz = std::min(displayEndMhz, m_limitEndMhz);
     }
 
-    const double maximumBandwidth = qMax(kMinSourceBandwidthMhz, displayEndMhz - displayStartMhz);
-    return qBound(kMinSourceBandwidthMhz, requestedBandwidthMhz, maximumBandwidth);
+    const double maximumBandwidth = std::max(kMinSourceBandwidthMhz, displayEndMhz - displayStartMhz);
+    return std::clamp(requestedBandwidthMhz, kMinSourceBandwidthMhz, maximumBandwidth);
 }
 
 double SpectrumScopeModel::constrainedCenter(double requestedCenterMhz, double requestedBandwidthMhz) const
@@ -47,8 +47,8 @@ double SpectrumScopeModel::constrainedCenter(double requestedCenterMhz, double r
     double displayEndMhz = sourceEndMhz();
     if (m_hasFrequencyLimits)
     {
-        displayStartMhz = qMax(displayStartMhz, m_limitStartMhz);
-        displayEndMhz = qMin(displayEndMhz, m_limitEndMhz);
+        displayStartMhz = std::max(displayStartMhz, m_limitStartMhz);
+        displayEndMhz = std::min(displayEndMhz, m_limitEndMhz);
     }
 
     if (displayEndMhz <= displayStartMhz)
@@ -59,14 +59,14 @@ double SpectrumScopeModel::constrainedCenter(double requestedCenterMhz, double r
     const double halfBandwidth = requestedBandwidthMhz / 2.0;
     const double minCenter = displayStartMhz + halfBandwidth;
     const double maxCenter = displayEndMhz - halfBandwidth;
-    return qBound(qMin(minCenter, maxCenter), requestedCenterMhz, qMax(minCenter, maxCenter));
+    return std::clamp(requestedCenterMhz, std::min(minCenter, maxCenter), std::max(minCenter, maxCenter));
 }
 
 void SpectrumScopeModel::constrainDisplayRange()
 {
     const double nextBandwidth = constrainedBandwidth(m_bandwidthMhz);
     const double nextCenter = constrainedCenter(m_centerMhz, nextBandwidth);
-    if (qAbs(nextCenter - m_centerMhz) < 1e-9 && qAbs(nextBandwidth - m_bandwidthMhz) < 1e-9)
+    if (std::abs(nextCenter - m_centerMhz) < 1e-9 && std::abs(nextBandwidth - m_bandwidthMhz) < 1e-9)
     {
         return;
     }
@@ -80,7 +80,7 @@ void SpectrumScopeModel::centerOnFrequency(double freqMhz)
 {
     const double nextBandwidth = constrainedBandwidth(m_bandwidthMhz);
     const double nextCenter = constrainedCenter(freqMhz, nextBandwidth);
-    if (qAbs(nextCenter - m_centerMhz) < 1e-9 && qAbs(nextBandwidth - m_bandwidthMhz) < 1e-9)
+    if (std::abs(nextCenter - m_centerMhz) < 1e-9 && std::abs(nextBandwidth - m_bandwidthMhz) < 1e-9)
     {
         return;
     }
@@ -116,7 +116,8 @@ void SpectrumScopeModel::setFrequencyLimits(double lowerMhz, double upperMhz)
         clearFrequencyLimits();
         return;
     }
-    if (m_hasFrequencyLimits && qAbs(m_limitStartMhz - lowerMhz) < 1e-9 && qAbs(m_limitEndMhz - upperMhz) < 1e-9)
+    if (m_hasFrequencyLimits && std::abs(m_limitStartMhz - lowerMhz) < 1e-9 &&
+        std::abs(m_limitEndMhz - upperMhz) < 1e-9)
     {
         return;
     }
@@ -176,8 +177,8 @@ void SpectrumScopeModel::ingestSpectrum(const QVector<float>& levels, double low
         const double binToleranceMhz =
             levels.size() > 1 ? incomingBw / static_cast<double>(levels.size() - 1) * 0.25 : kMinHeldCenterToleranceMhz;
         const double heldCenterToleranceMhz =
-            qBound(kMinHeldCenterToleranceMhz, binToleranceMhz, kMaxHeldCenterToleranceMhz);
-        if (qAbs(incomingCenter - m_heldSourceCenterMhz) > heldCenterToleranceMhz)
+            std::clamp(binToleranceMhz, kMinHeldCenterToleranceMhz, kMaxHeldCenterToleranceMhz);
+        if (std::abs(incomingCenter - m_heldSourceCenterMhz) > heldCenterToleranceMhz)
         {
             return;
         }
@@ -190,8 +191,8 @@ void SpectrumScopeModel::ingestSpectrum(const QVector<float>& levels, double low
     displayBandwidth = constrainedBandwidth(displayBandwidth);
     displayCenter = constrainedCenter(displayCenter, displayBandwidth);
 
-    if (qAbs(displayCenter - m_centerMhz) > kRangeChangeTolerance ||
-        qAbs(displayBandwidth - m_bandwidthMhz) > kRangeChangeTolerance)
+    if (std::abs(displayCenter - m_centerMhz) > kRangeChangeTolerance ||
+        std::abs(displayBandwidth - m_bandwidthMhz) > kRangeChangeTolerance)
     {
         m_centerMhz = displayCenter;
         m_bandwidthMhz = displayBandwidth;

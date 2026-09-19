@@ -1,5 +1,6 @@
 #include "AudioHandlerQtOutput.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace
@@ -20,8 +21,8 @@ sdr9700::audio::StereoChannelPeaks stereoPeaks(const QByteArray& data, Magnitude
     float channel1 = 0.0F;
     for (qsizetype sample = 0; sample < sampleCount; sample += 2)
     {
-        channel0 = qMax(channel0, magnitude(samples[sample]));
-        channel1 = qMax(channel1, magnitude(samples[sample + 1]));
+        channel0 = std::max(channel0, magnitude(samples[sample]));
+        channel1 = std::max(channel1, magnitude(samples[sample + 1]));
     }
     return {channel0, channel1, true};
 }
@@ -34,15 +35,16 @@ StereoChannelPeaks stereoChannelPeaks(const QByteArray& data, QAudioFormat::Samp
     switch (sampleFormat)
     {
     case QAudioFormat::Int16:
-        return stereoPeaks<qint16>(data, [](qint16 sample) { return qMin(1.0F, std::abs(float(sample)) / 32767.0F); });
+        return stereoPeaks<qint16>(data,
+                                   [](qint16 sample) { return std::min(1.0F, std::abs(float(sample)) / 32767.0F); });
     case QAudioFormat::Int32:
-        return stereoPeaks<qint32>(data,
-                                   [](qint32 sample) { return qMin(1.0F, std::abs(float(sample)) / 2147483647.0F); });
+        return stereoPeaks<qint32>(data, [](qint32 sample)
+                                   { return std::min(1.0F, std::abs(float(sample)) / 2147483647.0F); });
     case QAudioFormat::Float:
-        return stereoPeaks<float>(data, [](float sample) { return qMin(1.0F, std::abs(sample)); });
+        return stereoPeaks<float>(data, [](float sample) { return std::min(1.0F, std::abs(sample)); });
     case QAudioFormat::UInt8:
-        return stereoPeaks<quint8>(data,
-                                   [](quint8 sample) { return qMin(1.0F, std::abs(float(sample) - 128.0F) / 127.0F); });
+        return stereoPeaks<quint8>(data, [](quint8 sample)
+                                   { return std::min(1.0F, std::abs(float(sample) - 128.0F) / 127.0F); });
     default:
         return {};
     }
@@ -159,7 +161,7 @@ void AudioHandlerQtOutput::writeToOutputDevice(const QByteArray& data, float amp
         const int prefillBytes =
             sdr9700::audio::outputPrefillBytes(nativeFormat, audioOutput->bufferSize(), setupData.latency);
         const int freeBytes = static_cast<int>(audioOutput->bytesFree());
-        const int silenceBytes = qMin(prefillBytes, freeBytes);
+        const int silenceBytes = std::min(prefillBytes, freeBytes);
         if (silenceBytes > 0)
         {
             const char silenceByte = nativeFormat.sampleFormat() == QAudioFormat::UInt8 ? char(0x80) : '\0';
@@ -191,13 +193,13 @@ void AudioHandlerQtOutput::writeToOutputDevice(const QByteArray& data, float amp
     // tail for the next 20 ms callback instead of discarding it. Cap the local
     // backlog at two sink buffers so a blocked device cannot grow memory or
     // turn a transient stall into seconds of delayed playback.
-    const qsizetype maxPendingBytes = qMax<qsizetype>(audioOutput->bufferSize() * 2, data.size());
+    const qsizetype maxPendingBytes = std::max<qsizetype>(audioOutput->bufferSize() * 2, data.size());
     if (m_pendingOutput.size() > maxPendingBytes)
     {
         qsizetype removeBytes = m_pendingOutput.size() - maxPendingBytes;
-        const int bytesPerFrame = qMax(1, nativeFormat.bytesPerFrame());
+        const int bytesPerFrame = std::max(1, nativeFormat.bytesPerFrame());
         removeBytes = ((removeBytes + bytesPerFrame - 1) / bytesPerFrame) * bytesPerFrame;
-        m_pendingOutput.remove(0, qMin(removeBytes, m_pendingOutput.size()));
+        m_pendingOutput.remove(0, std::min(removeBytes, m_pendingOutput.size()));
         isOverrun.store(true, std::memory_order_relaxed);
     }
     drainPendingOutput();
@@ -223,7 +225,7 @@ void AudioHandlerQtOutput::drainPendingOutput()
             return;
         }
         const qint64 remaining = m_pendingOutput.size() - m_pendingOutputOffset;
-        const qint64 requested = qMin(freeBytes, remaining);
+        const qint64 requested = std::min(freeBytes, remaining);
         const qint64 written = audioDevice->write(m_pendingOutput.constData() + m_pendingOutputOffset, requested);
         if (written <= 0)
         {

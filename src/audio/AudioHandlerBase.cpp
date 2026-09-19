@@ -1,5 +1,6 @@
 #include "AudioHandlerBase.h"
 
+#include <algorithm>
 #include <QSemaphore>
 #include <memory>
 
@@ -137,10 +138,10 @@ bool AudioHandlerBase::negotiateFormat(int minSampleRate)
     }
 
     QList<int> channelCandidates;
-    const int preferredChannels = qBound(1, preferred.channelCount(), 2);
+    const int preferredChannels = std::clamp(preferred.channelCount(), 1, 2);
     if (!setupData.isinput && setupData.playbackChannels > 0)
     {
-        channelCandidates.append(qBound(1, int(setupData.playbackChannels), 2));
+        channelCandidates.append(std::clamp(int(setupData.playbackChannels), 1, 2));
     }
     else if (radioFormat.channelCount() == 2)
     {

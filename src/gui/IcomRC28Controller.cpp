@@ -254,7 +254,7 @@ void IcomRC28Controller::handleIcomRC28Tune(int steps)
 void IcomRC28Controller::refreshIcomRC28EncoderSettings()
 {
     const int sensitivity =
-        qBound(1, IcomRC28Manager::settingsField(QStringLiteral("sensitivity"), QStringLiteral("1")).toInt(), 10);
+        std::clamp(IcomRC28Manager::settingsField(QStringLiteral("sensitivity"), QStringLiteral("1")).toInt(), 1, 10);
     if (sensitivity != m_window->m_icomRC28Sensitivity)
     {
         m_window->m_icomRC28PulseAccum = 0;

@@ -28,7 +28,7 @@ template <typename Canvas> void configureRequestedBackend(Canvas* canvas)
 
 int deviceCoordinate(double logicalCoordinate, qreal devicePixelRatio, int limit)
 {
-    return qBound(0, int(std::lround(logicalCoordinate * devicePixelRatio)), qMax(0, limit - 1));
+    return std::clamp(int(std::lround(logicalCoordinate * devicePixelRatio)), 0, std::max(0, limit - 1));
 }
 
 QSize expectedFramebufferSize(const QWidget& widget)
@@ -50,9 +50,9 @@ double meanRgbDifference(const QImage& first, const QImage& second)
         {
             const QColor firstColor = first.pixelColor(x, y);
             const QColor secondColor = second.pixelColor(x, y);
-            totalDifference +=
-                quint64(qAbs(firstColor.red() - secondColor.red()) + qAbs(firstColor.green() - secondColor.green()) +
-                        qAbs(firstColor.blue() - secondColor.blue()));
+            totalDifference += quint64(std::abs(firstColor.red() - secondColor.red()) +
+                                       std::abs(firstColor.green() - secondColor.green()) +
+                                       std::abs(firstColor.blue() - secondColor.blue()));
             sampleCount += 3;
         }
     }
@@ -122,9 +122,9 @@ void GpuPanadapterRenderTest::rendersWaterfallRowsInRingOrder()
         const QColor actual = rendered.pixelColor(deviceCoordinate(kWidth / 2.0, devicePixelRatio, rendered.width()),
                                                   deviceCoordinate(displayedRow, devicePixelRatio, rendered.height()));
         const QColor expected = waterfall.pixelColor(kWidth / 2, sourceRow);
-        QVERIFY(qAbs(actual.red() - expected.red()) <= 2);
-        QVERIFY(qAbs(actual.green() - expected.green()) <= 2);
-        QVERIFY(qAbs(actual.blue() - expected.blue()) <= 2);
+        QVERIFY(std::abs(actual.red() - expected.red()) <= 2);
+        QVERIFY(std::abs(actual.green() - expected.green()) <= 2);
+        QVERIFY(std::abs(actual.blue() - expected.blue()) <= 2);
     }
 }
 
@@ -139,7 +139,7 @@ void GpuPanadapterRenderTest::rendersSpectrumLayersWithoutTextureCollapse()
     QVector<float> bins(160, 10.0f);
     for (int index = 20; index < bins.size(); index += 30)
     {
-        bins[index] = float(qMin(160, index + 50));
+        bins[index] = float(std::min(160, index + 50));
     }
     canvas.updateSpectrum(bins, false);
     QSignalSpy failureSpy(&canvas, &QRhiWidget::renderFailed);

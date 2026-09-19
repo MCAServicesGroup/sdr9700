@@ -1,5 +1,7 @@
 #include "AudioHandlerQtInput.h"
 
+#include <cstring>
+
 bool AudioHandlerQtInput::openDevice() noexcept
 {
     audioInput = new QAudioSource(deviceInfo, nativeFormat, this);
@@ -75,7 +77,7 @@ void AudioHandlerQtInput::onReadyRead()
         pkt.createdAtMs = audioMonotonicTimestampMs();
         pkt.sent = 0;
         pkt.volume = volume;
-        memcpy(&pkt.guid, setupData.guid, GUIDLEN);
+        std::memcpy(&pkt.guid, setupData.guid, GUIDLEN);
         pkt.data = QByteArray(tempBuf.data.constData() + m_bufferReadOffset, bytesPerBlock);
         m_bufferReadOffset += bytesPerBlock;
         queueForConversion(std::move(pkt));

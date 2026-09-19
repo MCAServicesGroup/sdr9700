@@ -107,7 +107,7 @@ MainWindow::MainWindow(RadioModel* model, QWidget* parent, bool quitApplicationO
       m_spectrumScope(model->spectrumScope()),
       m_quitApplicationOnClose(quitApplicationOnClose)
 {
-    m_connectedAudioOutputChannels = qBound(1, AppSettings::instance().value("audioOutputChannels", 2).toInt(), 2);
+    m_connectedAudioOutputChannels = std::clamp(AppSettings::instance().value("audioOutputChannels", 2).toInt(), 1, 2);
     m_spectrumScopeController = new SpectrumScopeController(this);
 #ifdef HAVE_HIDAPI
     m_icomRC28Controller = new IcomRC28Controller(this);
@@ -456,7 +456,7 @@ void MainWindow::buildToolBar()
                 {
                     return;
                 }
-                const int bounded = qBound(0, value, 255);
+                const int bounded = std::clamp(value, 0, 255);
                 m_currentAfGain = bounded;
                 AppSettings::instance().setValueDeferred(QStringLiteral("volumeLevel"), bounded);
                 if (auto* backend = m_model->backend())
@@ -564,7 +564,7 @@ void MainWindow::showSettingsDialog()
                     m_settingsDialog = nullptr;
                 }
 
-                m_lanModValue = qBound(0, AppSettings::instance().value("LANModLevel", 128).toInt(), 255);
+                m_lanModValue = std::clamp(AppSettings::instance().value("LANModLevel", 128).toInt(), 0, 255);
                 if (m_mainVfoController)
                 {
                     m_mainVfoController->setLanModLevel(m_lanModValue);
@@ -659,7 +659,7 @@ void MainWindow::reloadMemoryTable()
 
 void MainWindow::buildRadioControls()
 {
-    m_lanModValue = qBound(0, AppSettings::instance().value("LANModLevel", 128).toInt(), 255);
+    m_lanModValue = std::clamp(AppSettings::instance().value("LANModLevel", 128).toInt(), 0, 255);
     const int appVolume = appVolumeSettingValue();
     m_currentAfGain = appVolume;
     if (m_titleBar)
@@ -771,7 +771,7 @@ void MainWindow::showRadioChooserDialog()
 
 void MainWindow::onConnectToProfile(const RadioProfile& profile)
 {
-    m_connectedAudioOutputChannels = qBound(1, AppSettings::instance().value("audioOutputChannels", 2).toInt(), 2);
+    m_connectedAudioOutputChannels = std::clamp(AppSettings::instance().value("audioOutputChannels", 2).toInt(), 1, 2);
     m_pendingProfileId = profile.id;
     m_memoryController->setRadioProfileId(profile.id);
     m_radioHost = profile.host;
@@ -955,7 +955,7 @@ void MainWindow::resetRadioOwnedControlsForSync()
 {
     m_vfoFrequencyHz = 0;
     m_meterSnapshot = {};
-    m_lanModValue = qBound(0, AppSettings::instance().value("LANModLevel", 128).toInt(), 255);
+    m_lanModValue = std::clamp(AppSettings::instance().value("LANModLevel", 128).toInt(), 0, 255);
     m_duplexMode = dmSimplex;
     m_toneAccessMode = ratrNN;
     m_toneFrequency = 670;
@@ -1780,7 +1780,7 @@ void MainWindow::applyAudioSettings()
 
     if (!m_model->isConnected())
     {
-        m_connectedAudioOutputChannels = qBound(1, settings.value("audioOutputChannels", 2).toInt(), 2);
+        m_connectedAudioOutputChannels = std::clamp(settings.value("audioOutputChannels", 2).toInt(), 1, 2);
     }
 }
 

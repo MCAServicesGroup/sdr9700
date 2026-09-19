@@ -117,7 +117,7 @@ inline quint64 spectrumTunePendingAfterReadback(quint64 pendingHz, quint64 repor
 
 inline int radioLevelPercent(int rawLevel)
 {
-    return qRound(qBound(0, rawLevel, 255) * 100.0 / 255.0);
+    return static_cast<int>(std::lround(std::clamp(rawLevel, 0, 255) * 100.0 / 255.0));
 }
 constexpr QSize kMemoryWindowSize(980, 620);
 constexpr int kMemoryBandColumnWidth = 80;

@@ -1,6 +1,8 @@
 #include "AudioConverter.h"
 #include "LogCategories.h"
 
+#include <algorithm>
+#include <cmath>
 #include <speex/speex_resampler.h>
 #include <cstring>
 
@@ -234,7 +236,7 @@ bool AudioConverter::convert(audioPacket audio)
                 int s = (t - 0x84) * sign;           // signed 16-bit range
 
                 // Scale to float; use 32768.0f so full-scale maps symmetrically
-                out[i] = qBound(-1.0f, s / 32768.0f, 1.0f);
+                out[i] = std::clamp(s / 32768.0f, -1.0f, 1.0f);
             }
 
             audio.data.swap(scratchIn);
@@ -367,7 +369,7 @@ bool AudioConverter::convert(audioPacket audio)
                 for (Eigen::Index index = 0; index < sampleCount; ++index)
                 {
                     const float magnitude = std::fabs(samplesF[index]);
-                    peakMagnitude = qMax(peakMagnitude, magnitude);
+                    peakMagnitude = std::max(peakMagnitude, magnitude);
                     sumSquares += static_cast<double>(magnitude) * magnitude;
                     if (magnitude >= sdr9700::audio::kFullScaleMagnitude)
                     {

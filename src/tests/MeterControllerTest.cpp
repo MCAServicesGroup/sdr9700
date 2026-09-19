@@ -50,8 +50,8 @@ void MeterControllerTest::batchesUpdatesIntoOneSnapshot()
     QCOMPARE(snapshot.powerWatts, 50.0);
     QVERIFY(snapshot.powerValid);
     QVERIFY(snapshot.txAudioState != sdr9700::audio::TxAudioMeterState::Invalid);
-    QVERIFY(qAbs(snapshot.txAudioRmsDb - (-18.0)) < 0.1);
-    QVERIFY(qAbs(snapshot.txAudioPeakDb - (-6.0)) < 0.1);
+    QVERIFY(std::abs(snapshot.txAudioRmsDb - (-18.0)) < 0.1);
+    QVERIFY(std::abs(snapshot.txAudioPeakDb - (-6.0)) < 0.1);
 }
 
 void MeterControllerTest::clampsMeterValues()

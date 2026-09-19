@@ -178,7 +178,7 @@ bool populateModeInfo(const QString& mode, ModeInfo* info)
 
 radioInput restoreInputForModSource(int reg)
 {
-    return radioInput(inputUnknown, static_cast<qint8>(qBound(0, reg, 99)), QStringLiteral("Previous"));
+    return radioInput(inputUnknown, static_cast<qint8>(std::clamp(reg, 0, 99)), QStringLiteral("Previous"));
 }
 
 void sendDisconnectSafetyCommands(Commander* commandSession, std::optional<int> originalDataOffMod,
@@ -785,7 +785,7 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
     const quint64 session = ++m_sessionId;
     m_sessionActive = std::make_shared<std::atomic_bool>(true);
     const auto sessionActive = m_sessionActive;
-    m_lanModLevel = qBound(0, AppSettings::instance().value("LANModLevel", m_lanModLevel).toInt(), 255);
+    m_lanModLevel = std::clamp(AppSettings::instance().value("LANModLevel", m_lanModLevel).toInt(), 0, 255);
 
     m_commander = new Commander();
     Commander* commandSession = m_commander;
@@ -1035,11 +1035,11 @@ void RadioBackend::connectToRadio(const QString& host, quint16 port, const QStri
     static constexpr quint8 kLpcmMono16 = 0x04;
     static constexpr quint8 kLpcmStereo16 = 0x10;
     static constexpr quint16 kIc9700CivAddress = 0xA2;
-    const int playbackChannels = qBound(1, AppSettings::instance().value("audioOutputChannels", 2).toInt(), 2);
+    const int playbackChannels = std::clamp(AppSettings::instance().value("audioOutputChannels", 2).toInt(), 1, 2);
     // Always request both IC-9700 receiver channels. Mono playback is a local
     // downmix; requesting the radio's one-channel codec discards SUB entirely.
     m_rxChannelCount = 2;
-    const int outputVolume = qBound(0, AppSettings::instance().value("volumeLevel", 128).toInt(), 255);
+    const int outputVolume = std::clamp(AppSettings::instance().value("volumeLevel", 128).toInt(), 0, 255);
 
     audioSetup rxSetup;
     rxSetup.type = qtAudio;
@@ -1383,7 +1383,7 @@ void RadioBackend::setMode(const QString& mode)
         qWarning(logRadio()).noquote() << "Ignoring unsupported mode selection:" << mode;
         return;
     }
-    mi.filter = static_cast<quint8>(qBound(1, m_currentMainFilter, 3));
+    mi.filter = static_cast<quint8>(std::clamp(m_currentMainFilter, 1, 3));
 
     invokeOnCurrentCommander(
         [mi, transferSelectedMemory](Commander* commandSession)
@@ -1417,7 +1417,7 @@ void RadioBackend::setNrEnabled(bool on)
 
 void RadioBackend::setNrLevel(int level)
 {
-    const ushort rawLevel = static_cast<ushort>(qRound((qBound(1, level, 15) - 1) * 255.0 / 14.0));
+    const ushort rawLevel = static_cast<ushort>(std::lround((std::clamp(level, 1, 15) - 1) * 255.0 / 14.0));
     scheduleVfoReceiverCommand(
         m_activeVfo, funcNRLevel, [rawLevel](Commander* commandSession, uchar receiver)
         { commandSession->receiveCommand(funcNRLevel, QVariant::fromValue(rawLevel), receiver); });
@@ -1431,7 +1431,7 @@ void RadioBackend::setNbEnabled(bool on)
 
 void RadioBackend::setNbLevel(int level)
 {
-    const ushort rawLevel = static_cast<ushort>(qRound((qBound(1, level, 10) - 1) * 255.0 / 9.0));
+    const ushort rawLevel = static_cast<ushort>(std::lround((std::clamp(level, 1, 10) - 1) * 255.0 / 9.0));
     scheduleVfoReceiverCommand(
         m_activeVfo, funcNBLevel, [rawLevel](Commander* commandSession, uchar receiver)
         { commandSession->receiveCommand(funcNBLevel, QVariant::fromValue(rawLevel), receiver); });
@@ -1444,7 +1444,7 @@ void RadioBackend::setPreampEnabled(bool on)
 
 void RadioBackend::setPreampLevel(int level)
 {
-    const uchar val = static_cast<uchar>(qBound(0, level, 3));
+    const uchar val = static_cast<uchar>(std::clamp(level, 0, 3));
     routeVfoReceiverCommand(m_activeVfo, funcPreamp,
                             [val](Commander* commandSession, uchar receiver)
                             {
@@ -1472,14 +1472,14 @@ void RadioBackend::setAfGain(int level)
 
 void RadioBackend::setRfGain(int level)
 {
-    const ushort bounded = static_cast<ushort>(qBound(0, level, 255));
+    const ushort bounded = static_cast<ushort>(std::clamp(level, 0, 255));
     scheduleVfoReceiverCommand(m_activeVfo, funcRfGain, [bounded](Commander* commandSession, uchar receiver)
                                { commandSession->receiveCommand(funcRfGain, QVariant::fromValue(bounded), receiver); });
 }
 
 void RadioBackend::setTxPower(int level)
 {
-    const ushort bounded = static_cast<ushort>(qBound(0, level, 255));
+    const ushort bounded = static_cast<ushort>(std::clamp(level, 0, 255));
     scheduleVfoReceiverCommand(
         Vfo::Main, funcRFPower, [bounded](Commander* commandSession, uchar receiver)
         { commandSession->receiveCommand(funcRFPower, QVariant::fromValue(bounded), receiver); });
@@ -1487,7 +1487,7 @@ void RadioBackend::setTxPower(int level)
 
 void RadioBackend::setTuningStep(int step)
 {
-    const uchar val = static_cast<uchar>(qBound(0, step, 11));
+    const uchar val = static_cast<uchar>(std::clamp(step, 0, 11));
     routeVfoReceiverCommand(m_activeVfo, funcTuningStep, [val](Commander* commandSession, uchar receiver)
                             { commandSession->receiveCommand(funcTuningStep, QVariant::fromValue(val), receiver); });
 }
@@ -1685,7 +1685,7 @@ void RadioBackend::setVfoMode(Vfo vfo, const QString& mode)
         qWarning(logRadio()).noquote() << "Ignoring unsupported VFO mode selection:" << mode;
         return;
     }
-    modeInfo.filter = static_cast<quint8>(qBound(1, m_currentMainFilter, 3));
+    modeInfo.filter = static_cast<quint8>(std::clamp(m_currentMainFilter, 1, 3));
     routeVfoReceiverCommand(vfo, funcModeSet,
                             [modeInfo](Commander* commandSession, uchar receiver)
                             {
@@ -1703,7 +1703,7 @@ void RadioBackend::setVfoFilter(Vfo vfo, const QString& mode, int filter)
         qWarning(logRadio()).noquote() << "Ignoring filter selection for unsupported VFO mode:" << mode;
         return;
     }
-    modeInfo.filter = static_cast<quint8>(qBound(1, filter, 3));
+    modeInfo.filter = static_cast<quint8>(std::clamp(filter, 1, 3));
     routeVfoReceiverCommand(vfo, funcModeSet,
                             [modeInfo](Commander* commandSession, uchar receiver)
                             {
@@ -1726,7 +1726,7 @@ void RadioBackend::applyVfoBandRecall(Vfo vfo, const VfoBandRecallRequest& recal
         recall.mode.has_value() && recall.filter.has_value() && populateModeInfo(*recall.mode, &modeInfo);
     if (hasMode)
     {
-        modeInfo.filter = static_cast<quint8>(qBound(1, *recall.filter, 3));
+        modeInfo.filter = static_cast<quint8>(std::clamp(*recall.filter, 1, 3));
     }
 
     // MAIN is the IC-9700 transmit path. Mark its frequency, duplex mode, and
@@ -1856,7 +1856,7 @@ void RadioBackend::setVfoNbEnabled(Vfo vfo, bool on)
 
 void RadioBackend::setVfoNbLevel(Vfo vfo, int level)
 {
-    const ushort value = static_cast<ushort>(qRound((qBound(1, level, 10) - 1) * 255.0 / 9.0));
+    const ushort value = static_cast<ushort>(std::lround((std::clamp(level, 1, 10) - 1) * 255.0 / 9.0));
     routeVfoReceiverCommand(vfo, funcNBLevel,
                             [value](Commander* commandSession, uchar receiver)
                             {
@@ -1893,7 +1893,7 @@ void RadioBackend::setVfoNrEnabled(Vfo vfo, bool on)
 
 void RadioBackend::setVfoNrLevel(Vfo vfo, int level)
 {
-    const ushort value = static_cast<ushort>(qRound((qBound(1, level, 15) - 1) * 255.0 / 14.0));
+    const ushort value = static_cast<ushort>(std::lround((std::clamp(level, 1, 15) - 1) * 255.0 / 14.0));
     routeVfoReceiverCommand(vfo, funcNRLevel,
                             [value](Commander* commandSession, uchar receiver)
                             {
@@ -1905,7 +1905,7 @@ void RadioBackend::setVfoNrLevel(Vfo vfo, int level)
 
 void RadioBackend::setVfoPreampLevel(Vfo vfo, int level)
 {
-    const uchar value = static_cast<uchar>(qBound(0, level, 3));
+    const uchar value = static_cast<uchar>(std::clamp(level, 0, 3));
     routeVfoReceiverCommand(vfo, funcPreamp,
                             [value](Commander* commandSession, uchar receiver)
                             {
@@ -1918,7 +1918,7 @@ void RadioBackend::setVfoPreampLevel(Vfo vfo, int level)
 
 void RadioBackend::setVfoRfGain(Vfo vfo, int level)
 {
-    const ushort value = static_cast<ushort>(qBound(0, level, 255));
+    const ushort value = static_cast<ushort>(std::clamp(level, 0, 255));
     qDebug(logRadio()).noquote().nospace()
         << "Receiver level request control=RFG vfo=" << (vfo == Vfo::Main ? "MAIN" : "SUB")
         << " receiver=" << int(sdr9700::backend::receiverForVfo(vfo)) << " raw=" << value;
@@ -1933,7 +1933,7 @@ void RadioBackend::setVfoRfGain(Vfo vfo, int level)
 
 void RadioBackend::setVfoSquelch(Vfo vfo, int level)
 {
-    const ushort value = static_cast<ushort>(qBound(0, level, 255));
+    const ushort value = static_cast<ushort>(std::clamp(level, 0, 255));
     qDebug(logRadio()).noquote().nospace()
         << "Receiver level request control=SQL vfo=" << (vfo == Vfo::Main ? "MAIN" : "SUB")
         << " receiver=" << int(sdr9700::backend::receiverForVfo(vfo)) << " raw=" << value;
@@ -2023,7 +2023,7 @@ void RadioBackend::setSquelch(bool on, int level)
 {
     // On IC-9700, squelch level 0 = fully open, >0 = active.
     // Setting funcSquelch with 0 disables it; non-zero enables + sets level.
-    const ushort squelchVal = on ? qMax<ushort>(1, static_cast<ushort>(qBound(0, level, 255))) : 0;
+    const ushort squelchVal = on ? std::max<ushort>(1, static_cast<ushort>(std::clamp(level, 0, 255))) : 0;
     scheduleVfoReceiverCommand(
         m_activeVfo, funcSquelch, [squelchVal](Commander* commandSession, uchar receiver)
         { commandSession->receiveCommand(funcSquelch, QVariant::fromValue(squelchVal), receiver); });
@@ -2088,7 +2088,7 @@ void RadioBackend::setDialLockEnabled(bool on)
 
 void RadioBackend::setRitOffset(short hz)
 {
-    const short bounded = qBound(static_cast<short>(-999), hz, static_cast<short>(999));
+    const short bounded = std::clamp(hz, static_cast<short>(-999), static_cast<short>(999));
     invokeOnCurrentCommander(
         [bounded](Commander* commandSession)
         {
@@ -2106,7 +2106,7 @@ void RadioBackend::setCompressor(bool on)
 
 void RadioBackend::setCompressorLevel(int level)
 {
-    const ushort bounded = static_cast<ushort>(qBound(0, level, 255));
+    const ushort bounded = static_cast<ushort>(std::clamp(level, 0, 255));
     scheduleVfoReceiverCommand(
         Vfo::Main, funcCompressorLevel, [bounded](Commander* commandSession, uchar receiver)
         { commandSession->receiveCommand(funcCompressorLevel, QVariant::fromValue(bounded), receiver); });
@@ -2385,7 +2385,7 @@ void RadioBackend::setScopeSpanHz(quint64 hz)
 
 void RadioBackend::setScopeMode(int mode)
 {
-    const uchar bounded = static_cast<uchar>(qBound(0, mode, 1));
+    const uchar bounded = static_cast<uchar>(std::clamp(mode, 0, 1));
     const uchar receiver = sdr9700::backend::receiverForVfo(m_activeVfo);
     invokeOnCurrentCommander(
         [bounded, receiver](Commander* commandSession)
@@ -3110,7 +3110,7 @@ void RadioBackend::sendLanModLevel(int level)
         return;
     }
 
-    const ushort val = static_cast<ushort>(qBound(0, level, 255));
+    const ushort val = static_cast<ushort>(std::clamp(level, 0, 255));
 
     if (QThread::currentThread() == m_commander->thread())
     {
@@ -3124,7 +3124,7 @@ void RadioBackend::sendLanModLevel(int level)
 
 void RadioBackend::setLanModLevel(int level)
 {
-    m_lanModLevel = qBound(0, level, 255);
+    m_lanModLevel = std::clamp(level, 0, 255);
     sendLanModLevel(m_lanModLevel);
 }
 

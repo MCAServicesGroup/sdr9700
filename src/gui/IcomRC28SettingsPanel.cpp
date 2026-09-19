@@ -233,7 +233,7 @@ void IcomRC28SettingsPanel::loadSettings()
     m_pttModeCombo->setCurrentIndex(pttIndex >= 0 ? pttIndex : 0);
 
     const int sensitivity =
-        qBound(1, IcomRC28Manager::settingsField(QStringLiteral("sensitivity"), QStringLiteral("1")).toInt(), 10);
+        std::clamp(IcomRC28Manager::settingsField(QStringLiteral("sensitivity"), QStringLiteral("1")).toInt(), 1, 10);
     m_sensitivitySlider->setValue(sensitivity);
     m_sensitivityValueLabel->setText(QString::number(sensitivity));
     m_autoSnapCheck->setChecked(IcomRC28Manager::settingsField(QStringLiteral("autoSnap"), QStringLiteral("False")) ==
@@ -254,7 +254,7 @@ void IcomRC28SettingsPanel::savePTTMode(const QString& mode)
 
 void IcomRC28SettingsPanel::saveSensitivity(int value)
 {
-    const QString text = QString::number(qBound(1, value, 10));
+    const QString text = QString::number(std::clamp(value, 1, 10));
     if (m_sensitivityValueLabel)
     {
         m_sensitivityValueLabel->setText(text);

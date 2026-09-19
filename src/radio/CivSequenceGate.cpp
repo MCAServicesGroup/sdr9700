@@ -1,5 +1,7 @@
 #include "CivSequenceGate.h"
 
+#include <algorithm>
+
 qint16 CivSequenceGate::distance(quint16 from, quint16 to)
 {
     return static_cast<qint16>(to - from);
@@ -31,7 +33,7 @@ CivSequenceGateResult CivSequenceGate::accept(quint16 sequence, const QByteArray
     }
 
     ++m_diagnostics.delivered;
-    m_diagnostics.highWaterMark = qMax(m_diagnostics.highWaterMark, m_recentSequences.size());
+    m_diagnostics.highWaterMark = std::max(m_diagnostics.highWaterMark, m_recentSequences.size());
     return payload;
 }
 
