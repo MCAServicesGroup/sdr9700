@@ -88,6 +88,7 @@ class AudioConverter : public QObject
   signals:
     void converted(audioPacket audio);
     void conversionCycleFinished();
+    void conversionFailed();
     void initFailed(QString message);
 
   protected:

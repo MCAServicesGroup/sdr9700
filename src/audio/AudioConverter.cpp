@@ -136,7 +136,10 @@ void AudioConverter::process(audioPacket audio)
 {
     // Always report completion, including malformed/dropped packets, so the
     // bounded producer queue can advance and cannot become permanently busy.
-    convert(std::move(audio));
+    if (!convert(std::move(audio)))
+    {
+        emit conversionFailed();
+    }
     emit conversionCycleFinished();
 }
 

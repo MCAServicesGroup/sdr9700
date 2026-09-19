@@ -7,9 +7,10 @@ bool AudioHandlerQtInput::openDevice() noexcept
     // current PTT/DTMF epoch rather than a connection-time default.
     updateTxEncodingState(setupData.initialTxEncodingState);
     audioInput = new QAudioSource(deviceInfo, nativeFormat, this);
-    connect(audioInput, &QAudioSource::stateChanged, this, &AudioHandlerQtInput::stateChanged);
+    connect(audioInput, &QAudioSource::stateChanged, this, &AudioHandlerQtInput::onInputStateChanged);
 
     connect(converter, &AudioConverter::converted, this, &AudioHandlerQtInput::onConverted);
+    connect(converter, &AudioConverter::conversionFailed, this, &AudioHandlerQtInput::invalidateTransmitMeter);
 
     audioInput->setBufferSize(nativeFormat.bytesForDuration(setupData.latency * 1000));
 
@@ -136,6 +137,21 @@ void AudioHandlerQtInput::updateTxEncodingState(sdr9700::audio::TxEncodingState 
     // operation that installs the new epoch; the one in-flight block is
     // rejected downstream if it completes after the transition.
     m_conversionQueue.clear();
+}
+
+void AudioHandlerQtInput::onInputStateChanged(QAudio::State state)
+{
+    stateChanged(state);
+    if (state == QAudio::StoppedState && audioInput && audioInput->error() != QAudio::NoError &&
+        !disposed.load(std::memory_order_acquire))
+    {
+        invalidateTransmitMeter();
+    }
+}
+
+void AudioHandlerQtInput::invalidateTransmitMeter()
+{
+    emit haveTxMeter({}, setupData.latency, static_cast<quint16>(latencyMs()), isUnderrun.load(), isOverrun.load());
 }
 
 QAudioFormat AudioHandlerQtInput::getNativeFormat()

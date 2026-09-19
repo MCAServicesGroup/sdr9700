@@ -22,6 +22,7 @@ class VfoSelectionController : public QObject
 
     VfoSelectionPanel* panel() const { return m_panel; }
     Vfo selectedVfo() const { return m_selectedVfo; }
+    bool receiverContextAvailable() const;
     void setControlsEnabled(bool enabled);
     void setRadioReady(bool ready);
     void setReceiverContextReady(bool ready);
@@ -29,7 +30,7 @@ class VfoSelectionController : public QObject
     bool selectVfo(Vfo vfo);
     bool requestMainSubExchange();
     bool requestDualWatch(bool enabled);
-    void completeExchangeScopeSync();
+    void completeExchangeScopeSync(bool releaseReceiverContext = false);
 
   signals:
     void selectedVfoChanged(Vfo vfo);
@@ -38,7 +39,6 @@ class VfoSelectionController : public QObject
   private:
     void reset();
     void requestSelection(Vfo vfo);
-    bool receiverContextAvailable() const;
     bool receiverPairAvailable() const;
     void setPttReady(bool ready);
     void updateTransmitIndicators();

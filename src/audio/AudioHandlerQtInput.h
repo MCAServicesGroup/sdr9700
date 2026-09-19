@@ -39,4 +39,6 @@ class AudioHandlerQtInput : public AudioHandlerBase
   private slots:
     void onReadyRead();
     void onConverted(const audioPacket& audio);
+    void onInputStateChanged(QAudio::State state);
+    void invalidateTransmitMeter();
 };

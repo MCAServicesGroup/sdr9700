@@ -16,6 +16,7 @@ class PanelAccessibilityTest : public QObject
     void dtmfControlsHaveUsableInitialState();
     void utilityDialogsAreResizableAndFrameless();
     void invalidTransmitMetersCanBeCleared();
+    void transmitMeterStatesUseContractLanguage();
     void metersSurviveRepeatedUpdatesAndDestruction();
 };
 
@@ -99,10 +100,33 @@ void PanelAccessibilityTest::utilityDialogsAreResizableAndFrameless()
     {
         labelTexts.append(label->text());
     }
-    QVERIFY(labelTexts.contains(QStringLiteral("Audio Average")));
-    QVERIFY(labelTexts.contains(QStringLiteral("Audio Peak")));
+    QVERIFY(labelTexts.contains(QStringLiteral("Average")));
+    QVERIFY(labelTexts.contains(QStringLiteral("Peak")));
+    QVERIFY(labelTexts.contains(QStringLiteral("Local processed input")));
     QVERIFY(!labelTexts.contains(QStringLiteral("Microphone Average")));
     QVERIFY(!labelTexts.contains(QStringLiteral("Microphone Peak")));
+}
+
+void PanelAccessibilityTest::transmitMeterStatesUseContractLanguage()
+{
+    MetersDialog meters;
+    auto* stateLabel = meters.findChild<QLabel*>(QStringLiteral("txAudioState"));
+    QVERIFY(stateLabel != nullptr);
+    QCOMPARE(stateLabel->accessibleName(), QStringLiteral("Local processed input state"));
+
+    const QList<QPair<sdr9700::audio::TxAudioMeterState, QString>> states = {
+        {sdr9700::audio::TxAudioMeterState::Invalid, QStringLiteral("Unavailable")},
+        {sdr9700::audio::TxAudioMeterState::NoActivity, QStringLiteral("No activity")},
+        {sdr9700::audio::TxAudioMeterState::SignalPresent, QStringLiteral("Signal present")},
+        {sdr9700::audio::TxAudioMeterState::RecommendedHeadroom, QStringLiteral("Recommended local headroom")},
+        {sdr9700::audio::TxAudioMeterState::NearFullScale, QStringLiteral("Near full scale")},
+        {sdr9700::audio::TxAudioMeterState::FullScaleDetected, QStringLiteral("Full-scale samples detected")},
+    };
+    for (const auto& [state, text] : states)
+    {
+        meters.setTransmitAudioMeter(state, -18.0, -6.0, state == sdr9700::audio::TxAudioMeterState::FullScaleDetected);
+        QCOMPARE(stateLabel->text(), text);
+    }
 }
 
 void PanelAccessibilityTest::metersSurviveRepeatedUpdatesAndDestruction()

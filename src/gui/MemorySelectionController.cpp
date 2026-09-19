@@ -8,6 +8,7 @@
 #include "models/RadioModel.h"
 #include "models/RadioState.h"
 #include "models/VfoModel.h"
+#include "VfoSelectionController.h"
 
 #include <QComboBox>
 #include <QMessageBox>
@@ -85,6 +86,17 @@ void MemorySelectionController::selectMemoryById(const QString& id, bool showDia
             m_owner->m_window->showStatusMessage(QStringLiteral("Connect to radio before selecting a memory"), 4000,
                                                  MainWindow::StatusMessageKind::Warning);
         }
+        return;
+    }
+    if (!m_owner->m_window->m_vfoSelectionController ||
+        !m_owner->m_window->m_vfoSelectionController->receiverContextAvailable())
+    {
+        // Memory activation changes the radio's physical receiver context. It
+        // must not cross a MAIN/SUB exchange, Dual Watch transition, or scope
+        // synchronization boundary and restore an unrelated hidden memory.
+        m_owner->m_window->showStatusMessage(
+            QStringLiteral("Wait for the current receiver change before selecting a memory"), 4000,
+            MainWindow::StatusMessageKind::Warning);
         return;
     }
 
