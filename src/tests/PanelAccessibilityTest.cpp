@@ -114,9 +114,15 @@ void PanelAccessibilityTest::metersSurviveRepeatedUpdatesAndDestruction()
         {
             // Exercise both repeated values, which must not rebuild the style
             // sheet, and threshold transitions that legitimately change it.
-            const int audioLevel = level < 25 ? 0 : (level < 50 ? 64 : (level < 75 ? 220 : 250));
-            meters->setTransmitAudioLevel(audioLevel, audioLevel);
-            meters->setTransmitAudioLevel(audioLevel, audioLevel);
+            const sdr9700::audio::TxAudioMeterState state =
+                level < 25   ? sdr9700::audio::TxAudioMeterState::NoActivity
+                : level < 50 ? sdr9700::audio::TxAudioMeterState::RecommendedHeadroom
+                : level < 75 ? sdr9700::audio::TxAudioMeterState::NearFullScale
+                             : sdr9700::audio::TxAudioMeterState::FullScaleDetected;
+            const double levelDb = -60.0 + level * 0.6;
+            const quint32 clipped = state == sdr9700::audio::TxAudioMeterState::FullScaleDetected ? quint32(level) : 0U;
+            meters->setTransmitAudioMeter(state, levelDb, levelDb, clipped);
+            meters->setTransmitAudioMeter(state, levelDb, levelDb, clipped);
         }
     }
 }

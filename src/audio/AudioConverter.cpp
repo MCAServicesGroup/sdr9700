@@ -26,7 +26,7 @@ AudioConverter::AudioConverter(QObject* parent) : QObject(parent) {}
 
 bool AudioConverter::init(QAudioFormat inputFormat, codecType inputCodec, QAudioFormat outputFormat,
                           codecType outputCodec, quint8 encoderComplexity, quint8 converterResampleQuality,
-                          bool stereoToDualMono)
+                          bool stereoToDualMono, bool measureLocalInputMeter)
 {
 
     releaseCodecState();
@@ -37,6 +37,7 @@ bool AudioConverter::init(QAudioFormat inputFormat, codecType inputCodec, QAudio
     opusComplexity = encoderComplexity;
     resampleQuality = converterResampleQuality;
     mixStereoToDualMono = stereoToDualMono;
+    measureInputMeter = measureLocalInputMeter;
 
     qInfo(logAudioConverter).noquote() << "Starting AudioConverter() Input:" << inputFormat.channelCount()
                                        << "Channels of" << inputCodec << inputFormat.sampleRate()
@@ -342,6 +343,44 @@ bool AudioConverter::convert(audioPacket audio)
                 Eigen::Map<Eigen::VectorXf, 0, Eigen::InnerStride<2>>(samplesF.data() + 1, frameCount) =
                     scratchChannelMix;
             }
+
+            // Local processed-input measurement for the transmit meter. This
+            // tap is deliberately after application gain and channel mixing and
+            // before resampling:
+            //  - after mixing, because equal and opposite stereo channels sum
+            //    to silence at the radio while each channel alone still shows a
+            //    large level, which a pre-mix tap would report as healthy audio;
+            //  - after gain, so the reading cannot silently depend on the
+            //    transmit gain happening to be unity;
+            //  - before resampling, so the identical tap is available whether or
+            //    not the transmit encode path runs. The reading must not change
+            //    when PTT is pressed.
+            // Full scale is counted here rather than at the output clamp because
+            // the clamp only runs while encoding; post-mix samples are not
+            // clamped, so they can legitimately exceed unity.
+            if (measureInputMeter)
+            {
+                const Eigen::Index sampleCount = samplesF.size();
+                float peakMagnitude = 0.0F;
+                double sumSquares = 0.0;
+                quint32 fullScaleCount = 0;
+                for (Eigen::Index index = 0; index < sampleCount; ++index)
+                {
+                    const float magnitude = std::fabs(samplesF[index]);
+                    peakMagnitude = qMax(peakMagnitude, magnitude);
+                    sumSquares += static_cast<double>(magnitude) * magnitude;
+                    if (magnitude >= sdr9700::audio::kFullScaleMagnitude)
+                    {
+                        ++fullScaleCount;
+                    }
+                }
+                audio.inputMeter.peak = peakMagnitude;
+                audio.inputMeter.sumSquares = sumSquares;
+                audio.inputMeter.sampleCount = static_cast<quint32>(sampleCount);
+                audio.inputMeter.fullScaleCount = fullScaleCount;
+                audio.inputMeter.valid = true;
+            }
+
             if (resampler != nullptr && resampleRatio != 1.0)
             {
                 if (!sampleCountMatchesChannels(samplesF.size(), outFormat.channelCount()))

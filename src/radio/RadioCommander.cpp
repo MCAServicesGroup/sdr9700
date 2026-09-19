@@ -41,6 +41,11 @@ void RadioCommander::handleNetworkAudioLevels(const networkAudioLevels& levels)
     emit haveNetworkAudioLevels(levels);
 }
 
+void RadioCommander::handleTxAudioMeter(const sdr9700::audio::TxAudioMeterBlock& block)
+{
+    emit haveTxAudioMeter(block);
+}
+
 void RadioCommander::receiveAudioData(const audioPacket& data)
 {
     emit haveAudioData(data);

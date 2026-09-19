@@ -2,6 +2,8 @@
 
 #include "UtilityWindow.h"
 
+#include "TxAudioMeterPolicy.h"
+
 #include <QString>
 
 class QLabel;
@@ -30,7 +32,8 @@ class MetersDialog : public sdr9700::ui::UtilityWindow
     void clearVoltageMeter();
     void setCurrentMeter(double amps);
     void clearCurrentMeter();
-    void setTransmitAudioLevel(int peak, int rms);
+    void setTransmitAudioMeter(sdr9700::audio::TxAudioMeterState state, double rmsDb, double peakDb,
+                               quint32 fullScaleCount);
 
   private:
     struct MeterRow

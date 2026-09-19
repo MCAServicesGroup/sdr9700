@@ -8,6 +8,7 @@
 #include <QtGlobal>
 #include <optional>
 #include "Types.h"
+#include "TxAudioMeterPolicy.h"
 #include "Vfo.h"
 
 // A complete, receiver-targeted request assembled from confirmed radio state.
@@ -172,7 +173,7 @@ class IRadioBackend : public QObject
     void networkQualityChanged(int rttMs);
     void sessionHeartbeat();
 
-    void txAudioLevelChanged(int peak, int rms);
+    void txAudioMeterChanged(const sdr9700::audio::TxAudioMeterBlock& block);
 
     void audioDataReady(const QByteArray& pcm, int sampleRate, int channelCount);
 };

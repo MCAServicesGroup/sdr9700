@@ -20,6 +20,7 @@
 #include <QDebug>
 
 #include "PacketTypes.h"
+#include "TxAudioMeterPolicy.h"
 #include "AudioHandler.h"
 #include "UdpBase.h"
 #include "UdpCivData.h"
@@ -63,8 +64,8 @@ class UdpHandler : public UdpBase
     void setCurrentRadio(quint8 radio);
     void getRxLevels(quint16 amplitudePeak, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under,
                      bool over);
-    void getTxLevels(quint16 amplitudePeak, quint16 amplitudeRMS, quint16 latency, quint16 current, bool under,
-                     bool over);
+    void getTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency, quint16 measuredLatency,
+                    bool under, bool over);
     void setPttActive(bool active);
     void queueDtmfPcm(const QByteArray& pcm);
     void beginStandbyWakeHold();
@@ -77,6 +78,7 @@ class UdpHandler : public UdpBase
     void haveSetVolume(quint8 value);
     void haveNetworkStatus(networkStatus);
     void haveNetworkAudioLevels(networkAudioLevels);
+    void haveTxAudioMeter(const sdr9700::audio::TxAudioMeterBlock& block);
     void requestRadioSelection(QList<radio_cap_packet> radios);
     void setRadioUsage(quint8, bool admin, quint8 busy, QString name, QString mac);
     void streamReady();
@@ -172,13 +174,8 @@ class UdpHandler : public UdpBase
     quint16 txSampleRates = 0;
     networkStatus status;
 
-    quint8 audioLevelsTxPeak[audioLevelBufferSize];
     quint8 audioLevelsRxPeak[audioLevelBufferSize];
-
-    quint8 audioLevelsTxRMS[audioLevelBufferSize];
     quint8 audioLevelsRxRMS[audioLevelBufferSize];
-
-    quint8 audioLevelsTxPosition = 0;
     quint8 audioLevelsRxPosition = 0;
     static quint8 findMean(const quint8* data);
     static quint8 findMax(const quint8* data);
