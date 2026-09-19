@@ -9,6 +9,10 @@ class AudioHandlerQtInput : public AudioHandlerBase
     explicit AudioHandlerQtInput(QObject* parent = nullptr) : AudioHandlerBase(parent) {}
     ~AudioHandlerQtInput() override { dispose(); }
     QString role() const override { return QStringLiteral("Input"); }
+    sdr9700::audio::TxEncodingState txEncodingState() const noexcept { return m_txEncodingState; }
+
+  public slots:
+    void updateTxEncodingState(sdr9700::audio::TxEncodingState state);
 
   signals:
     // Transmit-specific publication path. AudioHandlerBase::haveLevels is shared
@@ -30,8 +34,11 @@ class AudioHandlerQtInput : public AudioHandlerBase
 
     QIODevice* audioDevice{nullptr};
     qsizetype m_bufferReadOffset{0};
+    sdr9700::audio::TxEncodingState m_txEncodingState;
 
   private slots:
     void onReadyRead();
     void onConverted(const audioPacket& audio);
+    void onInputStateChanged(QAudio::State state);
+    void invalidateTransmitMeter();
 };

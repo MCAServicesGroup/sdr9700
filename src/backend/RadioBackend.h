@@ -139,6 +139,8 @@ class RadioBackend : public IRadioBackend
     void forcePttOffForSafety(const QString& message);
     void handleTransmitSwr(double swr);
     static void selectMainVfoForCommand(Commander* commandSession);
+    static void scheduleInitialMainVfoIdentityForCommand(Commander* commandSession, bool enterVfoMode);
+    static void requestMainVfoStateForCommand(Commander* commandSession);
     static void requestSubVfoIdentityForCommand(Commander* commandSession, bool restoreMain = true,
                                                 bool requestFrequency = true, bool requestMode = true);
     static void requestSubVfoStateForCommand(Commander* commandSession);
@@ -149,6 +151,7 @@ class RadioBackend : public IRadioBackend
     static void selectMemoryBandForCommand(Commander* commandSession, quint16 group, Vfo targetVfo);
     static void selectMemoryForCommand(Commander* commandSession, quint16 group, quint16 channel,
                                        bool prepareBand = true);
+    static void sendPttOnForCommand(Commander* commandSession, bool memorySelected);
     void resetScopeController();
     bool isCurrentSession(quint64 session, const Commander* commandSession) const;
     void invokeOnCurrentCommander(const std::function<void(Commander*)>& command);

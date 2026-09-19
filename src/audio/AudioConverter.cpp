@@ -138,7 +138,10 @@ void AudioConverter::process(audioPacket audio)
 {
     // Always report completion, including malformed/dropped packets, so the
     // bounded producer queue can advance and cannot become permanently busy.
-    convert(std::move(audio));
+    if (!convert(std::move(audio)))
+    {
+        emit conversionFailed();
+    }
     emit conversionCycleFinished();
 }
 
@@ -381,6 +384,16 @@ bool AudioConverter::convert(audioPacket audio)
                 audio.inputMeter.sampleCount = static_cast<quint32>(sampleCount);
                 audio.inputMeter.fullScaleCount = fullScaleCount;
                 audio.inputMeter.valid = true;
+            }
+
+            // Keep capture and the post-mix meter live before PTT, but avoid
+            // resampling, encoding, and output construction when this block's
+            // capture epoch was not authorized for voice transmission.
+            if (measureInputMeter && !audio.txEncodingState.encodingAuthorized())
+            {
+                audio.data.clear();
+                emit converted(audio);
+                return true;
             }
 
             if (resampler != nullptr && resampleRatio != 1.0)

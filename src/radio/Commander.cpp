@@ -374,11 +374,14 @@ void Commander::scheduleSMeterRead(uchar receiver)
                                m_receiverScopedReadActive = true;
                                m_smeterScopedReadActive = true;
                                m_smeterScopedReceiver = receiver;
+                               const quint64 generation = ++m_smeterScopedReadGeneration;
                                receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoSub), 0);
                                QTimer::singleShot(50, this,
-                                                  [this, receiver]()
+                                                  [this, receiver, generation]()
                                                   {
-                                                      if (!m_shutdownComplete && m_smeterScopedReadActive)
+                                                      if (!m_shutdownComplete && m_smeterScopedReadActive &&
+                                                          m_smeterScopedReceiver == receiver &&
+                                                          m_smeterScopedReadGeneration == generation)
                                                       {
                                                           receiveCommand(funcSMeter, QVariant(), receiver);
                                                       }

@@ -73,7 +73,10 @@ class MemoryManagerSmokeTest : public QObject
     void compressorMenuReflectsConfirmedLevel();
     void utilityWindowIsDestroyedWithHost();
     void backendReadinessWaitsForBothVfos();
+    void backendQueuesStartupMainStateAsScopedAction();
+    void backendQueuesStartupSubStateAsScopedAction();
     void backendQueuesPostExchangeSettingsForBothReceivers();
+    void memoryPttDoesNotReselectMemoryChannel();
     void backendKeepsUnkeyPendingAcrossStaleReadback();
     void radioControlsDoNotWaitForInitialMemorySync();
     void quitActionDefersWindowClose();
@@ -184,6 +187,11 @@ void MemoryManagerSmokeTest::memoryActivationRoutesByBand()
             backend->m_commander = nullptr;
             backend->m_sessionActive.reset();
         });
+    auto* vfoSelection = window.findChild<VfoSelectionController*>();
+    QVERIFY(vfoSelection != nullptr);
+    vfoSelection->setControlsEnabled(true);
+    vfoSelection->setRadioReady(true);
+    vfoSelection->setReceiverContextReady(true);
     commander.receiveCommand(funcSelectVFO, QVariant::fromValue(expectSub ? vfoMain : vfoSub), 0);
     QSignalSpy wireSpy(&commander, &Commander::dataForComm);
     QVERIFY(QMetaObject::invokeMethod(table, "cellDoubleClicked", Q_ARG(int, 0), Q_ARG(int, 0)));
@@ -376,22 +384,28 @@ void MemoryManagerSmokeTest::memoryManagerShowsCachedVerificationAndLiveSyncProg
     QVERIFY(!partialState.complete);
 
     // Unknown receiver bands fall back to MAIN. Exercise the table connection.
+    auto* vfoSelection = window.findChild<VfoSelectionController*>();
+    QVERIFY(vfoSelection != nullptr);
+    vfoSelection->setControlsEnabled(true);
+    vfoSelection->setRadioReady(true);
+    vfoSelection->setReceiverContextReady(true);
     QVERIFY(QMetaObject::invokeMethod(memoryTable, "cellDoubleClicked", Q_ARG(int, 0), Q_ARG(int, 0)));
     auto* statusMessageLabel = window.findChild<QLabel*>(QStringLiteral("statusMessageLabel"));
     QVERIFY(statusMessageLabel != nullptr);
     QCOMPARE(statusMessageLabel->text(), QStringLiteral("Selected memory on MAIN: DATABASE TEST"));
 
     // Highlighting SUB must not override the MAIN fallback.
-    auto* vfoSelection = window.findChild<VfoSelectionController*>();
-    QVERIFY(vfoSelection != nullptr);
     model.backend()->radioValueConfirmed(funcVFODualWatch, QVariant::fromValue<bool>(true), 0);
     QCoreApplication::processEvents();
-    vfoSelection->setControlsEnabled(true);
-    vfoSelection->setRadioReady(true);
+    vfoSelection->setReceiverContextReady(false);
+    QVERIFY(QMetaObject::invokeMethod(memoryTable, "cellDoubleClicked", Q_ARG(int, 0), Q_ARG(int, 0)));
+    QCOMPARE(statusMessageLabel->text(),
+             QStringLiteral("Wait for the current receiver change before selecting a memory"));
     vfoSelection->setReceiverContextReady(true);
     QVERIFY(vfoSelection->selectVfo(Vfo::Sub));
     model.backend()->radioValueConfirmed(funcVFOBandMS, QVariant::fromValue<bool>(true), 0);
     QCoreApplication::processEvents();
+    vfoSelection->setReceiverContextReady(true);
     QVERIFY(QMetaObject::invokeMethod(memoryTable, "cellDoubleClicked", Q_ARG(int, 0), Q_ARG(int, 0)));
     QCOMPARE(statusMessageLabel->text(), QStringLiteral("Selected memory on MAIN: DATABASE TEST"));
 }
@@ -947,6 +961,49 @@ void MemoryManagerSmokeTest::backendReadinessWaitsForBothVfos()
     QCOMPARE(readySpy.constFirst().constFirst().toBool(), true);
 }
 
+void MemoryManagerSmokeTest::backendQueuesStartupSubStateAsScopedAction()
+{
+    Commander commander;
+    QSignalSpy wireSpy(&commander, &Commander::dataForComm);
+
+    RadioBackend::requestSubVfoStateForCommand(&commander);
+
+    QVERIFY(wireSpy.isEmpty());
+    QCOMPARE(commander.m_scheduledCommands.size(), 1);
+    const Commander::ScheduledCommand& command = commander.m_scheduledCommands.constFirst();
+    QCOMPARE(command.commandClass, Commander::ScheduledCommandClass::ConfirmatoryRead);
+    QCOMPARE(command.func, funcFreqGet);
+    QCOMPARE(command.receiver, uchar(1));
+    QVERIFY(command.action);
+}
+
+void MemoryManagerSmokeTest::backendQueuesStartupMainStateAsScopedAction()
+{
+    Commander commander;
+    QSignalSpy wireSpy(&commander, &Commander::dataForComm);
+
+    RadioBackend::scheduleInitialMainVfoIdentityForCommand(&commander, false);
+
+    QVERIFY(wireSpy.isEmpty());
+    QCOMPARE(commander.m_scheduledCommands.size(), 1);
+    const Commander::ScheduledCommand& command = commander.m_scheduledCommands.constFirst();
+    QCOMPARE(command.commandClass, Commander::ScheduledCommandClass::ConfirmatoryRead);
+    QCOMPARE(command.func, funcFreqGet);
+    QCOMPARE(command.receiver, uchar(0));
+    QVERIFY(command.action);
+
+    commander.m_scheduledCommands.clear();
+    RadioBackend::requestMainVfoStateForCommand(&commander);
+
+    QVERIFY(wireSpy.isEmpty());
+    QCOMPARE(commander.m_scheduledCommands.size(), 1);
+    const Commander::ScheduledCommand& fullStateCommand = commander.m_scheduledCommands.constFirst();
+    QCOMPARE(fullStateCommand.commandClass, Commander::ScheduledCommandClass::ConfirmatoryRead);
+    QCOMPARE(fullStateCommand.func, funcFreqGet);
+    QCOMPARE(fullStateCommand.receiver, uchar(0));
+    QVERIFY(fullStateCommand.action);
+}
+
 void MemoryManagerSmokeTest::backendQueuesPostExchangeSettingsForBothReceivers()
 {
     Commander commander;
@@ -963,6 +1020,33 @@ void MemoryManagerSmokeTest::backendQueuesPostExchangeSettingsForBothReceivers()
         receivers.insert(command.receiver);
     }
     QCOMPARE(receivers, QSet<uchar>({0, 1}));
+}
+
+void MemoryManagerSmokeTest::memoryPttDoesNotReselectMemoryChannel()
+{
+    Commander commander;
+    sdr9700::populateRadioCapabilities(commander.radioCaps);
+    commander.haveRadioCaps = true;
+    commander.setCIVAddr(0xA2);
+    QSignalSpy wireSpy(&commander, &Commander::dataForComm);
+
+    RadioBackend::sendPttOnForCommand(&commander, true);
+
+    QVERIFY(!wireSpy.isEmpty());
+    bool requestedTransmitStatus = false;
+    bool requestedSelectedFrequency = false;
+    bool requestedSelectedMode = false;
+    for (const auto& emission : wireSpy)
+    {
+        const QByteArray command = emission.at(0).toByteArray().mid(4);
+        QVERIFY2(command.isEmpty() || command.front() != '\x08', "PTT must not reselect a memory channel");
+        requestedTransmitStatus = requestedTransmitStatus || command.startsWith(QByteArray::fromHex("1c00"));
+        requestedSelectedFrequency = requestedSelectedFrequency || command.startsWith(QByteArray::fromHex("25"));
+        requestedSelectedMode = requestedSelectedMode || command.startsWith(QByteArray::fromHex("26"));
+    }
+    QVERIFY(requestedTransmitStatus);
+    QVERIFY(requestedSelectedFrequency);
+    QVERIFY(requestedSelectedMode);
 }
 
 void MemoryManagerSmokeTest::backendKeepsUnkeyPendingAcrossStaleReadback()

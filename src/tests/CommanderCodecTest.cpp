@@ -62,6 +62,7 @@ class CommanderCodecTest : public QObject
     void sMeterMainReadAvoidsContextCommands();
     void sMeterSubReadWaitsForReplyFamilyDrainBeforeSelectingContext();
     void sMeterSubReadRestoresContextAfterReply();
+    void staleSMeterTimerDoesNotAffectLaterRead();
     void sMeterSubReadPreservesOperatorSelectedSub();
     void receiverScopedReadPreservesOperatorSelectedSub();
     void survivesCombinedTransportAndSchedulerFaultSoak();
@@ -516,6 +517,34 @@ void CommanderCodecTest::sMeterSubReadRestoresContextAfterReply()
     QCOMPARE(m_commander.correlationDiagnostics().subSMeterTimeouts, quint64(0));
     QCOMPARE(m_commander.schedulerDiagnostics().scheduledFrames, quint64(3));
     QCOMPARE(m_commander.schedulerDiagnostics().directFrames, quint64(1));
+}
+
+void CommanderCodecTest::staleSMeterTimerDoesNotAffectLaterRead()
+{
+    QSignalSpy wireSpy(&m_commander, &Commander::dataForComm);
+    const quint64 initialGeneration = m_commander.m_smeterScopedReadGeneration;
+
+    m_commander.scheduleSMeterRead(1);
+    m_commander.dispatchNextScheduledCommand();
+    QCOMPARE(wireSpy.count(), 1);
+    m_commander.abortSMeterRead(1);
+    QCOMPARE(wireSpy.count(), 3);
+
+    // The first transaction still owns a delayed 50 ms callback. Queue a new
+    // transaction while its 25 ms context-restoration guard is active so the
+    // scheduler starts the replacement before that stale callback fires.
+    m_commander.scheduleSMeterRead(1);
+    QTRY_COMPARE_WITH_TIMEOUT(m_commander.m_smeterScopedReadGeneration, initialGeneration + 2, 100);
+    QTest::qWait(100);
+
+    QCOMPARE(wireSpy.count(), 5);
+    QCOMPARE(wireSpy.at(3).at(0).toByteArray(), QByteArray::fromHex("fefea2e107d1"));
+    QCOMPARE(wireSpy.at(4).at(0).toByteArray(), QByteArray::fromHex("fefea2e11502"));
+    QCOMPARE(m_commander.correlationDiagnostics().subSMeterRequests, quint64(1));
+
+    m_commander.handleNewData(QByteArray::fromHex("fefee1a215020000fd"));
+    QCOMPARE(m_commander.correlationDiagnostics().subSMeterReplies, quint64(1));
+    QTRY_VERIFY_WITH_TIMEOUT(!m_commander.m_receiverScopedReadActive, 250);
 }
 
 void CommanderCodecTest::sMeterSubReadPreservesOperatorSelectedSub()

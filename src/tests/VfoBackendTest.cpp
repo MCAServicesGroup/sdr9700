@@ -270,6 +270,7 @@ class VfoBackendTest : public QObject
     void uiSelectionIgnoresBackgroundReceiverRouting();
     void dualWatchRequestReportsBackendAcceptance();
     void receiverPairActionsRespectLifecycleGates();
+    void exchangeScopeTimeoutReleasesReceiverControls();
 };
 
 void VfoBackendTest::levelMenuUsesSameRoundedPercentageAsControl_data()
@@ -720,6 +721,30 @@ void VfoBackendTest::receiverPairActionsRespectLifecycleGates()
     QCOMPARE(backend.exchangeCalls, 1);
     QVERIFY(!selection.selectVfo(Vfo::Main));
     QVERIFY(!selection.requestMainSubExchange());
+}
+
+void VfoBackendTest::exchangeScopeTimeoutReleasesReceiverControls()
+{
+    FakeRadioBackend backend;
+    sdr9700::RadioState state(&backend);
+    QWidget parent;
+    VfoController mainController(Vfo::Main, &backend, &state, &parent);
+    VfoController subController(Vfo::Sub, &backend, &state, &parent);
+    VfoSelectionController selection(&backend, &mainController, &subController, &parent);
+    selection.setRadioReady(true);
+    selection.setControlsEnabled(true);
+    emit backend.radioValueConfirmed(funcVFODualWatch, true, 0);
+
+    QVERIFY(selection.requestMainSubExchange());
+    QCOMPARE(backend.exchangeCalls, 1);
+    emit backend.mainSubExchangeCompleted();
+
+    selection.setReceiverContextReady(false);
+    QVERIFY(!selection.requestMainSubExchange());
+
+    selection.completeExchangeScopeSync(true);
+    QVERIFY(selection.requestMainSubExchange());
+    QCOMPARE(backend.exchangeCalls, 2);
 }
 
 void VfoBackendTest::controllerFrequencyRequestWaitsForRadioConfirmation()

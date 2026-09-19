@@ -143,7 +143,10 @@ void UdpAudio::sendAudioBuffer(const QByteArray& data)
 
 void UdpAudio::receiveAudioData(audioPacket audio)
 {
-    if (txaudio == nullptr)
+    // A replacement capture worker may be installed before a signal already
+    // posted by the old worker reaches this event loop. Source identity keeps
+    // that old-device audio out without inventing an encoding-state transition.
+    if (txaudio == nullptr || sender() != txaudio)
     {
         qDebug(logUdp()).noquote() << "TX: receiveAudioData called but txaudio is null";
         return;
@@ -157,13 +160,12 @@ void UdpAudio::receiveAudioData(audioPacket audio)
         }
 
         // DTMF timer owns the audio path; mic frames are suppressed entirely.
-        if (!sdr9700::audio::shouldQueueMicrophoneFrameForTransmit(m_txActive.load(), m_dtmfTimerActive))
+        if (!m_txEncodingState.encodingAuthorized() || audio.txEncodingState.epoch != m_txEncodingState.epoch)
         {
-            m_txAudioQueue.clear();
             return;
         }
 
-        m_txAudioQueue.enqueue(audio.data);
+        m_txAudioQueue.enqueue({audio.txEncodingState.epoch, std::move(audio.data)});
         while (m_txAudioQueue.size() > kMaxQueuedTxAudioFrames)
         {
             m_txAudioQueue.dequeue();
@@ -173,23 +175,26 @@ void UdpAudio::receiveAudioData(audioPacket audio)
 
 void UdpAudio::queueDtmfPcm(const QByteArray& pcm)
 {
-    m_txAudioQueue.clear();
+    if (pcm.isEmpty())
+    {
+        finishDtmf();
+        return;
+    }
+
+    updateTxEncodingState(m_txEncodingState.pttActive, true);
     m_dtmfPcm = pcm;
     m_dtmfPcmOffset = 0;
     m_txPumpClock.invalidate();
     m_txFramesSent = 0;
     m_dtmfPumpClock.invalidate();
     m_dtmfFramesSent = 0;
-    if (!pcm.isEmpty())
-    {
-        m_dtmfTimerActive = true;
-        m_dtmfTimer->start();
-    }
+    m_dtmfTimerActive = true;
+    m_dtmfTimer->start();
 }
 
 void UdpAudio::sendNextTxAudioFrame()
 {
-    if (!m_txActive.load())
+    if (!m_txEncodingState.pttActive)
     {
         if (txAudioTimer)
         {
@@ -207,10 +212,12 @@ void UdpAudio::sendNextTxAudioFrame()
     const qint64 framesDue = nextTxAudioFramesDue(m_txPumpClock, m_txFramesSent);
     for (qint64 frameIndex = 0; frameIndex < framesDue; ++frameIndex)
     {
+        std::optional<QByteArray> queuedFrame =
+            sdr9700::audio::takeMatchingTxAudioFrame(m_txAudioQueue, m_txEncodingState.epoch);
         QByteArray frame;
-        if (!m_txAudioQueue.isEmpty())
+        if (queuedFrame)
         {
-            frame = m_txAudioQueue.dequeue();
+            frame = std::move(*queuedFrame);
         }
         else
         {
@@ -226,17 +233,15 @@ void UdpAudio::sendNextTxAudioFrame()
 
 void UdpAudio::sendNextDtmfFrame()
 {
-    if (!m_txActive.load())
+    if (!m_txEncodingState.pttActive)
     {
-        m_dtmfTimerActive = false;
-        m_dtmfTimer->stop();
+        finishDtmf();
         return;
     }
 
     if (m_dtmfPcmOffset >= m_dtmfPcm.size())
     {
-        m_dtmfTimerActive = false;
-        m_dtmfTimer->stop();
+        finishDtmf();
         return;
     }
 
@@ -259,10 +264,7 @@ void UdpAudio::sendNextDtmfFrame()
 
     if (m_dtmfPcmOffset >= m_dtmfPcm.size())
     {
-        m_dtmfTimerActive = false;
-        m_dtmfTimer->stop();
-        m_txPumpClock.invalidate();
-        m_txFramesSent = 0;
+        finishDtmf();
     }
 }
 
@@ -300,6 +302,13 @@ void UdpAudio::getRxLevels(quint16 amplitude, quint16 amplitudeRMS, quint16 late
 void UdpAudio::getTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency,
                           quint16 measuredLatency, bool under, bool over)
 {
+    // A device replacement can leave an already-posted signal from the old
+    // capture worker in this event queue. Do not let that stale sample make a
+    // restarted meter valid before the replacement produces its first block.
+    if (sender() != txaudio)
+    {
+        return;
+    }
     emit haveTxMeter(block, configuredLatency, measuredLatency, under, over);
 }
 
@@ -477,6 +486,7 @@ void UdpAudio::setTxAudioDevice(const QAudioDevice& device)
 void UdpAudio::stopLocalAudio()
 {
     m_audioReady = false;
+    updateTxEncodingState(false, false);
     m_rxAudioStartPolicy.reset();
     stopAudioWorker(rxaudio, rxAudioThread, "rxAudioThread");
     stopAudioWorker(txaudio, txAudioThread, "txAudioThread");
@@ -546,8 +556,8 @@ void UdpAudio::startTxAudio()
 
     // Keep the selected microphone open throughout the connected session so
     // the operator can verify local transmit level before pressing PTT. The
-    // send path remains gated by m_txActive, and stopLocalAudio() tears the
-    // capture device down during disconnect.
+    // send path remains gated by the current encoding state, and
+    // stopLocalAudio() tears the capture device down during disconnect.
     auto* input = new AudioHandlerQtInput();
     txaudio = input;
     txAudioThread = new QThread(this);
@@ -556,6 +566,7 @@ void UdpAudio::startTxAudio()
     txAudioThread->start(QThread::HighPriority);
 
     connect(this, &UdpAudio::setupTxAudio, txaudio, &AudioHandlerBase::init);
+    connect(this, &UdpAudio::txEncodingStateChanged, input, &AudioHandlerQtInput::updateTxEncodingState);
     connect(txaudio, &AudioHandlerBase::haveAudioData, this, &UdpAudio::receiveAudioData);
     // Only the capture worker is connected to the transmit meter path.
     // AudioHandlerBase::haveLevels stays wired to the receive worker alone.
@@ -563,11 +574,14 @@ void UdpAudio::startTxAudio()
     connect(txAudioThread, &QThread::finished, txaudio, &QObject::deleteLater);
     connect(txaudio, &AudioHandlerBase::initFailed, this, &UdpAudio::onTxAudioInitFailed);
 
-    emit setupTxAudio(txSetup);
+    audioSetup currentSetup = txSetup;
+    currentSetup.initialTxEncodingState = m_txEncodingState;
+    emit setupTxAudio(currentSetup);
 }
 
 void UdpAudio::stopTxAudio()
 {
+    m_txAudioQueue.clear();
     stopAudioWorker(txaudio, txAudioThread, "txAudioThread");
     // The local meter has no measurement until a replacement capture worker
     // produces one. A restarted device must read as unavailable, not as its
@@ -577,11 +591,15 @@ void UdpAudio::stopTxAudio()
 
 void UdpAudio::setTxActive(bool active)
 {
+    const bool stateChanged = updateTxEncodingState(active, active ? m_txEncodingState.dtmfActive : false);
     if (active && m_audioReady)
     {
         startTxAudio();
     }
-    m_txActive.store(active);
+    if (!stateChanged)
+    {
+        return;
+    }
     m_txPumpClock.invalidate();
     m_txFramesSent = 0;
     m_dtmfPumpClock.invalidate();
@@ -593,11 +611,7 @@ void UdpAudio::setTxActive(bool active)
         {
             txAudioTimer->stop();
         }
-        m_dtmfTimer->stop();
-        m_dtmfTimerActive = false;
-        m_dtmfPcm.clear();
-        m_dtmfFrame.clear();
-        m_dtmfPcmOffset = 0;
+        finishDtmf();
     }
     else if (txAudioTimer && !txAudioTimer->isActive())
     {
@@ -605,6 +619,42 @@ void UdpAudio::setTxActive(bool active)
         sendNextTxAudioFrame();
     }
     qDebug(logUdp()).noquote() << "UdpAudio: TX audio" << (active ? "ENABLED (PTT on)" : "DISABLED (PTT off)");
+}
+
+bool UdpAudio::updateTxEncodingState(bool pttActive, bool dtmfActive)
+{
+    const std::optional<sdr9700::audio::TxEncodingState> next =
+        sdr9700::audio::transitionTxEncodingState(m_txEncodingState, pttActive, dtmfActive);
+    if (!next)
+    {
+        return false;
+    }
+
+    m_txEncodingState = *next;
+    m_txAudioQueue.clear();
+    emit txEncodingStateChanged(m_txEncodingState);
+    return true;
+}
+
+void UdpAudio::finishDtmf()
+{
+    const bool wasActive = m_dtmfTimerActive || m_txEncodingState.dtmfActive;
+    if (m_dtmfTimer)
+    {
+        m_dtmfTimer->stop();
+    }
+    m_dtmfTimerActive = false;
+    m_dtmfPcm.clear();
+    m_dtmfFrame.clear();
+    m_dtmfPcmOffset = 0;
+    m_txPumpClock.invalidate();
+    m_txFramesSent = 0;
+    m_dtmfPumpClock.invalidate();
+    m_dtmfFramesSent = 0;
+    if (wasActive)
+    {
+        updateTxEncodingState(m_txEncodingState.pttActive, false);
+    }
 }
 
 void UdpAudio::onRxAudioInitFailed()

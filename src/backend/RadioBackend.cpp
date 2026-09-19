@@ -49,6 +49,8 @@ constexpr int kPttOnConfirmationMs = 1000;
 constexpr int kPttOffConfirmationRetryMs = 50;
 constexpr int kPttOffConfirmationFastWindowMs = 1000;
 constexpr int kPttOffConfirmationSlowRetryMs = 1000;
+constexpr int kMemorySelectionSettleMs = 150;
+constexpr int kMemorySelectionRetryMs = 650;
 constexpr int kMaxTransmitDurationMs = 180000;
 constexpr uchar kHardwareTxTimeoutTimer = 1; // 3 minutes, the IC-9700's shortest non-off value.
 constexpr uchar kMainReceiver = 0;
@@ -86,6 +88,12 @@ constexpr std::array kVfoStatePollItems{
     VfoStatePollItem{funcToneFreq, false},        VfoStatePollItem{funcTSQLFreq, false},
     VfoStatePollItem{funcDTCSCode, false},        VfoStatePollItem{funcRFPower, true},
     VfoStatePollItem{funcCompressor, true},       VfoStatePollItem{funcXFCStatus, true},
+};
+
+constexpr std::array kReceiverSnapshotCommands{
+    funcAGCTimeConstant, funcAttenuator,      funcNoiseBlanker, funcNBLevel,  funcAutoNotch, funcManualNotch,
+    funcNoiseReduction,  funcNRLevel,         funcPreamp,       funcRfGain,   funcSquelch,   funcSplitStatus,
+    funcReadFreqOffset,  funcToneSquelchType, funcToneFreq,     funcTSQLFreq, funcDTCSCode,
 };
 
 quint64 memoryGroupDefaultFrequencyHz(quint16 group)
@@ -1618,30 +1626,11 @@ void RadioBackend::requestVfoState(Vfo vfo)
 {
     if (vfo == Vfo::Sub)
     {
-        invokeOnCurrentCommander(
-            [](Commander* commandSession)
-            {
-                requestSubVfoStateForCommand(commandSession);
-                commandSession->receiveCommand(funcVFOBandMS, QVariant::fromValue<bool>(false), 0);
-            });
+        invokeOnCurrentCommander([](Commander* commandSession) { requestSubVfoStateForCommand(commandSession); });
         return;
     }
 
-    invokeOnCurrentCommander(
-        [](Commander* commandSession)
-        {
-            selectMainVfoForCommand(commandSession);
-            commandSession->receiveCommand(funcFreqGet, QVariant(), 0);
-            commandSession->receiveCommand(funcModeGet, QVariant(), 0);
-            for (const Funcs func :
-                 {funcAGCTimeConstant, funcAttenuator,     funcNoiseBlanker, funcNBLevel,        funcAutoNotch,
-                  funcManualNotch,     funcNoiseReduction, funcNRLevel,      funcPreamp,         funcRfGain,
-                  funcSquelch,         funcRFPower,        funcSplitStatus,  funcReadFreqOffset, funcToneSquelchType,
-                  funcToneFreq,        funcTSQLFreq,       funcDTCSCode,     funcCompressor,     funcXFCStatus})
-            {
-                commandSession->receiveCommand(func, QVariant(), 0);
-            }
-        });
+    invokeOnCurrentCommander([](Commander* commandSession) { requestMainVfoStateForCommand(commandSession); });
 }
 
 void RadioBackend::routeVfoReceiverCommand(Vfo vfo, Funcs func, const std::function<void(Commander*, uchar)>& command)
@@ -2192,24 +2181,83 @@ void RadioBackend::selectMainVfoForCommand(Commander* commandSession)
     commandSession->receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoMain), 0);
 }
 
+void RadioBackend::scheduleInitialMainVfoIdentityForCommand(Commander* commandSession, bool enterVfoMode)
+{
+    if (!commandSession)
+    {
+        return;
+    }
+    if (enterVfoMode)
+    {
+        // Preserve the startup contract that leaves memory mode before the
+        // first identity read. The scoped action selects MAIN again after the
+        // mode change has had time to settle.
+        selectMainVfoForCommand(commandSession);
+        commandSession->receiveCommand(funcVFOModeSelect, QVariant(), kMainReceiver);
+    }
+    commandSession->scheduleConfirmatoryAction(funcFreqGet, kMainReceiver,
+                                               [commandSession]()
+                                               {
+                                                   commandSession->executeReceiverScopedAction(
+                                                       kMainReceiver, [commandSession]()
+                                                       { commandSession->readCurrentFrequencyAndMode(); });
+                                               });
+}
+
+void RadioBackend::requestMainVfoStateForCommand(Commander* commandSession)
+{
+    if (!commandSession)
+    {
+        return;
+    }
+    commandSession->scheduleConfirmatoryAction(
+        funcFreqGet, kMainReceiver,
+        [commandSession]()
+        {
+            commandSession->executeReceiverScopedAction(
+                kMainReceiver,
+                [commandSession]()
+                {
+                    commandSession->receiveCommand(funcFreqGet, QVariant(), kMainReceiver);
+                    commandSession->receiveCommand(funcModeGet, QVariant(), kMainReceiver);
+                    for (const Funcs func : kReceiverSnapshotCommands)
+                    {
+                        commandSession->receiveCommand(func, QVariant(), kMainReceiver);
+                    }
+                    commandSession->receiveCommand(funcRFPower, QVariant(), kMainReceiver);
+                    commandSession->receiveCommand(funcCompressor, QVariant(), kMainReceiver);
+                    commandSession->receiveCommand(funcXFCStatus, QVariant(), kMainReceiver);
+                });
+        });
+}
+
 void RadioBackend::requestSubVfoStateForCommand(Commander* commandSession)
 {
     if (!commandSession)
     {
         return;
     }
-    requestSubVfoIdentityForCommand(commandSession, false);
-
-    // Continue reading the receiver controls needed during startup or an
-    // explicit full state refresh while SUB remains selected.
-    for (const Funcs func :
-         {funcAGCTimeConstant, funcAttenuator, funcNoiseBlanker, funcNBLevel, funcAutoNotch, funcManualNotch,
-          funcNoiseReduction, funcNRLevel, funcPreamp, funcRfGain, funcSquelch, funcSplitStatus, funcReadFreqOffset,
-          funcToneSquelchType, funcToneFreq, funcTSQLFreq, funcDTCSCode})
-    {
-        commandSession->receiveCommand(func, QVariant(), 1);
-    }
-    commandSession->receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoMain), 0);
+    // Selecting SUB and reading it in the same immediate command burst can
+    // return the previous MAIN context on the IC-9700. That false SUB identity
+    // satisfies startup readiness and can remain visible until another routed
+    // operation revisits SUB. Use the same serialized, settled receiver path
+    // as normal polling so the first published snapshot is authoritative.
+    commandSession->scheduleConfirmatoryAction(
+        funcFreqGet, kSubReceiver,
+        [commandSession]()
+        {
+            commandSession->executeReceiverScopedAction(
+                kSubReceiver,
+                [commandSession]()
+                {
+                    commandSession->receiveCommand(funcFreqGet, QVariant(), kSubReceiver);
+                    commandSession->receiveCommand(funcModeGet, QVariant(), kSubReceiver);
+                    for (const Funcs func : kReceiverSnapshotCommands)
+                    {
+                        commandSession->receiveCommand(func, QVariant(), kSubReceiver);
+                    }
+                });
+        });
 }
 
 void RadioBackend::requestSubVfoIdentityForCommand(Commander* commandSession, bool restoreMain, bool requestFrequency,
@@ -2476,34 +2524,18 @@ bool RadioBackend::setPtt(bool on)
         emit pttRequestAccepted(true);
         armTransmitSafety();
         const auto selectedMemory = m_selectedRadioMemory;
-        qInfo(logRadio()).noquote().nospace()
-            << "PTT route target=MAIN memory=" << (selectedMemory.has_value() ? "yes" : "no");
-        invokeOnCurrentCommander(
-            [selectedMemory](Commander* commandSession)
-            {
-                if (selectedMemory)
-                {
-                    const auto [group, channel] = *selectedMemory;
-                    // The selected memory already established its band. Do
-                    // not run selectMemoryBandForCommand() here: that sequence
-                    // enters VFO mode and publishes a band-default frequency
-                    // before returning to memory mode.
-                    selectMemoryForCommand(commandSession, group, channel, false);
-                }
-                else
-                {
-                    commandSession->receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoMain), 0);
-                }
-                commandSession->setPttActive(true);
-                commandSession->receiveCommand(funcTransceiverStatus, QVariant::fromValue<bool>(true), 0);
-                if (selectedMemory)
-                {
-                    const auto [group, channel] = *selectedMemory;
-                    selectMemoryForCommand(commandSession, group, channel, false);
-                    commandSession->receiveCommand(funcSelectedFreq, QVariant(), 0);
-                    commandSession->receiveCommand(funcSelectedMode, QVariant(), 0);
-                }
-            });
+        if (selectedMemory)
+        {
+            const auto [group, channel] = *selectedMemory;
+            qInfo(logRadio()).noquote().nospace()
+                << "PTT route target=MAIN memory=yes group=" << group << " channel=" << channel << " reselection=no";
+        }
+        else
+        {
+            qInfo(logRadio()).noquote().nospace() << "PTT route target=MAIN memory=no";
+        }
+        invokeOnCurrentCommander([memorySelected = selectedMemory.has_value()](Commander* commandSession)
+                                 { sendPttOnForCommand(commandSession, memorySelected); });
         if (m_pttOnConfirmationTimer)
         {
             m_pttOnConfirmationTimer->start();
@@ -2535,6 +2567,28 @@ bool RadioBackend::setPtt(bool on)
             sendPttOffNow();
         }
         return true;
+    }
+}
+
+void RadioBackend::sendPttOnForCommand(Commander* commandSession, bool memorySelected)
+{
+    if (!commandSession)
+    {
+        return;
+    }
+    if (!memorySelected)
+    {
+        commandSession->receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoMain), 0);
+    }
+    commandSession->setPttActive(true);
+    commandSession->receiveCommand(funcTransceiverStatus, QVariant::fromValue<bool>(true), 0);
+    if (memorySelected)
+    {
+        // Preserve the already-selected memory context. Re-entering memory
+        // mode here can make the radio restore a different VFO or band-stack
+        // value even though the operator did not change frequency.
+        commandSession->receiveCommand(funcSelectedFreq, QVariant(), 0);
+        commandSession->receiveCommand(funcSelectedMode, QVariant(), 0);
     }
 }
 
@@ -2709,15 +2763,35 @@ void RadioBackend::selectRadioMemory(quint16 group, quint16 channel, Vfo targetV
                 selectMemoryBandForCommand(commandSession, group, targetVfo);
             }
             selectMemoryForCommand(commandSession, group, channel, false);
-            commandSession->receiveCommand(funcMemoryContents, QVariant::fromValue(memoryAddress), receiver);
-            commandSession->receiveCommand(funcFreqGet, QVariant(), receiver);
-            commandSession->receiveCommand(funcModeGet, QVariant(), receiver);
-            commandSession->receiveCommand(funcSplitStatus, QVariant(), receiver);
-            commandSession->receiveCommand(funcReadFreqOffset, QVariant(), receiver);
-            commandSession->receiveCommand(funcToneSquelchType, QVariant(), receiver);
-            commandSession->receiveCommand(funcToneFreq, QVariant(), receiver);
-            commandSession->receiveCommand(funcTSQLFreq, QVariant(), receiver);
-            commandSession->receiveCommand(funcDTCSCode, QVariant(), receiver);
+            const auto scheduleReadback = [commandSession, memoryAddress, receiver]()
+            {
+                commandSession->scheduleConfirmatoryAction(
+                    funcMemoryContents, receiver,
+                    [commandSession, memoryAddress, receiver]()
+                    {
+                        commandSession->executeReceiverScopedAction(
+                            receiver,
+                            [commandSession, memoryAddress, receiver]()
+                            {
+                                commandSession->receiveCommand(funcMemoryContents, QVariant::fromValue(memoryAddress),
+                                                               receiver);
+                                commandSession->receiveCommand(funcFreqGet, QVariant(), receiver);
+                                commandSession->receiveCommand(funcModeGet, QVariant(), receiver);
+                                commandSession->receiveCommand(funcSplitStatus, QVariant(), receiver);
+                                commandSession->receiveCommand(funcReadFreqOffset, QVariant(), receiver);
+                                commandSession->receiveCommand(funcToneSquelchType, QVariant(), receiver);
+                                commandSession->receiveCommand(funcToneFreq, QVariant(), receiver);
+                                commandSession->receiveCommand(funcTSQLFreq, QVariant(), receiver);
+                                commandSession->receiveCommand(funcDTCSCode, QVariant(), receiver);
+                            });
+                    });
+            };
+            // A cross-band memory activation first tunes a band-routing
+            // frequency. Reading immediately can publish that temporary VFO
+            // value as though it were the selected memory. Confirm only after
+            // command 08h has settled, with one bounded retry for a busy radio.
+            QTimer::singleShot(kMemorySelectionSettleMs, commandSession, scheduleReadback);
+            QTimer::singleShot(kMemorySelectionRetryMs, commandSession, scheduleReadback);
         });
 }
 
@@ -2763,15 +2837,8 @@ void RadioBackend::requestInitialRadioState()
         {
             return;
         }
-        invokeOnCurrentCommander(
-            [](Commander* commandSession)
-            {
-                // Use raw current-VFO 03/04 reads for connection readiness.
-                // In LAN startup captures the IC-9700 replied to scope/status
-                // traffic but did not answer selected-VFO 25/26 probes before
-                // the watchdog expired, causing an unnecessary reconnect loop.
-                commandSession->readCurrentFrequencyAndMode();
-            });
+        invokeOnCurrentCommander([](Commander* commandSession)
+                                 { scheduleInitialMainVfoIdentityForCommand(commandSession, false); });
     };
 
     if (firstRequest)
@@ -3175,9 +3242,11 @@ void RadioBackend::onLanReady()
             // mode before reading its frequency and mode.
             commandSession->receiveCommandNoReadback(funcScopeOnOff, QVariant::fromValue<bool>(false), 0);
             commandSession->receiveCommandNoReadback(funcScopeDataOutput, QVariant::fromValue<bool>(false), 0);
-            commandSession->receiveCommand(funcSelectVFO, QVariant::fromValue<vfo_t>(vfoMain), 0);
-            commandSession->receiveCommand(funcVFOModeSelect, QVariant(), 0);
-            commandSession->readCurrentFrequencyAndMode();
+            // Raw current-VFO 03/04 reads remain necessary here because early
+            // selected-VFO 25/26 probes were unanswered in field captures.
+            // Schedule those raw reads only after MAIN selection and VFO mode
+            // have settled so a retained SUB context cannot be tagged MAIN.
+            scheduleInitialMainVfoIdentityForCommand(commandSession, true);
         });
 
     if (m_initialStateRetryTimer)

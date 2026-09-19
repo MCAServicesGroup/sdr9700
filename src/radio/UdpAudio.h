@@ -26,6 +26,7 @@
 
 #include "AudioHandler.h"
 #include "RxAudioStartPolicy.h"
+#include "TxAudioMonitoringPolicy.h"
 #include "TxAudioMeterPolicy.h"
 
 class UdpAudio : public UdpBase
@@ -55,6 +56,7 @@ class UdpAudio : public UdpBase
     // with transport health as separate arguments.
     void haveTxMeter(const sdr9700::audio::TxAudioMeterBlock& block, quint16 configuredLatency, quint16 measuredLatency,
                      bool under, bool over);
+    void txEncodingStateChanged(sdr9700::audio::TxEncodingState state);
 
   public slots:
     void enableAudio();
@@ -84,6 +86,8 @@ class UdpAudio : public UdpBase
     void startTxAudio();
     void stopTxAudio();
     void stopAudioWorker(AudioHandlerBase*& handler, QThread*& workerThread, const char* name);
+    bool updateTxEncodingState(bool pttActive, bool dtmfActive);
+    void finishDtmf();
     audioSetup rxSetup;
     audioSetup txSetup;
 
@@ -98,8 +102,8 @@ class UdpAudio : public UdpBase
     QTimer* txAudioTimer = nullptr;
     bool enableTx = true;
 
-    std::atomic_bool m_txActive{false};
-    QQueue<QByteArray> m_txAudioQueue;
+    sdr9700::audio::TxEncodingState m_txEncodingState;
+    QQueue<sdr9700::audio::TxAudioQueueEntry> m_txAudioQueue;
     QByteArray m_dtmfPcm;
     QByteArray m_dtmfFrame;
     QByteArray m_txSilenceFrame;
