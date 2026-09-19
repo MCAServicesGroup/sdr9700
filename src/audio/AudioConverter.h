@@ -17,6 +17,7 @@
 #include <Eigen/Dense>
 
 #include "Types.h"
+#include "TxAudioMonitoringPolicy.h"
 #include "TxAudioMeterPolicy.h"
 
 struct SpeexResamplerState_;
@@ -41,6 +42,9 @@ struct audioPacket
     // The receive path leaves this invalid and continues to use amplitudePeak
     // and amplitudeRMS through the shared haveLevels signal.
     sdr9700::audio::TxAudioMeterBlock inputMeter;
+    // Capture-side authorization snapshot. The local meter ignores this state;
+    // it controls only whether work continues into resampling and encoding.
+    sdr9700::audio::TxEncodingState txEncodingState;
 };
 
 struct audioSetup
@@ -63,6 +67,7 @@ struct audioSetup
     // The default matches the IC-9700 LAN audio packet cadence.
     quint16 blockSize{20};
     quint8 guid[GUIDLEN]{};
+    sdr9700::audio::TxEncodingState initialTxEncodingState;
 };
 
 class AudioConverter : public QObject

@@ -242,6 +242,7 @@ class Commander : public RadioCommander
     bool m_receiverScopedReadActive{false};
     bool m_smeterScopedReadActive{false};
     uchar m_smeterScopedReceiver{0xff};
+    quint64 m_smeterScopedReadGeneration{0};
     vfo_t m_operatorSelectedVfo{vfoMain};
     bool m_mainSubExchangeQueued{false};
     bool m_mainSubExchangeConfirmationPending{false};

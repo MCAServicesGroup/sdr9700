@@ -384,6 +384,16 @@ bool AudioConverter::convert(audioPacket audio)
                 audio.inputMeter.valid = true;
             }
 
+            // Keep capture and the post-mix meter live before PTT, but avoid
+            // resampling, encoding, and output construction when this block's
+            // capture epoch was not authorized for voice transmission.
+            if (measureInputMeter && !audio.txEncodingState.encodingAuthorized())
+            {
+                audio.data.clear();
+                emit converted(audio);
+                return true;
+            }
+
             if (resampler != nullptr && resampleRatio != 1.0)
             {
                 if (!sampleCountMatchesChannels(samplesF.size(), outFormat.channelCount()))
