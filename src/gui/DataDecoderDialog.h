@@ -17,7 +17,7 @@ class Ax25DecoderWorker : public QObject
     Q_OBJECT
 
   public slots:
-    void processAudio(const QByteArray& pcm, int sampleRate, int channelCount);
+    void processAudio(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel);
     void reset();
 
   signals:
@@ -26,6 +26,7 @@ class Ax25DecoderWorker : public QObject
 
   private:
     Ax25Decoder m_decoder;
+    int m_receiverChannel{-1};
 };
 
 class DataDecoderDialog : public sdr9700::ui::UtilityWindow
@@ -37,13 +38,13 @@ class DataDecoderDialog : public sdr9700::ui::UtilityWindow
     ~DataDecoderDialog() override;
 
   public slots:
-    void processAudio(const QByteArray& pcm, int sampleRate, int channelCount);
+    void processAudio(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel);
 
   protected:
     void hideEvent(QHideEvent* event) override;
 
   signals:
-    void audioReceived(const QByteArray& pcm, int sampleRate, int channelCount);
+    void audioReceived(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel);
     void resetDecoder();
 
   private slots:

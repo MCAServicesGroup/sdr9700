@@ -138,9 +138,14 @@ class CallsignDelegate final : public QStyledItemDelegate
 };
 } // namespace
 
-void Ax25DecoderWorker::processAudio(const QByteArray& pcm, int sampleRate, int channelCount)
+void Ax25DecoderWorker::processAudio(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel)
 {
-    const QVector<Ax25Frame> frames = m_decoder.processPcm16(pcm, sampleRate, channelCount);
+    if (receiverChannel != m_receiverChannel)
+    {
+        m_decoder.reset();
+        m_receiverChannel = receiverChannel;
+    }
+    const QVector<Ax25Frame> frames = m_decoder.processPcm16(pcm, sampleRate, channelCount, receiverChannel);
     if (!frames.isEmpty())
     {
         emit framesDecoded(frames);
@@ -151,6 +156,7 @@ void Ax25DecoderWorker::processAudio(const QByteArray& pcm, int sampleRate, int 
 void Ax25DecoderWorker::reset()
 {
     m_decoder.reset();
+    m_receiverChannel = -1;
     emit statsChanged(m_decoder.stats());
 }
 
@@ -334,13 +340,13 @@ DataDecoderDialog::~DataDecoderDialog()
     m_decoderThread.wait();
 }
 
-void DataDecoderDialog::processAudio(const QByteArray& pcm, int sampleRate, int channelCount)
+void DataDecoderDialog::processAudio(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel)
 {
     if (!isVisible())
     {
         return;
     }
-    emit audioReceived(pcm, sampleRate, channelCount);
+    emit audioReceived(pcm, sampleRate, channelCount, receiverChannel);
 }
 
 void DataDecoderDialog::hideEvent(QHideEvent* event)

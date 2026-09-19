@@ -98,10 +98,12 @@ void Ax25Decoder::configure(int sampleRate)
     m_sampleIndex = 0;
 }
 
-QVector<Ax25Frame> Ax25Decoder::processPcm16(const QByteArray& pcm, int sampleRate, int channelCount)
+QVector<Ax25Frame> Ax25Decoder::processPcm16(const QByteArray& pcm, int sampleRate, int channelCount,
+                                             int receiverChannel)
 {
     QVector<Ax25Frame> frames;
-    if (sampleRate < kBaud * 4 || channelCount < 1 || channelCount > 2 || pcm.size() < channelCount * 2)
+    if (sampleRate < kBaud * 4 || channelCount < 1 || channelCount > 2 || receiverChannel < 0 ||
+        receiverChannel >= channelCount || pcm.size() < channelCount * 2)
     {
         return frames;
     }
@@ -112,15 +114,11 @@ QVector<Ax25Frame> Ax25Decoder::processPcm16(const QByteArray& pcm, int sampleRa
     double squaredSum = 0.0;
     for (qsizetype frame = 0; frame < sampleFrames; ++frame)
     {
-        qint32 mixed = 0;
-        for (int channel = 0; channel < channelCount; ++channel)
-        {
-            const qsizetype offset = frame * frameBytes + channel * 2;
-            const quint8 low = static_cast<quint8>(pcm.at(offset));
-            const quint8 high = static_cast<quint8>(pcm.at(offset + 1));
-            mixed += static_cast<qint16>(low | (static_cast<quint16>(high) << 8));
-        }
-        const float sample = static_cast<float>(mixed) / static_cast<float>(channelCount * 32768);
+        const qsizetype offset = frame * frameBytes + receiverChannel * 2;
+        const quint8 low = static_cast<quint8>(pcm.at(offset));
+        const quint8 high = static_cast<quint8>(pcm.at(offset + 1));
+        const qint16 pcmSample = static_cast<qint16>(low | (static_cast<quint16>(high) << 8));
+        const float sample = static_cast<float>(pcmSample) / 32768.0F;
         squaredSum += static_cast<double>(sample) * sample;
         m_window[m_windowPosition] = sample;
         m_windowPosition = (m_windowPosition + 1) % m_samplesPerSymbol;

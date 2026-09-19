@@ -32,7 +32,7 @@ Q_DECLARE_METATYPE(Ax25DecoderStats)
 class Ax25Decoder
 {
   public:
-    QVector<Ax25Frame> processPcm16(const QByteArray& pcm, int sampleRate, int channelCount);
+    QVector<Ax25Frame> processPcm16(const QByteArray& pcm, int sampleRate, int channelCount, int receiverChannel);
     QVector<Ax25Frame> processNrziTones(const QVector<bool>& tones);
     void reset();
     const Ax25DecoderStats& stats() const { return m_stats; }

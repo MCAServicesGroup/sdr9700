@@ -65,7 +65,7 @@ void PerformanceBenchmark::demodulatesAx25Audio() const
     QBENCHMARK
     {
         decoder.reset();
-        decoder.processPcm16(pcm, 48000, 1);
+        decoder.processPcm16(pcm, 48000, 1, 0);
     }
 }
 

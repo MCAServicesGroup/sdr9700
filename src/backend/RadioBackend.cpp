@@ -3558,6 +3558,9 @@ void RadioBackend::onNetworkStatus(networkStatus status)
 
 void RadioBackend::onHaveAudioData(const audioPacket& pkt)
 {
-    // IC-9700 delivers LPCM16 audio; sampleRate comes from rxSetup.
-    emit audioDataReady(pkt.data, static_cast<int>(m_rxSampleRate), m_rxChannelCount);
+    // IC-9700 stereo LPCM16 carries MAIN on channel 0 and SUB on channel 1.
+    // Keep the operator-selected receiver with the block so consumers do not
+    // combine two independent radio signals.
+    const int receiverChannel = m_activeVfo == Vfo::Sub ? 1 : 0;
+    emit audioDataReady(pkt.data, static_cast<int>(m_rxSampleRate), m_rxChannelCount, receiverChannel);
 }

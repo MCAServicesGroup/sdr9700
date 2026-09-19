@@ -57,19 +57,19 @@ void DataDecoderDialogTest::decodesAudioOnlyWhileVisible()
     QSignalSpy resetSpy(&dialog, &DataDecoderDialog::resetDecoder);
     const QByteArray pcm(1920, '\0');
 
-    dialog.processAudio(pcm, 48000, 2);
+    dialog.processAudio(pcm, 48000, 2, 0);
     QCOMPARE(audioSpy.count(), 0);
 
     dialog.show();
     QCoreApplication::processEvents();
     QVERIFY(dialog.isVisible());
-    dialog.processAudio(pcm, 48000, 2);
+    dialog.processAudio(pcm, 48000, 2, 0);
     QCOMPARE(audioSpy.count(), 1);
 
     dialog.hide();
     QCoreApplication::processEvents();
     QCOMPARE(resetSpy.count(), 1);
-    dialog.processAudio(pcm, 48000, 2);
+    dialog.processAudio(pcm, 48000, 2, 0);
     QCOMPARE(audioSpy.count(), 1);
 }
 
