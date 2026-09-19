@@ -134,7 +134,7 @@ SpectrumScopeController::SpectrumScopeController(MainWindow* window) : QObject(w
                         backend->setScopeVfo(selected);
                     }
                     updateScopeFrameGate();
-                    m_window->m_vfoSelectionController->completeExchangeScopeSync();
+                    m_window->m_vfoSelectionController->completeExchangeScopeSync(true);
                 }
             });
 }

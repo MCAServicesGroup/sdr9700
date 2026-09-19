@@ -193,11 +193,18 @@ VfoSelectionController::VfoSelectionController(IRadioBackend* backend, VfoContro
     setControlsEnabled(false);
 }
 
-void VfoSelectionController::completeExchangeScopeSync()
+void VfoSelectionController::completeExchangeScopeSync(bool releaseReceiverContext)
 {
     if (!m_exchangePolicy.confirmScope())
     {
         return;
+    }
+    if (releaseReceiverContext)
+    {
+        // A scope timeout must not strand the radio-routing controls behind
+        // SpectrumScopeController's still-locked frame gate. Spectrum clicks
+        // remain locked independently until a valid scope confirmation arrives.
+        setReceiverContextReady(true);
     }
     m_panel->setExchangePending(false);
     setPttReady(true);
