@@ -118,9 +118,12 @@ VfoSelectionController::VfoSelectionController(IRadioBackend* backend, VfoContro
         connect(m_backend, &IRadioBackend::pttChanged, this,
                 [this](bool transmitting)
                 {
+                    qDebug(logRadio()).noquote()
+                        << "PTT UI radio confirmation received state=" << (transmitting ? "TX" : "RX");
                     m_transmitting = transmitting;
                     updateTransmitIndicators();
                 });
+        connect(m_backend, &IRadioBackend::pttRequestAccepted, m_mainController, &VfoController::setTransmitRequested);
         connect(m_backend, &IRadioBackend::radioValueConfirmed, this,
                 [this](Funcs func, const QVariant& value, uchar receiver)
                 {

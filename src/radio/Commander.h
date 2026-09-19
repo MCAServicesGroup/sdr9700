@@ -262,6 +262,8 @@ class Commander : public RadioCommander
     bool m_dispatchingScheduledCommand{false};
     bool m_suppressReadbackForCurrentCommand{false};
     bool m_shutdownComplete{false};
+    bool m_pttActive{false};
+    QElapsedTimer m_pttFrequencyTransitionWindow;
 
     ScopeData mainScopeData;
     ScopeData subScopeData;

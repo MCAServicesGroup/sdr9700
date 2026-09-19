@@ -143,6 +143,7 @@ class RadioBackend : public IRadioBackend
     static void requestSubVfoStateForCommand(Commander* commandSession);
     static void requestVfoFrequenciesForCommand(Commander* commandSession);
     static void scheduleVfoReceiverReadForCommand(Commander* commandSession, Vfo vfo, Funcs func);
+    static void schedulePostExchangeSettingsForCommand(Commander* commandSession);
     void observeVfoFrequency(quint64 hz, uchar receiver);
     static void selectMemoryBandForCommand(Commander* commandSession, quint16 group, Vfo targetVfo);
     static void selectMemoryForCommand(Commander* commandSession, quint16 group, quint16 channel,
@@ -189,6 +190,7 @@ class RadioBackend : public IRadioBackend
     QTimer* m_pttReleaseDelayTimer{nullptr};
     QTimer* m_pttOnConfirmationTimer{nullptr};
     QTimer* m_pttOffConfirmationTimer{nullptr};
+    QElapsedTimer m_pttOffConfirmationClock;
     QTimer* m_pttMaxDurationTimer{nullptr};
     QTimer* m_scopeRetryTimer{nullptr};
     QTimer* m_initialStateRetryTimer{nullptr};

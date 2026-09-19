@@ -30,6 +30,7 @@ constexpr int kMaxConsecutiveInteractiveDispatches = 3;
 constexpr qint64 kMeterQueueBudgetMs = 100;
 constexpr qint64 kBackgroundStarvationCeilingMs = 1500;
 constexpr qint64 kScopeAssemblyLifetimeMs = 250;
+constexpr qint64 kPttFrequencyTransitionWindowMs = 500;
 
 QString logToken(QString value)
 {
@@ -272,6 +273,8 @@ void Commander::shutdownComm()
     m_scopeAssemblyClocks[1].invalidate();
     m_expectedScopeSequences[0] = 0;
     m_expectedScopeSequences[1] = 0;
+    m_pttActive = false;
+    m_pttFrequencyTransitionWindow.invalidate();
     udp = nullptr;
     m_shutdownComplete = true;
 }
@@ -301,6 +304,8 @@ void Commander::commonSetup()
     m_scopeAssemblyClocks[1].invalidate();
     m_expectedScopeSequences[0] = 0;
     m_expectedScopeSequences[1] = 0;
+    m_pttActive = false;
+    m_pttFrequencyTransitionWindow.invalidate();
     m_pendingCommandClock.start();
 
     // Minimal commands used before the built-in IC-9700 capability table is loaded.
@@ -2723,17 +2728,33 @@ void Commander::parseCommand(FrameOrigin origin)
         }
     }
 
+    const bool pttTransitionFrequencyBroadcast =
+        origin == FrameOrigin::UnsolicitedBroadcast && !explicitlyIdentifiesReceiver && correlationFunc == funcFreqTR &&
+        m_pttFrequencyTransitionWindow.isValid() &&
+        m_pttFrequencyTransitionWindow.elapsed() <= kPttFrequencyTransitionWindowMs;
     const bool ambiguousFrequencyOrModeBroadcast =
         origin == FrameOrigin::UnsolicitedBroadcast && !explicitlyIdentifiesReceiver &&
         (correlationFunc == funcFreq || correlationFunc == funcFreqTR || correlationFunc == funcFreqGet ||
          correlationFunc == funcMode || correlationFunc == funcModeTR || correlationFunc == funcModeGet ||
          correlationFunc == funcDataModeWithFilter);
-    if (ambiguousFrequencyOrModeBroadcast)
+    if (ambiguousFrequencyOrModeBroadcast && !pttTransitionFrequencyBroadcast)
     {
         ++m_correlationDiagnostics.ambiguousUnsolicitedFrames;
         qWarning(logRadio()).noquote() << "Ignoring receiver-ambiguous unsolicited CI-V value"
                                        << funcString[correlationFunc];
         return;
+    }
+    if (pttTransitionFrequencyBroadcast)
+    {
+        // PTT is always routed through physical MAIN. The IC-9700 publishes
+        // the shifted TX frequency after key-up and the restored RX frequency
+        // after unkey before a confirmatory read can traverse the normal
+        // queue. Limit each attribution to one short transition window so
+        // unrelated receiver-less broadcasts remain rejected.
+        receiver = 0;
+        m_pttFrequencyTransitionWindow.invalidate();
+        qDebug(logRadio()).noquote() << "Accepted PTT transition frequency for MAIN state="
+                                     << (m_pttActive ? "TX" : "RX");
     }
     if (origin == FrameOrigin::SolicitedReply && !explicitlyIdentifiesReceiver && !pendingCorrelationFound &&
         value.isValid())
@@ -3894,6 +3915,12 @@ bool Commander::stopLocalAudio()
 
 void Commander::setPttActive(bool active)
 {
+    if (m_pttActive != active)
+    {
+        m_pttFrequencyTransitionWindow.restart();
+    }
+    m_pttActive = active;
+
     if (udp == nullptr)
     {
         return;

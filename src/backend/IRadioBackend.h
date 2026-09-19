@@ -141,6 +141,9 @@ class IRadioBackend : public QObject
     void ritEnabledChanged(bool on);
     void ritOffsetChanged(short hz);
     void pttChanged(bool on);
+    // Operator intent accepted by the backend. This precedes radio readback
+    // and must not be presented as confirmed transmit state.
+    void pttRequestAccepted(bool on);
     void nrChanged(bool on);
     void nrLevelChanged(int level);
     void nbChanged(bool on);

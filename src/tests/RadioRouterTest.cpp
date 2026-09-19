@@ -19,6 +19,7 @@ class RadioRouterTest : public QObject
     void keepsSubReceiverControlsOutOfLegacyMainSignals();
     void routesToneRegisterForActiveToneMode();
     void keepsToneModesIndependentByReceiver();
+    void keepsMainTransmitConfigurationSignalsIsolated();
     void routesProtocolPayloadTypes();
     void routesConfirmedVfoSelectionState();
     void routesAllSimpleControlBranches();
@@ -419,6 +420,41 @@ void RadioRouterTest::keepsToneModesIndependentByReceiver()
     router.route(CacheItem(funcToneFreq, QVariant::fromValue(ToneInfo(885)), 0));
     QCOMPARE(toneSpy.count(), 1);
     QCOMPARE(toneSpy.takeFirst().at(0).value<ushort>(), ushort(885));
+}
+
+void RadioRouterTest::keepsMainTransmitConfigurationSignalsIsolated()
+{
+    RadioRouter router;
+    QSignalSpy valueSpy(&router, &RadioRouter::radioValueUpdated);
+    QSignalSpy duplexSpy(&router, &RadioRouter::duplexModeChanged);
+    QSignalSpy offsetSpy(&router, &RadioRouter::repeaterOffsetChanged);
+    QSignalSpy dtcsSpy(&router, &RadioRouter::dtcsCodeChanged);
+
+    Frequency mainOffset;
+    mainOffset.Hz = 600000;
+    router.route(CacheItem(funcSplitStatus, QVariant::fromValue(dmDupPlus), 0));
+    router.route(CacheItem(funcReadFreqOffset, QVariant::fromValue(mainOffset), 0));
+    router.route(CacheItem(funcDTCSCode, QVariant::fromValue(ToneInfo(23)), 0));
+    QCOMPARE(duplexSpy.takeFirst().at(0).value<duplexMode_t>(), dmDupPlus);
+    QCOMPARE(offsetSpy.takeFirst().at(0).toULongLong(), quint64(600000));
+    QCOMPARE(dtcsSpy.takeFirst().at(0).value<ushort>(), ushort(23));
+
+    valueSpy.clear();
+    Frequency subOffset;
+    subOffset.Hz = 5000000;
+    router.route(CacheItem(funcSplitStatus, QVariant::fromValue(dmDupMinus), 1));
+    router.route(CacheItem(funcReadFreqOffset, QVariant::fromValue(subOffset), 1));
+    router.route(CacheItem(funcDTCSCode, QVariant::fromValue(ToneInfo(245)), 1));
+
+    // Receiver-tagged state still reaches RadioState for the SUB panel, but
+    // legacy MAIN-only consumers and PTT validation must not be overwritten.
+    QCOMPARE(valueSpy.count(), 3);
+    QCOMPARE(valueSpy.at(0).at(2).value<uchar>(), uchar(1));
+    QCOMPARE(valueSpy.at(1).at(2).value<uchar>(), uchar(1));
+    QCOMPARE(valueSpy.at(2).at(2).value<uchar>(), uchar(1));
+    QCOMPARE(duplexSpy.count(), 0);
+    QCOMPARE(offsetSpy.count(), 0);
+    QCOMPARE(dtcsSpy.count(), 0);
 }
 
 void RadioRouterTest::routesProtocolPayloadTypes()

@@ -219,6 +219,20 @@ VfoController::VfoController(Vfo vfo, IRadioBackend* backend, sdr9700::RadioStat
         connect(m_backend, &IRadioBackend::radioValueConfirmed, this,
                 [this](Funcs func, const QVariant& value, uchar receiver)
                 {
+                    const uchar expectedReceiver = m_vfo == Vfo::Main ? 0 : 1;
+                    if (receiver != expectedReceiver)
+                    {
+                        return;
+                    }
+                    if (func == funcFreqGet || func == funcFreqSet || func == funcSelectedFreq)
+                    {
+                        if (!m_transmitRequested && !m_transmitting && m_holdTransmitFrequencyDisplay)
+                        {
+                            m_holdTransmitFrequencyDisplay = false;
+                            updateTransmitFrequencyDisplay();
+                        }
+                        return;
+                    }
                     if (func == funcRfGain || func == funcSquelch)
                     {
                         applyReceiverLevelConfirmation(func, value, receiver);
@@ -402,6 +416,8 @@ void VfoController::clearFrequency()
     m_fallbackFrequencyHz.reset();
     m_publishedFrequencyHz.reset();
     m_fallbackBand = bandUnknown;
+    m_transmitRequested = false;
+    m_holdTransmitFrequencyDisplay = false;
     m_display->clearFrequency();
     m_fallbackMode.clear();
     m_display->setSMeterValue(0);
@@ -430,8 +446,33 @@ void VfoController::setSelected(bool selected)
     m_display->setSelected(selected);
 }
 
+void VfoController::setTransmitRequested(bool transmitting)
+{
+    if (m_transmitRequested != transmitting)
+    {
+        qDebug(logRadio()).noquote() << "PTT VFO request state applied state=" << (transmitting ? "TX" : "RX");
+    }
+    m_transmitRequested = transmitting;
+    if (transmitting)
+    {
+        // The IC-9700 can publish its temporary repeater TX frequency before
+        // its PTT-on confirmation. Freeze only the derived TX label at the
+        // accepted request edge; the badge and meter remain radio-confirmed.
+        m_holdTransmitFrequencyDisplay = true;
+    }
+}
+
 void VfoController::setTransmitting(bool transmitting)
 {
+    if (m_vfo == Vfo::Main && m_transmitting != transmitting)
+    {
+        qDebug(logRadio()).noquote() << "PTT VFO display state applied state=" << (transmitting ? "TX" : "RX");
+    }
+    m_transmitting = transmitting;
+    if (transmitting)
+    {
+        m_holdTransmitFrequencyDisplay = true;
+    }
     m_display->setTransmitting(transmitting);
     if (m_vfo == Vfo::Main)
     {
@@ -698,6 +739,11 @@ void VfoController::publishConfirmedState()
 
     if (!m_publishedFrequencyHz.has_value() || *m_publishedFrequencyHz != confirmedFrequencyHz)
     {
+        if (m_vfo == Vfo::Main && (m_transmitRequested || m_transmitting || m_holdTransmitFrequencyDisplay))
+        {
+            qDebug(logRadio()).noquote() << "PTT VFO frequency display changed pttRequested=" << m_transmitRequested
+                                         << " transmitting=" << m_transmitting;
+        }
         m_publishedFrequencyHz = confirmedFrequencyHz;
         emit frequencyChanged(confirmedFrequencyHz);
     }
@@ -776,6 +822,10 @@ void VfoController::updateReceiverControlDisplay()
 
 void VfoController::updateTransmitFrequencyDisplay()
 {
+    if (m_holdTransmitFrequencyDisplay)
+    {
+        return;
+    }
     const std::optional<duplexMode_t> duplexMode = confirmedDuplexMode();
     const std::optional<quint64> repeaterOffsetHz = confirmedRepeaterOffsetHz();
     const quint64 receiveFrequencyHz = frequencyHz();
