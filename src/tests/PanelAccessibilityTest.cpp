@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTest>
+#include <algorithm>
 #include <memory>
 
 class PanelAccessibilityTest : public QObject
@@ -85,16 +86,18 @@ void PanelAccessibilityTest::utilityDialogsAreResizableAndFrameless()
     QVERIFY(dtmf.findChild<QWidget*>(QStringLiteral("dialogFooterSeparator")) == nullptr);
     QVERIFY(dtmf.findChild<QWidget*>(QStringLiteral("dialogButtonBox")) == nullptr);
     QVERIFY(meters.findChild<QGroupBox*>(QStringLiteral("receiveMeters")) != nullptr);
-    QVERIFY(meters.findChild<QGroupBox*>(QStringLiteral("transmitMeters")) != nullptr);
-    QVERIFY(meters.findChild<QGroupBox*>(QStringLiteral("audioMeters")) != nullptr);
+    auto* transmitMeters = meters.findChild<QGroupBox*>(QStringLiteral("transmitMeters"));
+    QVERIFY(transmitMeters != nullptr);
+    auto* audioMeters = meters.findChild<QGroupBox*>(QStringLiteral("audioMeters"));
+    QVERIFY(audioMeters != nullptr);
     QVERIFY(meters.findChild<QGroupBox*>(QStringLiteral("radioMeters")) != nullptr);
     QStringList groupTitles;
     for (const auto* group : meters.findChildren<QGroupBox*>())
     {
         groupTitles.append(group->title());
     }
-    QCOMPARE(groupTitles, QStringList({QStringLiteral("Audio"), QStringLiteral("Radio"), QStringLiteral("Receive"),
-                                       QStringLiteral("Transmit")}));
+    QCOMPARE(groupTitles, QStringList({QStringLiteral("Audio Input"), QStringLiteral("Radio"),
+                                       QStringLiteral("Receive"), QStringLiteral("Transmit")}));
     QStringList labelTexts;
     for (const auto* label : meters.findChildren<QLabel*>())
     {
@@ -102,9 +105,22 @@ void PanelAccessibilityTest::utilityDialogsAreResizableAndFrameless()
     }
     QVERIFY(labelTexts.contains(QStringLiteral("Average")));
     QVERIFY(labelTexts.contains(QStringLiteral("Peak")));
-    QVERIFY(labelTexts.contains(QStringLiteral("Local processed input")));
+    QVERIFY(!labelTexts.contains(QStringLiteral("Local processed input")));
     QVERIFY(!labelTexts.contains(QStringLiteral("Microphone Average")));
     QVERIFY(!labelTexts.contains(QStringLiteral("Microphone Peak")));
+
+    QStringList audioLabels;
+    for (const auto* label : audioMeters->findChildren<QLabel*>())
+    {
+        audioLabels.append(label->text());
+    }
+    QStringList transmitLabels;
+    for (const auto* label : transmitMeters->findChildren<QLabel*>())
+    {
+        transmitLabels.append(label->text());
+    }
+    QVERIFY(!audioLabels.contains(QStringLiteral("Compression")));
+    QVERIFY(transmitLabels.contains(QStringLiteral("Compression")));
 }
 
 void PanelAccessibilityTest::transmitMeterStatesUseContractLanguage()
@@ -112,7 +128,16 @@ void PanelAccessibilityTest::transmitMeterStatesUseContractLanguage()
     MetersDialog meters;
     auto* stateLabel = meters.findChild<QLabel*>(QStringLiteral("txAudioState"));
     QVERIFY(stateLabel != nullptr);
-    QCOMPARE(stateLabel->accessibleName(), QStringLiteral("Local processed input state"));
+    QCOMPARE(stateLabel->accessibleName(), QStringLiteral("Audio input state"));
+    auto* audioMeters = meters.findChild<QGroupBox*>(QStringLiteral("audioMeters"));
+    QVERIFY(audioMeters != nullptr);
+
+    meters.setTransmitAudioMeter(sdr9700::audio::TxAudioMeterState::NoActivity, -60.0, -60.0, 0);
+    const QList<QLabel*> audioLabels = audioMeters->findChildren<QLabel*>();
+    const auto inactiveReadouts = std::count_if(audioLabels.cbegin(), audioLabels.cend(), [](const QLabel* label)
+                                                { return label->text() == QStringLiteral("-- dB"); });
+    QCOMPARE(inactiveReadouts, 2);
+    QCOMPARE(stateLabel->text(), QStringLiteral("No activity"));
 
     const QList<QPair<sdr9700::audio::TxAudioMeterState, QString>> states = {
         {sdr9700::audio::TxAudioMeterState::Invalid, QStringLiteral("Unavailable")},

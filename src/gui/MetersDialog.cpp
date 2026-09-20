@@ -154,31 +154,24 @@ MetersDialog::MetersDialog(QWidget* parent) : sdr9700::ui::UtilityWindow(QString
     contentLayout->setSpacing(6);
     root->addWidget(content);
 
-    auto* audioGrid = createMeterSection(contentLayout, QStringLiteral("Audio"), QStringLiteral("audioMeters"));
-    auto* localInputLabel = new QLabel(QStringLiteral("Local processed input"), this);
-    localInputLabel->setAccessibleName(QStringLiteral("Local processed input"));
-    localInputLabel->setStyleSheet(
-        QStringLiteral("QLabel { color: %1; font-size: 12px; }").arg(UiTheme::Color::TextBright));
-    audioGrid->addWidget(localInputLabel, 0, 0, 1, 3);
+    auto* audioGrid = createMeterSection(contentLayout, QStringLiteral("Audio Input"), QStringLiteral("audioMeters"));
     m_txAudioAverageMeter = addMeterRow(
-        audioGrid, 1, QStringLiteral("Average"),
-        QStringLiteral("Local processed input average level in dBFS, including before PTT. Recommended -24 to -12 "
+        audioGrid, 0, QStringLiteral("Average"),
+        QStringLiteral("Processed audio input average level in dBFS, including before PTT. Recommended -24 to -12 "
                        "dBFS. This is a local recording level, not radio drive: use the ALC meter for transmit "
                        "drive on SSB."));
     m_txAudioPeakMeter = addMeterRow(
-        audioGrid, 2, QStringLiteral("Peak"),
-        QStringLiteral("Local processed input peak level in dBFS, including before PTT. Recommended -12 to -3 dBFS; "
+        audioGrid, 1, QStringLiteral("Peak"),
+        QStringLiteral("Processed audio input peak level in dBFS, including before PTT. Recommended -12 to -3 dBFS; "
                        "-1 dBFS and above is near full scale. This is a local recording level, not radio drive."));
-    m_txAudioAverageMeter.bar->setAccessibleName(QStringLiteral("Local processed input average"));
-    m_txAudioPeakMeter.bar->setAccessibleName(QStringLiteral("Local processed input peak"));
+    m_txAudioAverageMeter.bar->setAccessibleName(QStringLiteral("Audio input average"));
+    m_txAudioPeakMeter.bar->setAccessibleName(QStringLiteral("Audio input peak"));
     m_txAudioStateLabel = new QLabel(this);
     m_txAudioStateLabel->setObjectName(QStringLiteral("txAudioState"));
-    m_txAudioStateLabel->setAccessibleName(QStringLiteral("Local processed input state"));
+    m_txAudioStateLabel->setAccessibleName(QStringLiteral("Audio input state"));
     m_txAudioStateLabel->setStyleSheet(
         QStringLiteral("QLabel { color: %1; font-size: 12px; }").arg(UiTheme::Color::TextMuted));
-    audioGrid->addWidget(m_txAudioStateLabel, 3, 1, 1, 2);
-    m_compressionMeter =
-        addMeterRow(audioGrid, 4, QStringLiteral("Compression"), QStringLiteral("Transmit compression"));
+    audioGrid->addWidget(m_txAudioStateLabel, 2, 1, 1, 2);
 
     auto* radioGrid = createMeterSection(contentLayout, QStringLiteral("Radio"), QStringLiteral("radioMeters"));
     m_currentMeter =
@@ -194,6 +187,8 @@ MetersDialog::MetersDialog(QWidget* parent) : sdr9700::ui::UtilityWindow(QString
     m_alcMeter = addMeterRow(transmitGrid, 0, QStringLiteral("ALC"), QStringLiteral("Automatic level control"));
     m_powerMeter = addMeterRow(transmitGrid, 1, QStringLiteral("RF Power"), QStringLiteral("Transmit output power"));
     m_swrMeter = addMeterRow(transmitGrid, 2, QStringLiteral("SWR"), QStringLiteral("Standing wave ratio"));
+    m_compressionMeter =
+        addMeterRow(transmitGrid, 3, QStringLiteral("Compression"), QStringLiteral("Transmit compression"));
 
     resetMeters();
     setMinimumHeight(sizeHint().height());
@@ -360,10 +355,10 @@ void MetersDialog::setTransmitAudioMeter(sdr9700::audio::TxAudioMeterState state
     // converter failure, or an audio-device restart. Digital silence is a real
     // measurement and reads at the floor instead.
     const QString averageText = invalid  ? QStringLiteral("--")
-                                : silent ? QStringLiteral("No activity")
+                                : silent ? QStringLiteral("-- dB")
                                          : QStringLiteral("%1 dB").arg(rmsDb, 0, 'f', 1);
     QString peakText = invalid  ? QStringLiteral("--")
-                       : silent ? QStringLiteral("No activity")
+                       : silent ? QStringLiteral("-- dB")
                                 : QStringLiteral("%1 dB").arg(peakDb, 0, 'f', 1);
     if (fullScaleCount > 0)
     {
