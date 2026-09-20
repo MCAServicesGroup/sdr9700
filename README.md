@@ -234,6 +234,9 @@ release, radio-protocol, and research material maintained with the source.
 Local task files belong in the [workspace guide](workspace/WORKSPACE.md); only
 that guide is tracked in Git.
 
+New local task material should use the [local activity guide](Local/LOCAL.md);
+only that guide is synchronized through Git/GitHub.
+
 Repository-level policy and community documents remain at the project root:
 
 - `AGENTS.md`: canonical AI-agent project guide.

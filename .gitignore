@@ -64,6 +64,10 @@ compile_commands.json
 /workspace/*
 !/workspace/WORKSPACE.md
 
+# Local activity files; retain only the local guide in Git.
+/Local/*
+!/Local/LOCAL.md
+
 # vcpkg
 vcpkg_installed/
 
