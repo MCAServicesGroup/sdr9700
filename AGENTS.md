@@ -1,13 +1,28 @@
-# SDR9700 — Project Context for AI Agents
+# SDR9700 Repository Instructions
 
 SDR9700 is a Qt/C++ desktop GUI client for controlling an Icom IC-9700 amateur
 radio transceiver over the radio's LAN interface on Linux and Apple Silicon
 macOS.
 
+## Instruction Authority
+
+This file is the authoritative source for repository-wide agent instructions.
+Consolidate all such instructions here.
+
+## GitHub
+
+- Maintain the `sdr9700` repository in the **MCA Services Group**
+  organization: <https://github.com/MCAServicesGroup/sdr9700>.
+- Use the `jwpauler` GitHub account for this repository.
+- Author commits as `Justin Pauler <justin@pauler.org>`.
+- Sign every commit with the key whose fingerprint is
+  `5BB858A821B6FEFD33D8A148C3D84DCCEF6E8A03`, and verify each signature.
+- Keep this repository private.
+
 ## Project Goal
 
-Build an open-source Linux and Apple Silicon macOS application that gives IC-9700 operators a
-maintainable native GUI for everyday control, spectrum/waterfall display,
+Build a Linux and Apple Silicon macOS application that gives IC-9700 operators
+a maintainable native GUI for everyday control, spectrum/waterfall display,
 audio routing, and station workflows.
 
 ## Current Scope
@@ -25,28 +40,39 @@ audio routing, and station workflows.
 - Icom RC-28 rotary controller support for step tuning and button mapping
   (optional, requires libhidapi at build time).
 
-## Agent Guidelines
+## Development
 
-- Read `CONVENTIONS.md` before writing code.
+- Before beginning project work, read the root `README.md`,
+  `_development/STATUS.md`, and `CONVENTIONS.md`.
+- Keep Qt/CMake builds, packaging, and runtime configuration reproducible,
+  secure, and explicit about required configuration.
+- Keep credentials, private keys, production data, and secret-bearing
+  environment files out of Git.
+- Test changes with the checks appropriate to each affected component. Avoid
+  live radio, production, signing, notarization, or release changes unless the
+  user explicitly authorizes them.
+- Document compatibility limitations, operational requirements, hardware
+  validation, and incomplete validation accurately.
 - Prefer C++20 standard-library facilities when they are direct semantic
   equivalents, and include their owning headers. Use Qt 6 idioms where Qt
   integration or Qt-specific semantics are required; follow the boundary in
   `CONVENTIONS.md` rather than converting between Qt and standard types solely
   for style.
-- Evaluate every code change for its effect on both supported desktop platforms:
-  Linux and Apple Silicon macOS. Prefer Qt APIs and Qt libraries that already
-  provide cross-platform behavior instead of adding platform-specific
-  implementations. When Qt does not provide a suitable abstraction, keep
-  platform-specific code isolated behind explicit platform guards and preserve
-  equivalent behavior on both platforms.
+- Evaluate every code change for its effect on both supported desktop
+  platforms: Linux and Apple Silicon macOS. Prefer Qt APIs and Qt libraries
+  that already provide cross-platform behavior instead of adding
+  platform-specific implementations. When Qt does not provide a suitable
+  abstraction, keep platform-specific code isolated behind explicit platform
+  guards and preserve equivalent behavior on both platforms.
 - Keep classes small and single-purpose.
 - Use RAII and Qt parent ownership; avoid raw owning `new`/`delete`.
 - Use Qt signals/slots for cross-object communication.
 - Attempt to add or update automated tests for every code change wherever
   practical. Run the complete existing test suite after code changes and do
   not leave previously passing tests broken.
-- Keep IC-9700 protocol decisions grounded in logs, packet captures, or radio
-  behavior; ask for captures when behavior is uncertain.
+- Keep IC-9700 protocol decisions grounded in logs, packet captures, Icom
+  documentation, or observed radio behavior; ask for captures when behavior is
+  uncertain.
 - Use `AppSettings` for SDR9700 client settings. Do not add new app-owned
   `QSettings` persistence.
 - Radio capability definitions are compiled into the application; do not add
@@ -58,19 +84,89 @@ audio routing, and station workflows.
 - Do not remove or rewrite user changes from the working tree unless the user
   explicitly asks.
 
+## Permissions
+
+- Set all directories to mode `0775`.
+- Set all files to mode `0664`.
+- Preserve these modes when creating or replacing repository content.
+- Ignored deployment or local environment paths under `workspace/` are the
+  exception: set their directories to `0700` and secret-bearing files to
+  `0600`.
+
+## Repository Layout
+
+### `AGENTS.md`
+
+This file is the authoritative source for repository-wide agent instructions.
+Consolidate all such instructions here.
+
+### `workspace/`
+
+- Use `workspace/` as the private, per-system local work area for files that
+  directly support SDR9700.
+- Never commit or synchronize anything under `workspace/`, including guides,
+  configuration, credentials, generated artifacts, and temporary files.
+- Operator-approved environment files may be stored only in ignored
+  task-specific subdirectories below `workspace/`, protected with modes
+  `0700`/`0600`. Never force-add or synchronize them. Store all other
+  credentials, keys, and sensitive operational data only in the approved
+  private workspace location, never in this repository.
+
+### `_development/`
+
+- Use `_development/` for repository-wide development artifacts and AI
+  context.
+- `_development/STATUS.md` is maintained by agents and records the current
+  development status of SDR9700.
+- `_development/STANDARD.md` defines repository-wide implementation and
+  maintenance requirements. `CONVENTIONS.md` remains the canonical source for
+  C++ and Qt coding rules.
+- Keep `_development/STATUS.md`, `_development/STANDARD.md`, and
+  `CONVENTIONS.md` accurate and up to date.
+
+### `_support/`
+
+Use `_support/` for shared artifacts, such as scripts, that affect multiple
+parts of the repository rather than one application component.
+
+### Naming and Documentation
+
+- Name project-owned directories and non-code path components with lowercase
+  `snake_case`; do not use hyphens in project names. Reserve hyphens for
+  ecosystem-mandated names, command names, distribution names, and documented
+  filename-role separators. C++ source names follow `CONVENTIONS.md`.
+- Treat top-level directories whose names begin with `_` as repository
+  support directories.
+- Treat top-level, non-hidden directories without an `_` prefix as SDR9700
+  project content.
+- Keep credentials, private keys, production data, and secret-bearing
+  configuration out of Git.
+- In documentation, use paths relative to the repository root. Do not include
+  machine-specific absolute paths such as `/mnt/dev/...` or
+  `/home/user/Code/...`.
+
+### Source Tree
+
+- `src/gui/`: Qt widgets and dialogs.
+- `src/models/`: UI-facing radio and VFO models.
+- `src/backend/`: bridge between models and the IC-9700 radio stack.
+- `src/radio/`: IC-9700 LAN/CI-V radio protocol implementation.
+- `src/audio/`: Qt Multimedia audio handlers and conversion utilities.
+- `src/core/`: shared types, settings, profile storage, logging, and queues.
+
 ## Source Code Review
 
 When an AI agent is asked to perform a top-down and bottom-up review of the
 source code, the expected result is a detailed, nit-picky review of every file
-within the source tree. Findings should be identified for a maintainer to review
-and confirm;
-do not automatically correct issues found during this review unless
-the maintainer explicitly asks for fixes.
+within the source tree. Findings should be identified for a maintainer to
+review and confirm; do not automatically correct issues found during this
+review unless the maintainer explicitly asks for fixes.
 
 A code review must always include these automated checks, run from the project
 root, before reporting findings:
 
 **clang-format** — apply in-place and report any files changed:
+
 ```bash
 find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
   | xargs -0 clang-format-23 -i
@@ -78,9 +174,11 @@ git diff --stat
 ```
 
 Use clang-format 23 for this command. Linux CI invokes `clang-format-23`
-explicitly; developers must not format the tree with a different major version.
+explicitly; developers must not format the tree with a different major
+version.
 
 **cppcheck** — pedantic mode, using the project suppressions file:
+
 ```bash
 cppcheck --enable=all --inconclusive --std=c++20 \
   --library=qt \
@@ -97,20 +195,20 @@ release from its checksum-verified source archive; developers must not use a
 different analyzer version when adding or removing suppressions.
 
 Do not scan `src/build` with cppcheck. It contains generated CMake, Qt MOC,
-and resource files, which wastes review time and obscures source findings.
-The command suppresses only missing external/include-model details and analyzer
+and resource files, which wastes review time and obscures source findings. The
+command suppresses only missing external/include-model details and analyzer
 status reports. Keep all source correctness categories enabled. Add a
-source-specific suppression only
-for a demonstrated false positive that cannot reasonably be expressed more
-clearly in code, and document its reason in `.cppcheck_suppressions`.
+source-specific suppression only for a demonstrated false positive that cannot
+reasonably be expressed more clearly in code, and document its reason in
+`.cppcheck_suppressions`.
 
 Any findings from these tools that are not already suppressed must be included
 in the review report.
 
 Items to look for include, but are not limited to:
 
-- Adherence to SDR9700 principles, coding requirements, style, syntax practices,
-  and formatting rules.
+- Adherence to SDR9700 principles, coding requirements, style, syntax
+  practices, and formatting rules.
 - Security risks, unsafe assumptions, input validation gaps, and resource
   handling problems.
 - Leftover code, build paths, assumptions, or branches intended for unsupported
@@ -134,14 +232,17 @@ ctest --test-dir src/build --output-on-failure
 ```
 
 Always use `src/build` for local builds. Do not create agent-specific build
-directories such as `build-codex`, `build-claude`, or similar variants. Always
-do a clean build for verification: remove `src/build`, reconfigure it, then
-build. The root `Makefile` release and debug targets perform this clean rebuild.
-Only `Release` and `Debug` are supported CMake build types. Use `make release`
-for production behavior and normal verification. Use `make debug` when debug
-symbols or debugger-friendly builds are required. Runtime logging is controlled
-with `--log=radio,udp,ci-v`, `--log=all`, and optional `--log-file=<path>`.
-Debug builds default to `--log=all` when no log option is supplied.
+directories such as `build-codex`, `build-claude`, or similar variants.
+Always do a clean build for verification: remove `src/build`, reconfigure it,
+then build. The root `Makefile` release and debug targets perform this clean
+rebuild.
+
+Only `Release` and `Debug` are supported CMake build types. Use
+`make release` for production behavior and normal verification. Use
+`make debug` when debug symbols or debugger-friendly builds are required.
+Runtime logging is controlled with `--log=radio,udp,ci-v`, `--log=all`, and
+optional `--log-file=<path>`. Debug builds default to `--log=all` when no
+log option is supplied.
 
 ## Settings
 
@@ -161,18 +262,9 @@ an independent source of radio truth: live radio replies remain authoritative
 for slot availability and write verification. CSV import/export is the
 supported offline interchange format.
 
-The settings file is JSON. Boolean settings are stored as `"True"` / `"False"`
-strings for compatibility with existing code. Use camel-case keys, with
-all-caps abbreviations, grouped under current schema objects such as
-`radioChooser`, `audio`, `spectrumScope`, and `radio`. Do not add configuration
-fallback paths, migration keys, or migration holdover code; configuration
-import is the cleanup boundary for current schema validation.
-
-## Architecture
-
-- `src/gui/`: Qt widgets and dialogs.
-- `src/models/`: UI-facing radio and VFO models.
-- `src/backend/`: bridge between models and the IC-9700 radio stack.
-- `src/radio/`: IC-9700 LAN/CI-V radio protocol implementation.
-- `src/audio/`: Qt Multimedia audio handlers and conversion utilities.
-- `src/core/`: shared types, settings, profile storage, logging, and queues.
+The settings file is JSON. Boolean settings are stored as `"True"` /
+`"False"` strings for compatibility with existing code. Use camel-case keys,
+with all-caps abbreviations, grouped under current schema objects such as
+`radioChooser`, `audio`, `spectrumScope`, and `radio`. Do not add
+configuration fallback paths, migration keys, or migration holdover code;
+configuration import is the cleanup boundary for current schema validation.
