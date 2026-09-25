@@ -24,19 +24,19 @@ radio-control path harder to understand or maintain.
 
 ```bash
 make release
-./src/build/bin/SDR9700
+./_workspace/build/bin/SDR9700
 ```
 
-Use `src/build` for all local builds. Do not create agent-specific build
+Use `_workspace/build` for all local builds. Do not create agent-specific build
 directories such as `build-codex`, `build-claude`, or similar variants. If
-`src/build` was configured with a different CMake generator, clear and
-reconfigure `src/build`.
+`_workspace/build` was configured with a different CMake generator, clear and
+reconfigure `_workspace/build` without altering `_workspace/private/`.
 
 Use `make debug` for developer builds that need debug symbols. Runtime logging
 is controlled separately in release builds. Debug builds default to `--log=all`:
 
 ```bash
-./src/build/bin/SDR9700 --log=radio,udp,ci-v --log-file=/tmp/sdr9700.log
+./_workspace/build/bin/SDR9700 --log=radio,udp,ci-v --log-file=/tmp/sdr9700.log
 ```
 
 Other CMake build types are rejected by CMake.
@@ -90,7 +90,7 @@ the repository suppressions. The underlying commands are documented below.
 
 **clang-format** — apply in-place and confirm no files changed:
 ```bash
-find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' \) -print0 \
+find src \( -name '*.cpp' -o -name '*.h' \) -print0 \
   | xargs -0 clang-format-23 -i
 git diff --stat
 ```
@@ -107,7 +107,7 @@ cppcheck --enable=all --inconclusive --std=c++20 \
   --suppress=normalCheckLevelMaxBranches \
   --suppress=checkersReport \
   --suppressions-list=.cppcheck_suppressions \
-  -I src -i src/build src
+  -I src src
 ```
 
 Use cppcheck 2.21.0 so local findings match CI and the reviewed suppressions
@@ -119,7 +119,7 @@ Then:
 
 - Run a clean Release build with `make release`.
 - Run the complete existing test suite with
-  `ctest --test-dir src/build --output-on-failure`; all tests must pass.
+  `ctest --test-dir _workspace/build --output-on-failure`; all tests must pass.
 - Explain what changed and how it was verified.
 - Note any behavior that needs validation against real IC-9700 hardware.
 

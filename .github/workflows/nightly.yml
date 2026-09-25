@@ -45,15 +45,15 @@ jobs:
             libspeexdsp-dev libxkbcommon-dev libeigen3-dev libhidapi-dev
       - name: Build
         run: |
-          cmake -S . -B src/build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+          cmake -S . -B _workspace/build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
             -D${{ matrix.cmake_option }}=ON
-          cmake --build src/build -j2
+          cmake --build _workspace/build -j2
       - name: Test
         run: |
           if [[ "${{ matrix.cmake_option }}" == "SDR9700_THREAD_SANITIZE" ]]; then
             export TSAN_OPTIONS="halt_on_error=1:suppressions=$GITHUB_WORKSPACE/_developer/sanitizers/tsan_suppressions.txt"
           fi
-          env ${{ matrix.runtime_options }} ctest --test-dir src/build --output-on-failure --timeout 180 ${{ matrix.ctest_args }}
+          env ${{ matrix.runtime_options }} ctest --test-dir _workspace/build --output-on-failure --timeout 180 ${{ matrix.ctest_args }}
 
   benchmarks:
     name: Performance benchmarks
@@ -69,7 +69,7 @@ jobs:
             libspeexdsp-dev libxkbcommon-dev libeigen3-dev libhidapi-dev
       - name: Build benchmark suite
         run: |
-          cmake -S . -B src/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDR9700_BUILD_BENCHMARKS=ON
-          cmake --build src/build --target PerformanceBenchmark -j2
+          cmake -S . -B _workspace/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDR9700_BUILD_BENCHMARKS=ON
+          cmake --build _workspace/build --target PerformanceBenchmark -j2
       - name: Run benchmarks
-        run: ctest --test-dir src/build --output-on-failure --verbose -L benchmark
+        run: ctest --test-dir _workspace/build --output-on-failure --verbose -L benchmark

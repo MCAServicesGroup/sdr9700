@@ -30,7 +30,7 @@ through its opt-in local automation bridge. Start a fully synchronized
 application explicitly with automation enabled:
 
 ```bash
-./src/build/bin/SDR9700 --enable-automation --log=radio,udp,ci-v
+./_workspace/build/bin/SDR9700 --enable-automation --log=radio,udp,ci-v
 ```
 
 These tools discover the newest `sdr9700-automation-*.json` record beneath

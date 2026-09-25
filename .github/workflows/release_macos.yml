@@ -92,10 +92,10 @@ jobs:
       - name: Build and test
         run: |
           make release
-          grep -Fq 'SDR9700_ENABLE_GPU_PANADAPTER:BOOL=ON' src/build/CMakeCache.txt
-          nm src/build/bin/SDR9700.app/Contents/MacOS/SDR9700 \
+          grep -Fq 'SDR9700_ENABLE_GPU_PANADAPTER:BOOL=ON' _workspace/build/CMakeCache.txt
+          nm _workspace/build/bin/SDR9700.app/Contents/MacOS/SDR9700 \
             | grep -F 'qInitResources_SDR9700_panadapter_shaders' >/dev/null
-          ctest --test-dir src/build --output-on-failure
+          ctest --test-dir _workspace/build --output-on-failure
 
       - name: Import Developer ID certificate
         env:
@@ -128,9 +128,9 @@ jobs:
         run: |
           make release-dmg
           make verify-bundle
-          codesign --verify --deep --strict --verbose=2 src/build/bin/SDR9700.app
+          codesign --verify --deep --strict --verbose=2 _workspace/build/bin/SDR9700.app
 
-          dmg_path="$(find src/build/package -maxdepth 1 -name 'SDR9700-*-macOS-apple-silicon.dmg' -print -quit)"
+          dmg_path="$(find _workspace/build/package -maxdepth 1 -name 'SDR9700-*-macOS-apple-silicon.dmg' -print -quit)"
           test -n "$dmg_path"
           echo "SDR9700_DMG=$dmg_path" >> "$GITHUB_ENV"
 

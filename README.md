@@ -126,8 +126,8 @@ instructions below.
 
 Building requires a C++ toolchain, CMake, Ninja, GNU Make, pkg-config, Qt 6,
 OpenSSL, Opus, SpeexDSP, Eigen, and optionally HIDAPI for RC-28 support.
-`make release` performs a clean Release build in `src/build`. Only Release and
-Debug CMake configurations are supported.
+`make release` performs a clean Release build in `_workspace/build`. Only
+Release and Debug CMake configurations are supported.
 
 ### Linux
 
@@ -160,13 +160,13 @@ make debug
 Run the complete automated test suite after either build:
 
 ```bash
-ctest --test-dir src/build --output-on-failure
+ctest --test-dir _workspace/build --output-on-failure
 ```
 
 Launch the built application with diagnostics enabled:
 
 ```bash
-./src/build/bin/SDR9700 --log=radio,udp,ci-v
+./_workspace/build/bin/SDR9700 --log=radio,udp,ci-v
 ```
 
 ### macOS (Apple Silicon)
@@ -204,13 +204,13 @@ make debug
 Run the complete automated test suite after either build:
 
 ```bash
-ctest --test-dir src/build --output-on-failure
+ctest --test-dir _workspace/build --output-on-failure
 ```
 
 Launch the built application directly with diagnostics enabled:
 
 ```bash
-./src/build/bin/SDR9700.app/Contents/MacOS/SDR9700 --log=radio,udp,ci-v
+./_workspace/build/bin/SDR9700.app/Contents/MacOS/SDR9700 --log=radio,udp,ci-v
 ```
 
 ## Repository Layout
@@ -233,8 +233,10 @@ Launch the built application directly with diagnostics enabled:
 The [documentation index](docs/README.md) links the architecture, development,
 release, radio-protocol, and research material maintained with the source.
 
-Local task files belong under the ignored `_workspace/` directory. Nothing
-beneath `_workspace/` is synchronized through Git or GitHub.
+Local build output and task files belong under the ignored `_workspace/`
+directory. Nothing beneath `_workspace/` is synchronized through Git or
+GitHub. Store sensitive local material only beneath `_workspace/private/`,
+which uses restrictive permissions independently of the normal build area.
 
 Repository-level policy and community documents remain at the project root:
 

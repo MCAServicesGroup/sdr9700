@@ -9,8 +9,9 @@ The detailed C++ and Qt coding rules remain in `CONVENTIONS.md`.
 - Keep builds, packaging, and runtime configuration reproducible and explicit.
 - Keep credentials, private keys, production data, and secret-bearing files out
   of Git.
-- Use `_workspace/` for private per-system files and `_developer/` for shared,
-  committed developer documentation and repository tooling.
+- Use `_workspace/` for ignored per-system files and `_developer/` for shared,
+  committed developer documentation and repository tooling. Keep sensitive
+  local material beneath the restricted `_workspace/private/` subtree.
 - Add or update deterministic automated tests for code changes where practical.
 - Run a clean affected build and the complete relevant test suite before
   considering a change complete.

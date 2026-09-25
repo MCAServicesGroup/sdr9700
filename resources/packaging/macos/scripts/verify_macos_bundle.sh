@@ -7,7 +7,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-app_path="${1:-src/build/bin/SDR9700.app}"
+app_path="${1:-_workspace/build/bin/SDR9700.app}"
 contents_path="${app_path}/Contents"
 frameworks_path="${contents_path}/Frameworks"
 

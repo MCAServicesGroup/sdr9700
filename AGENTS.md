@@ -89,8 +89,9 @@ audio routing, and station workflows.
 - Set all directories to mode `0755`.
 - Set all files to mode `0644`.
 - Preserve these modes when creating or replacing repository content.
-- Keep `_workspace/` private: set it and its subdirectories to mode `0700`
-  and files beneath it to mode `0600`.
+- Generated executable files under `_workspace/build/` may use mode `0755`.
+- Keep `_workspace/private/` private: set it and its subdirectories to mode
+  `0700` and files beneath it to mode `0600`.
 
 ## Repository Layout
 
@@ -101,15 +102,18 @@ Consolidate all such instructions here.
 
 ### `_workspace/`
 
-- Use `_workspace/` as the private, per-system local work area for files that
-  directly support SDR9700.
+- Use `_workspace/` as the ignored, per-system local work area for files that
+  directly support SDR9700. Use standard directory and file modes outside its
+  `private/` subdirectory.
+- Use `_workspace/build/` as the only local CMake build directory.
+- Store sensitive local material only beneath `_workspace/private/`.
 - Never commit or synchronize anything under `_workspace/`, including guides,
   configuration, credentials, generated artifacts, and temporary files.
 - Operator-approved environment files may be stored only in ignored
-  task-specific subdirectories below `_workspace/`. Never force-add or
-  synchronize them. Store all other credentials, keys, and sensitive
-  operational data only in the approved private workspace location, never in
-  this repository.
+  task-specific subdirectories below `_workspace/private/`. Never force-add
+  or synchronize them. Store all other credentials, keys, and sensitive
+  operational data only in `_workspace/private/`, never elsewhere in this
+  repository.
 
 ### `_developer/`
 
@@ -165,7 +169,7 @@ root, before reporting findings:
 **clang-format** — apply in-place and report any files changed:
 
 ```bash
-find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
+find src \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
   | xargs -0 clang-format-23 -i
 git diff --stat
 ```
@@ -184,19 +188,19 @@ cppcheck --enable=all --inconclusive --std=c++20 \
   --suppress=normalCheckLevelMaxBranches \
   --suppress=checkersReport \
   --suppressions-list=.cppcheck_suppressions \
-  -I src -i src/build src
+  -I src src
 ```
 
 Use cppcheck 2.21.0 for this command. Linux CI builds that exact upstream
 release from its checksum-verified source archive; developers must not use a
 different analyzer version when adding or removing suppressions.
 
-Do not scan `src/build` with cppcheck. It contains generated CMake, Qt MOC,
-and resource files, which wastes review time and obscures source findings. The
-command suppresses only missing external/include-model details and analyzer
-status reports. Keep all source correctness categories enabled. Add a
-source-specific suppression only for a demonstrated false positive that cannot
-reasonably be expressed more clearly in code, and document its reason in
+Keep cppcheck scoped to `src`; generated CMake, Qt MOC, and resource files live
+outside that tree in `_workspace/build` and must not be scanned. The command
+suppresses only missing external/include-model details and analyzer status
+reports. Keep all source correctness categories enabled. Add a source-specific
+suppression only for a demonstrated false positive that cannot reasonably be
+expressed more clearly in code, and document its reason in
 `.cppcheck_suppressions`.
 
 Any findings from these tools that are not already suppressed must be included
@@ -224,15 +228,15 @@ here; update `CONVENTIONS.md` when a coding rule changes.
 
 ```bash
 make release
-ctest --test-dir src/build --output-on-failure
-./src/build/bin/SDR9700
+ctest --test-dir _workspace/build --output-on-failure
+./_workspace/build/bin/SDR9700
 ```
 
-Always use `src/build` for local builds. Do not create agent-specific build
-directories such as `build-codex`, `build-claude`, or similar variants.
-Always do a clean build for verification: remove `src/build`, reconfigure it,
-then build. The root `Makefile` release and debug targets perform this clean
-rebuild.
+Always use `_workspace/build` for local builds. Do not create agent-specific
+build directories such as `build-codex`, `build-claude`, or similar variants.
+Always do a clean build for verification: remove `_workspace/build`,
+reconfigure it, then build. The root `Makefile` release and debug targets
+perform this clean rebuild without altering `_workspace/private/`.
 
 Only `Release` and `Debug` are supported CMake build types. Use
 `make release` for production behavior and normal verification. Use

@@ -41,7 +41,7 @@ Check the items that apply. Explain unchecked verification items above; document
 
 - [ ] I read `CONTRIBUTING.md` and followed `CONVENTIONS.md`.
 - [ ] I kept the change focused and updated relevant documentation.
-- [ ] I ran `make release` and `ctest --test-dir src/build --output-on-failure` for source changes.
+- [ ] I ran `make release` and `ctest --test-dir _workspace/build --output-on-failure` for source changes.
 - [ ] I ran the pinned formatting and static-analysis checks for C/C++ changes.
 - [ ] I added or updated tests where practical.
 - [ ] I described any remaining Linux, Apple Silicon macOS, or IC-9700 validation above.

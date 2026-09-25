@@ -73,11 +73,12 @@ Run it before submitting source changes.
 
 ## Build Directory
 
-- Use `src/build` for all local CMake builds.
+- Use `_workspace/build` for all local CMake builds.
 - Do not create agent-specific build directories such as `build-codex`,
   `build-claude`, or similar variants.
-- If `src/build` has the wrong CMake generator or stale cache state, clear and
-  reconfigure `src/build` instead of creating another build directory.
+- If `_workspace/build` has the wrong CMake generator or stale cache state,
+  clear and reconfigure `_workspace/build` instead of creating another build
+  directory. Do not alter `_workspace/private/` when cleaning builds.
 
 ## Testing
 
@@ -92,7 +93,7 @@ Run it before submitting source changes.
   run the complete existing test suite with:
 
   ```bash
-  ctest --test-dir src/build --output-on-failure
+  ctest --test-dir _workspace/build --output-on-failure
   ```
 
 - All existing tests must continue to pass. Do not remove, disable, or weaken a

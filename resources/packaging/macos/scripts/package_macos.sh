@@ -7,8 +7,8 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-app_path="${1:-src/build/bin/SDR9700.app}"
-output_directory="${2:-src/build/package}"
+app_path="${1:-_workspace/build/bin/SDR9700.app}"
+output_directory="${2:-_workspace/build/package}"
 if [ ! -d "${app_path}" ]; then
     echo "SDR9700 application bundle not found at ${app_path}" >&2
     exit 1

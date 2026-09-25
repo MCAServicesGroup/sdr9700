@@ -40,8 +40,8 @@ within Copilot's chat context.
 
 7. **Test changes on the complete supported pipeline.** Add or update automated
    tests wherever practical, especially regression tests for defects. Use the
-   shared `src/build` directory and run a clean Release build plus the complete
-   CTest suite before considering a change complete.
+   shared `_workspace/build` directory and run a clean Release build plus the
+   complete CTest suite before considering a change complete.
 
 ## C++ and Qt 6 style highlights
 
@@ -63,17 +63,17 @@ within Copilot's chat context.
 
 ## Build and validation
 
-Always use `src/build`; do not create agent-specific build directories.
+Always use `_workspace/build`; do not create agent-specific build directories.
 
 ```bash
 make release
-ctest --test-dir src/build --output-on-failure
+ctest --test-dir _workspace/build --output-on-failure
 ```
 
 Source formatting must use clang-format 23:
 
 ```bash
-find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
+find src \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
   | xargs -0 clang-format-23 --dry-run --Werror
 ```
 

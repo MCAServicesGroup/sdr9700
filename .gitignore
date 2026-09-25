@@ -60,7 +60,7 @@ compile_commands.json
 *.swp
 .DS_Store
 
-# Private local work area. Nothing beneath it is synchronized through Git.
+# Ignored local work area. Sensitive material belongs in _workspace/private/.
 /_workspace/
 
 # vcpkg

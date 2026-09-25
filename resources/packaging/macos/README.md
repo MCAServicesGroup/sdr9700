@@ -39,5 +39,5 @@ To notarize the DMG locally, store a `notarytool` Keychain profile, set
 `SDR9700_NOTARY_PROFILE` to its name, and run:
 
 ```bash
-make notarize DMG=src/build/package/SDR9700-<version>-macOS-apple-silicon.dmg
+make notarize DMG=_workspace/build/package/SDR9700-<version>-macOS-apple-silicon.dmg
 ```
