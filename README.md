@@ -21,7 +21,7 @@ Multimedia.
 
 ## Status
 
-[SDR9700 26.9.3](https://github.com/w5jwp/SDR9700/releases/tag/v26.9.3) is the
+[SDR9700 26.9.3](https://github.com/MCAServicesGroup/sdr9700/releases/tag/v26.9.3) is the
 current stable release. The project remains under active development and
 provides an IC-9700-focused LAN control surface on Linux and Apple Silicon
 macOS, backed by automated protocol, scheduler, routing, model, and GUI tests.
@@ -59,10 +59,11 @@ systems, and optional USB controllers is welcome.
   memory use, transmit state, radio-command activity, and enabled automation
   sessions.
 - A meters window for signal strength, RF power, SWR, ALC, compression, radio
-  voltage/current, and microphone average/peak levels.
+  voltage/current, and local processed-input average/peak levels in dBFS.
 - DTMF send panel with PTT gating.
-- Receive-only AX.25 packet decoding from 1200-baud Bell 202 radio audio, with
-  live decode-health indicators and text export in the Data Decoder window.
+- Receive-only AX.25 packet decoding from the selected receiver's 1200-baud
+  Bell 202 LAN audio channel, with live decode-health indicators and text
+  export in the Data Decoder window.
 - Radio-backed IC-9700 memory management with add/edit/copy/remove, periodic and
   on-demand synchronization, CSV import/export, band filtering, ordering, and
   activation from the main-window memory browser. Each radio profile has a
@@ -109,7 +110,7 @@ systems, and optional USB controllers is welcome.
 ### macOS (Apple Silicon)
 
 Download the `SDR9700-<version>-macOS-apple-silicon.dmg` from the
-[latest SDR9700 release](https://github.com/w5jwp/SDR9700/releases/latest), open
+[latest SDR9700 release](https://github.com/MCAServicesGroup/sdr9700/releases/latest), open
 it, and drag SDR9700 into Applications.
 
 The release application includes Qt and its other runtime libraries. Users do
@@ -135,8 +136,8 @@ On Debian, Ubuntu, and related distributions, install the build dependencies:
 
 ```bash
 sudo apt install build-essential cmake ninja-build pkg-config \
-  qt6-base-dev qt6-multimedia-dev libqt6sql6-sqlite libssl-dev libopus-dev libspeexdsp-dev \
-  libxkbcommon-dev libeigen3-dev libhidapi-dev
+  qt6-base-dev qt6-multimedia-dev qt6-svg-dev libqt6sql6-sqlite libssl-dev libopus-dev \
+  libspeexdsp-dev libxkbcommon-dev libeigen3-dev libhidapi-dev
 ```
 
 After building, `make install` creates the desktop launcher and icons for the
@@ -177,16 +178,15 @@ Install the Xcode command-line tools if they are not already present:
 xcode-select --install
 ```
 
-Use Homebrew to install the build dependencies, including Vulkan tools and
-MoltenVK support:
+Use Homebrew to install the build dependencies:
 
 ```bash
-brew install cmake ninja pkg-config qt openssl@3 opus speexdsp eigen hidapi vulkan-tools
+brew install cmake ninja pkg-config qt openssl@3 opus speexdsp eigen hidapi
 ```
 
 Homebrew is needed only by developers building from source. It is not an
-end-user runtime requirement. The `vulkan-tools` formula installs the Vulkan
-loader and headers along with MoltenVK for Apple Silicon.
+end-user runtime requirement. Apple Silicon builds use Qt RHI's Metal backend
+for the spectrum and waterfall display.
 
 Build and run the application:
 
@@ -221,8 +221,7 @@ Launch the built application directly with diagnostics enabled:
 - `src/radio/`: IC-9700 LAN and CI-V radio protocol code.
 - `src/audio/`: Qt Multimedia audio handlers and conversion utilities.
 - `src/core/`: settings, profile storage, queues, and shared types.
-- `docs/`: architecture, development, protocol, and implementation research
-  documentation.
+- `docs/`: IC-9700 protocol documentation and implementation research.
 - `resources/`: shared images and Qt resources, hardware-integration tools,
   local research manuals, and platform-specific packaging assets.
 - `_developer/`: developer documentation, scripts, CI support files, analyzer
@@ -230,8 +229,10 @@ Launch the built application directly with diagnostics enabled:
 
 ## Documentation
 
-The [documentation index](docs/README.md) links the architecture, development,
-release, radio-protocol, and research material maintained with the source.
+The [technical documentation index](docs/README.md) links IC-9700 protocol and
+research material. The [developer documentation index](_developer/README.md)
+links architecture, debugging, release, status, and repository-standard
+material.
 
 Local build output and task files belong under the ignored `_workspace/`
 directory. Nothing beneath `_workspace/` is synchronized through Git or

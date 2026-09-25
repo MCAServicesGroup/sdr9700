@@ -1,4 +1,4 @@
-#SDR9700 Coding Conventions
+# SDR9700 Coding Conventions
 
 This file defines how SDR9700 code should be written. It applies to source,
 tests, build scripts, and documentation that describes implementation details.
@@ -40,7 +40,7 @@ tests, build scripts, and documentation that describes implementation details.
 - Do not use `goto`.
 - Prefer `constexpr`, `static constexpr`, or typed constants over new
   preprocessor constants.
-- Use `Q_OS_LINUX`, `Q_OS_WIN`, and `Q_OS_MAC` for new platform guards.
+- Use `Q_OS_LINUX` and `Q_OS_MAC` for new platform guards.
 - Log recoverable failures instead of throwing exceptions through Qt paths.
 
 ## Formatting

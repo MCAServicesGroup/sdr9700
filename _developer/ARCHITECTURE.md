@@ -43,14 +43,17 @@ src/gui/          MainWindow, dialogs, VFO display, spectrum, and waterfall
 - `RadioSessionWatchdog`: evaluates CI-V command/reply liveness independently
   from continuous UDP audio traffic.
 - `AudioConverter`: performs bounded sample-format and sample-rate conversion
-  for the Qt audio handlers.
-- `Ax25Decoder`: decodes AX.25 frames for the data-inspection UI.
+  for the Qt audio handlers and measures the post-gain, post-mix transmit input
+  before resampling.
+- `Ax25Decoder`: decodes AX.25 frames from the selected MAIN or SUB LAN audio
+  channel for the data-inspection UI.
 - `ScopeAdapter`: converts raw IC-9700 scope bytes to clamped native display
   levels in the range 0–160.
 - `RadioModel`: app-level connection and radio state.
 - `VfoModel`: active VFO state exposed to the UI.
 - `MeterController`: tracks validity and values for receive, transmit, radio,
-  and local microphone meters.
+  and local processed-input meters, including dBFS activity, peak hold, and
+  full-scale state.
 - `SpectrumScopeModel`: spectrum range and waterfall/scope data exposed to the UI.
 - `SpectrumScopeDisplay`, `SpectrumScopeCanvas`, and `WaterfallCanvas`: display
   IC-9700 scope and waterfall data.
@@ -96,6 +99,19 @@ or external radio definition files.
 
 SDR9700 client settings use `AppSettings`; do not add app-owned `QSettings`
 persistence.
+
+## Transmit Audio
+
+Microphone capture and local processed-input metering remain active while the
+configured transmit-audio path is available, allowing an operator to set input
+level before keying the radio. The meter tap runs after application gain and
+channel mixing and before resampling, and reports dBFS independently of PTT.
+
+Resampling, encoding, and network-output construction occur only when the
+capture block's transmit-authorization epoch permits microphone audio. PTT and
+DTMF transitions advance that epoch, clear queued conversion work, and cause
+stale in-flight or queued frames to be discarded. DTMF owns the transmit path
+while active, so microphone frames are not mixed into DTMF transmission.
 
 ## Spectrum Data
 

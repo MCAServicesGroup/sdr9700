@@ -1,6 +1,6 @@
 # SDR9700 CODEOWNERS
 #
-# @w5jwp is currently the project's sole maintainer and code owner. This
+# @jwpauler is currently the project's sole maintainer and code owner. This
 # repository-wide rule covers source, tests, documentation, build and release
 # infrastructure, security configuration, this CODEOWNERS file, and files
 # added in the future.
@@ -12,4 +12,4 @@
 # whose review authority differs by area. Place those rules below this default
 # and document their intended scope and ordering.
 
-* @w5jwp
+* @jwpauler

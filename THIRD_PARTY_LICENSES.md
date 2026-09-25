@@ -91,12 +91,16 @@ documentation, and prior open-source Icom LAN client work.
 The application links against system-provided libraries when available. These
 are not vendored in this repository.
 
-- Qt 6: Core, Widgets, Network, and Multimedia.
+- Qt 6: Core, Widgets, Network, Multimedia, MultimediaWidgets, SQL, and SVG;
+  Test is used by automated tests, and ShaderTools plus version-matched QtGui
+  private headers are required for GPU-panadapter builds.
+- OpenSSL: required for encrypted radio-profile credential storage.
 - XKB common: required by Qt GUI platform dependency discovery.
 - Opus: required codec dependency discovered through `pkg-config`.
 - SpeexDSP: required resampler dependency discovered through `pkg-config`.
-- Eigen3: required for audio sample format conversion in `src/audio/AudioConverter`.
-- HIDAPI (optional): used by `Rc28Manager` for Icom RC-28 HID control; linked
+- Eigen3: required for audio sample format conversion in
+  `src/audio/AudioConverter`.
+- HIDAPI (optional): used by `IcomRC28Manager` for Icom RC-28 HID control; linked
   when `libhidapi-hidraw` or `libhidapi` is detected at build time via
   `pkg-config`. Enables the `HAVE_HIDAPI` compile definition.
 

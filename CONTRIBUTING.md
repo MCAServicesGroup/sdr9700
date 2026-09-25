@@ -7,9 +7,10 @@ radio-control path harder to understand or maintain.
 ## Before You Start
 
 1. Read `README.md` for project scope.
-2. Read `CONVENTIONS.md` for coding rules.
-3. Read `AGENTS.md` if you are using an AI coding assistant.
-4. Check whether the file you want to use is imported reference material.
+2. Read `_developer/README.md` for architecture and developer workflows.
+3. Read `CONVENTIONS.md` for coding rules.
+4. Read `AGENTS.md` if you are using an AI coding assistant.
+5. Check whether the file you want to use is imported reference material.
    Rewrite and validate it before promoting it to active docs.
 
 ## Good First Contributions
@@ -90,7 +91,7 @@ the repository suppressions. The underlying commands are documented below.
 
 **clang-format** — apply in-place and confirm no files changed:
 ```bash
-find src \( -name '*.cpp' -o -name '*.h' \) -print0 \
+find src \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
   | xargs -0 clang-format-23 -i
 git diff --stat
 ```
@@ -100,7 +101,7 @@ version.
 
 **cppcheck** — pedantic static analysis:
 ```bash
-cppcheck --enable=all --inconclusive --std=c++20 \
+cppcheck --error-exitcode=1 --enable=all --inconclusive --std=c++20 \
   --library=qt \
   --suppress=missingIncludeSystem \
   --suppress=missingInclude \

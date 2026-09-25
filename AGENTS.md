@@ -122,6 +122,7 @@ Consolidate all such instructions here.
   utilities, and AI context.
 - Organize developer artifacts into purpose-specific subdirectories when that
   improves discoverability.
+- `_developer/README.md` indexes the repository-wide developer documentation.
 - `_developer/STATUS.md` is maintained by agents and records the current
   development status of SDR9700.
 - `_developer/STANDARD.md` defines repository-wide implementation and
