@@ -32,7 +32,7 @@ jobs:
             ctest_args: ""
           - name: Thread sanitizer
             cmake_option: SDR9700_THREAD_SANITIZE
-            runtime_options: TSAN_OPTIONS=halt_on_error=1:suppressions=${{ github.workspace }}/_support/tsan_suppressions.txt QT_NO_GLIB=1
+            runtime_options: QT_NO_GLIB=1
             ctest_args: -LE tsan_unsupported
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -49,7 +49,11 @@ jobs:
             -D${{ matrix.cmake_option }}=ON
           cmake --build src/build -j2
       - name: Test
-        run: env ${{ matrix.runtime_options }} ctest --test-dir src/build --output-on-failure --timeout 180 ${{ matrix.ctest_args }}
+        run: |
+          if [[ "${{ matrix.cmake_option }}" == "SDR9700_THREAD_SANITIZE" ]]; then
+            export TSAN_OPTIONS="halt_on_error=1:suppressions=$GITHUB_WORKSPACE/_support/tsan_suppressions.txt"
+          fi
+          env ${{ matrix.runtime_options }} ctest --test-dir src/build --output-on-failure --timeout 180 ${{ matrix.ctest_args }}
 
   benchmarks:
     name: Performance benchmarks
