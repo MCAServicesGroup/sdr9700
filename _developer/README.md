@@ -8,6 +8,8 @@ shared maintenance utilities.
 
 - [Development Status](STATUS.md) records the current source version and
   verified build, test, analysis, and benchmark state.
+- [Project Issues](ISSUES.md) tracks confirmed issues found during project
+  work, including their evidence, impact, next action, and resolution.
 - [Repository Standard](STANDARD.md) defines cross-cutting implementation and
   maintenance requirements.
 - [Architecture](ARCHITECTURE.md) describes the application layers, major
