@@ -42,7 +42,21 @@ outside the immediate task.
 
 ## Open Issues
 
-No open issues are currently recorded.
+### SDR-0002: CodeQL cannot read workflow metadata in the private repository
+
+- Status: `open`
+- Severity: `high`
+- Area: GitHub Actions and CodeQL
+- Identified: 2026-09-25 during PR #53 validation after restoring private
+  repository visibility
+- Evidence: All three CodeQL jobs reported `Resource not accessible by
+  integration` while requesting the workflow-run API. The job permissions did
+  not grant `actions: read`, which the private workflow-run API requires.
+- Impact: Required CodeQL checks fail before C/C++ and Python analysis and
+  during Actions result upload, preventing normal pull-request validation.
+- Next action: Grant the CodeQL job `actions: read` and confirm all three
+  language jobs pass in PR #53.
+- Related: `.github/workflows/codeql.yml`, PR #53, CodeQL run `36188965721`
 
 ## Resolved Issues
 
