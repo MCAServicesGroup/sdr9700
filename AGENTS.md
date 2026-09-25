@@ -43,7 +43,7 @@ audio routing, and station workflows.
 ## Development
 
 - Before beginning project work, read the root `README.md`,
-  `_development/STATUS.md`, and `CONVENTIONS.md`.
+  `_developer/STATUS.md`, and `CONVENTIONS.md`.
 - Keep Qt/CMake builds, packaging, and runtime configuration reproducible,
   secure, and explicit about required configuration.
 - Keep credentials, private keys, production data, and secret-bearing
@@ -86,12 +86,11 @@ audio routing, and station workflows.
 
 ## Permissions
 
-- Set all directories to mode `0775`.
-- Set all files to mode `0664`.
+- Set all directories to mode `0755`.
+- Set all files to mode `0644`.
 - Preserve these modes when creating or replacing repository content.
-- Ignored deployment or local environment paths under `workspace/` are the
-  exception: set their directories to `0700` and secret-bearing files to
-  `0600`.
+- Keep `_workspace/` private: set it and its subdirectories to mode `0700`
+  and files beneath it to mode `0600`.
 
 ## Repository Layout
 
@@ -100,28 +99,28 @@ audio routing, and station workflows.
 This file is the authoritative source for repository-wide agent instructions.
 Consolidate all such instructions here.
 
-### `workspace/`
+### `_workspace/`
 
-- Use `workspace/` as the private, per-system local work area for files that
+- Use `_workspace/` as the private, per-system local work area for files that
   directly support SDR9700.
-- Never commit or synchronize anything under `workspace/`, including guides,
+- Never commit or synchronize anything under `_workspace/`, including guides,
   configuration, credentials, generated artifacts, and temporary files.
 - Operator-approved environment files may be stored only in ignored
-  task-specific subdirectories below `workspace/`, protected with modes
-  `0700`/`0600`. Never force-add or synchronize them. Store all other
-  credentials, keys, and sensitive operational data only in the approved
-  private workspace location, never in this repository.
+  task-specific subdirectories below `_workspace/`. Never force-add or
+  synchronize them. Store all other credentials, keys, and sensitive
+  operational data only in the approved private workspace location, never in
+  this repository.
 
-### `_development/`
+### `_developer/`
 
-- Use `_development/` for repository-wide development artifacts and AI
+- Use `_developer/` for repository-wide development artifacts and AI
   context.
-- `_development/STATUS.md` is maintained by agents and records the current
+- `_developer/STATUS.md` is maintained by agents and records the current
   development status of SDR9700.
-- `_development/STANDARD.md` defines repository-wide implementation and
+- `_developer/STANDARD.md` defines repository-wide implementation and
   maintenance requirements. `CONVENTIONS.md` remains the canonical source for
   C++ and Qt coding rules.
-- Keep `_development/STATUS.md`, `_development/STANDARD.md`, and
+- Keep `_developer/STATUS.md`, `_developer/STANDARD.md`, and
   `CONVENTIONS.md` accurate and up to date.
 
 ### `_support/`

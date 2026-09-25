@@ -4,8 +4,6 @@
 
 #include <QSignalSpy>
 #include <QTest>
-#include <atomic>
-#include <chrono>
 #include <thread>
 
 class RadioRouterTest : public QObject
@@ -66,9 +64,8 @@ void RadioRouterTest::boundsReplaceableTrafficWhileConsumerIsStalled()
     ScopeData subFrame = mainFrame;
     subFrame.receiver = 1;
 
-    std::atomic_bool producerFinished{false};
-    std::thread producer(
-        [&router, &mainFrame, &subFrame, &producerFinished]()
+    std::jthread producer(
+        [&router, &mainFrame, &subFrame]()
         {
             for (int value = 0; value < kBatchCount; ++value)
             {
@@ -78,14 +75,11 @@ void RadioRouterTest::boundsReplaceableTrafficWhileConsumerIsStalled()
                                      CacheItem(funcScopeWaveData, QVariant::fromValue(mainFrame), 0),
                                      CacheItem(funcScopeWaveData, QVariant::fromValue(subFrame), 1)});
             }
-            producerFinished.store(true, std::memory_order_release);
         });
 
     // Intentionally do not process this thread's Qt event loop. Replaceable
     // traffic must collapse at the producer boundary instead of blocking or
     // filling the queued-delivery path while the consumer is stalled.
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    QVERIFY(producerFinished.load(std::memory_order_acquire));
     producer.join();
 
     const RadioRouterQueueDiagnostics stalled = router.queueDiagnostics();

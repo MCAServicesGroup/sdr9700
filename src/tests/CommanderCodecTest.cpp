@@ -1144,8 +1144,8 @@ void CommanderCodecTest::unsolicitedUpdateDoesNotConsumePendingReply()
     uchar receiver = 0;
     QVERIFY(m_commander.takePendingReplyReceiver(funcFreqGet, &receiver));
     QCOMPARE(receiver, uchar(1));
-    QVERIFY(!m_commander.queue->getCache(funcFreq, 0).value.isValid());
-    QVERIFY(!m_commander.queue->getCache(funcFreq, 1).value.isValid());
+    QVERIFY(!m_commander.queue->peekCache(funcFreq, 0).value.isValid());
+    QVERIFY(!m_commander.queue->peekCache(funcFreq, 1).value.isValid());
 }
 
 void CommanderCodecTest::acceptsOneMainFrequencyBroadcastAtEachPttTransition()

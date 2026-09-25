@@ -3371,7 +3371,7 @@ quint64 Commander::parseFreqDataToInt(QByteArray data)
     // Parse packed BCD frequency bytes with a lookup table.
     quint64 val = 0;
 
-    Q_ASSERT(data.size() * 2 < static_cast<int>(std::size(kPow10)));
+    Q_ASSERT(data.size() * 2 <= static_cast<int>(std::size(kPow10)));
     for (int i = 0; i < data.size() * 2; i = i + 2)
     {
         val += (data[i / 2] & 0x0f) * kPow10[i];

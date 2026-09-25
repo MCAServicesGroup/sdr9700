@@ -12,7 +12,7 @@ both while another client owns its CI-V and audio streams. SDR9700 considers a
 session owned only after receiving a correlated, successful stream response
 with usable CI-V and audio ports.
 
-Once ownership is established, SDR9700 writes an owner-only crash journal in
+Once ownership is established, SDR9700 writes a private crash journal in
 the operating system runtime directory. The journal contains the radio address,
 random SDR9700 client name, process ID, current authentication fields, and the
 local/remote endpoint and session-ID pairs for the control, CI-V, and audio
@@ -41,7 +41,7 @@ reservations are known.
 Recovery is allowed only when all of the following match:
 
 - the radio reports an SDR9700 client name from this host address;
-- the owner-only journal names that radio and client; and
+- the private journal names that radio and client; and
 - the process ID recorded in the journal is no longer running.
 
 The replacement process first replays departures using the predecessor's exact

@@ -231,11 +231,8 @@ Launch the built application directly with diagnostics enabled:
 The [documentation index](docs/README.md) links the architecture, development,
 release, radio-protocol, and research material maintained with the source.
 
-Local task files belong in the [workspace guide](workspace/WORKSPACE.md); only
-that guide is tracked in Git.
-
-New local task material should use the [local activity guide](Local/LOCAL.md);
-only that guide is synchronized through Git/GitHub.
+Local task files belong under the ignored `_workspace/` directory. Nothing
+beneath `_workspace/` is synchronized through Git or GitHub.
 
 Repository-level policy and community documents remain at the project root:
 
