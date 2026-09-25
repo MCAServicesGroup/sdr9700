@@ -64,7 +64,7 @@ void RadioRouterTest::boundsReplaceableTrafficWhileConsumerIsStalled()
     ScopeData subFrame = mainFrame;
     subFrame.receiver = 1;
 
-    std::jthread producer(
+    std::thread producer(
         [&router, &mainFrame, &subFrame]()
         {
             for (int value = 0; value < kBatchCount; ++value)
