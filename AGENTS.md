@@ -17,7 +17,7 @@ Consolidate all such instructions here.
 - Author commits as `Justin Pauler <justin@pauler.org>`.
 - Sign every commit with the key whose fingerprint is
   `5BB858A821B6FEFD33D8A148C3D84DCCEF6E8A03`, and verify each signature.
-- Keep this repository private.
+- Keep this repository public.
 
 ## Project Goal
 
@@ -43,7 +43,7 @@ audio routing, and station workflows.
 ## Development
 
 - Before beginning project work, read the root `README.md`,
-  `_developer/STATUS.md`, and `CONVENTIONS.md`.
+  `_developer/STATUS.md`, `_developer/ISSUES.md`, and `CONVENTIONS.md`.
 - Keep Qt/CMake builds, packaging, and runtime configuration reproducible,
   secure, and explicit about required configuration.
 - Keep credentials, private keys, production data, and secret-bearing
@@ -125,11 +125,14 @@ Consolidate all such instructions here.
 - `_developer/README.md` indexes the repository-wide developer documentation.
 - `_developer/STATUS.md` is maintained by agents and records the current
   development status of SDR9700.
+- `_developer/ISSUES.md` is maintained by agents and records confirmed issues
+  identified during any project work. Add a finding when it is identified,
+  update it as work progresses, and retain its resolution history.
 - `_developer/STANDARD.md` defines repository-wide implementation and
   maintenance requirements. `CONVENTIONS.md` remains the canonical source for
   C++ and Qt coding rules.
-- Keep `_developer/STATUS.md`, `_developer/STANDARD.md`, and
-  `CONVENTIONS.md` accurate and up to date.
+- Keep `_developer/STATUS.md`, `_developer/ISSUES.md`,
+  `_developer/STANDARD.md`, and `CONVENTIONS.md` accurate and up to date.
 
 ### Naming and Documentation
 
