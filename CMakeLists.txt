@@ -3,7 +3,7 @@ project(SDR9700 VERSION 26.9.4 LANGUAGES C CXX)
 
 include(CTest)
 
-set(SDR9700_DISPLAY_VERSION "26.9.4-beta.1")
+set(SDR9700_DISPLAY_VERSION "26.9.4")
 option(SDR9700_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer instrumentation" OFF)
 option(SDR9700_THREAD_SANITIZE "Enable ThreadSanitizer instrumentation" OFF)
 option(SDR9700_ENABLE_HIDAPI "Build optional Icom RC-28 support when hidapi is available" ON)

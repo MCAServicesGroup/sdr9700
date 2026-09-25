@@ -21,7 +21,7 @@ Multimedia.
 
 ## Status
 
-[SDR9700 26.9.3](https://github.com/MCAServicesGroup/sdr9700/releases/tag/v26.9.3) is the
+[SDR9700 26.9.4](https://github.com/MCAServicesGroup/sdr9700/releases/tag/v26.9.4) is the
 current stable release. The project remains under active development and
 provides an IC-9700-focused LAN control surface on Linux and Apple Silicon
 macOS, backed by automated protocol, scheduler, routing, model, and GUI tests.
