@@ -8,8 +8,6 @@ current source version is `26.9.4-beta.1`.
 - Keep the normal Linux and Apple Silicon macOS build and test workflows green.
 - Preserve hardware-independent automated coverage; radio-dependent behavior
   still requires explicit IC-9700 validation.
-- Confirm the repaired nightly sanitizer workflow in GitHub Actions after the
-  changes reach a pull-request branch.
 
 ## Validation State
 
@@ -22,3 +20,5 @@ current source version is `26.9.4-beta.1`.
 - The clang-format 23 and cppcheck 2.21.0 source checks pass.
 - The local performance benchmark suite passes, matching every recorded
   nightly workflow run.
+- The manually dispatched GitHub Nightly Analysis workflow passes its
+  ASan/UBSan, TSan, and performance benchmark jobs on the pull-request branch.
