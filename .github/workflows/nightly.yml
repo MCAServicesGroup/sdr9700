@@ -51,7 +51,7 @@ jobs:
       - name: Test
         run: |
           if [[ "${{ matrix.cmake_option }}" == "SDR9700_THREAD_SANITIZE" ]]; then
-            export TSAN_OPTIONS="halt_on_error=1:suppressions=$GITHUB_WORKSPACE/_support/tsan_suppressions.txt"
+            export TSAN_OPTIONS="halt_on_error=1:suppressions=$GITHUB_WORKSPACE/_developer/sanitizers/tsan_suppressions.txt"
           fi
           env ${{ matrix.runtime_options }} ctest --test-dir src/build --output-on-failure --timeout 180 ${{ matrix.ctest_args }}
 

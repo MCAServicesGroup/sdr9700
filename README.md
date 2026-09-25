@@ -225,6 +225,8 @@ Launch the built application directly with diagnostics enabled:
   documentation.
 - `resources/`: shared images and Qt resources, hardware-integration tools,
   local research manuals, and platform-specific packaging assets.
+- `_developer/`: developer documentation, scripts, CI support files, analyzer
+  configuration, and shared development utilities.
 
 ## Documentation
 

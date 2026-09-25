@@ -113,8 +113,11 @@ Consolidate all such instructions here.
 
 ### `_developer/`
 
-- Use `_developer/` for repository-wide development artifacts and AI
-  context.
+- Use `_developer/` as the single committed home for repository-wide
+  developer documentation, scripts, CI support files, analyzer configuration,
+  utilities, and AI context.
+- Organize developer artifacts into purpose-specific subdirectories when that
+  improves discoverability.
 - `_developer/STATUS.md` is maintained by agents and records the current
   development status of SDR9700.
 - `_developer/STANDARD.md` defines repository-wide implementation and
@@ -123,11 +126,6 @@ Consolidate all such instructions here.
 - Keep `_developer/STATUS.md`, `_developer/STANDARD.md`, and
   `CONVENTIONS.md` accurate and up to date.
 
-### `_support/`
-
-Use `_support/` for shared artifacts, such as scripts, that affect multiple
-parts of the repository rather than one application component.
-
 ### Naming and Documentation
 
 - Name project-owned directories and non-code path components with lowercase
@@ -135,7 +133,7 @@ parts of the repository rather than one application component.
   ecosystem-mandated names, command names, distribution names, and documented
   filename-role separators. C++ source names follow `CONVENTIONS.md`.
 - Treat top-level directories whose names begin with `_` as repository
-  support directories.
+  infrastructure directories.
 - Treat top-level, non-hidden directories without an `_` prefix as SDR9700
   project content.
 - Keep credentials, private keys, production data, and secret-bearing
