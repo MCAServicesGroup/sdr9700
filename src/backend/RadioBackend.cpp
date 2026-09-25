@@ -231,7 +231,6 @@ RadioBackend::RadioBackend(QObject* parent)
     m_workerThread->start();
 
     m_radioDataThread->setObjectName("radio-data");
-    m_radioDataThread->start();
 
     m_scopeController = new ScopeController();
     m_scopeController->moveToThread(m_radioDataThread);
@@ -675,6 +674,12 @@ RadioBackend::RadioBackend(QObject* parent)
     m_syncWatchdogTimer->setSingleShot(true);
     m_syncWatchdogTimer->setInterval(kSyncWatchdogTimeoutMs);
     connect(m_syncWatchdogTimer, &QTimer::timeout, this, &RadioBackend::restartAfterSyncTimeout);
+
+    // Finish constructing and moving the radio-data objects before the target
+    // thread starts its event dispatcher. Starting it first lets Qt initialize
+    // that dispatcher concurrently with moveToThread(), which ThreadSanitizer
+    // correctly identifies as unsynchronized access to Qt object metadata.
+    m_radioDataThread->start();
 }
 
 RadioBackend::~RadioBackend()

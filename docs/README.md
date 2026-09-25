@@ -1,20 +1,10 @@
-# SDR9700 Documentation
+# SDR9700 Technical Documentation
 
-This directory contains maintained technical and developer documentation. Files
-that GitHub, contributors, or development tools conventionally discover at the
-repository root remain there; implementation details and research live here.
-
-## Architecture
-
-- [Architecture](ARCHITECTURE.md) describes the application layers, major
-  components, threading model, radio definitions, and current constraints.
-
-## Development
-
-- [Debugging](development/DEBUGGING.md) documents debug builds, runtime logging
-  categories, and log-file capture.
-- [Releasing](development/RELEASING.md) defines versioning, release notes, and
-  the verification and publication checklist.
+This directory contains maintained IC-9700 protocol documentation and
+implementation research. Repository-wide developer documentation lives in the
+[`_developer/` index](../_developer/README.md). Files that GitHub, contributors,
+or development tools conventionally discover at the repository root remain
+there.
 
 ## IC-9700 Radio Protocol
 

@@ -4,6 +4,39 @@
 #include <QSemaphore>
 #include <QtTest>
 
+#include <atomic>
+#include <memory>
+#include <mutex>
+
+namespace
+{
+class CommandCollector
+{
+  public:
+    void append(Funcs command)
+    {
+        std::lock_guard locker(m_mutex);
+        m_commands.append(command);
+    }
+
+    int size() const
+    {
+        std::lock_guard locker(m_mutex);
+        return m_commands.size();
+    }
+
+    QVector<Funcs> snapshot() const
+    {
+        std::lock_guard locker(m_mutex);
+        return m_commands;
+    }
+
+  private:
+    mutable std::mutex m_mutex;
+    QVector<Funcs> m_commands;
+};
+} // namespace
+
 struct UnsupportedCachePayload
 {
     int value{0};
@@ -74,24 +107,33 @@ void CachingQueueTest::queueItemsHaveStableIdentity()
 void CachingQueueTest::dispatchesImmediateCommandsInOrder()
 {
     CachingQueue* queue = CachingQueue::getInstance();
-    QSignalSpy dispatched(queue, &CachingQueue::haveCommand);
+    const auto dispatched = std::make_shared<CommandCollector>();
+    QObject receiver;
+    connect(
+        queue, &CachingQueue::haveCommand, &receiver,
+        [dispatched](Funcs func, const QVariant&, uchar) { dispatched->append(func); }, Qt::DirectConnection);
 
     queue->add(kPriorityImmediate, funcFreqGet);
     queue->add(kPriorityImmediate, funcModeGet);
 
-    QTRY_COMPARE(dispatched.size(), 2);
-    QCOMPARE(dispatched.at(0).at(0).value<Funcs>(), funcFreqGet);
-    QCOMPARE(dispatched.at(1).at(0).value<Funcs>(), funcModeGet);
+    QTRY_COMPARE(dispatched->size(), 2);
+    const QVector<Funcs> commands = dispatched->snapshot();
+    QCOMPARE(commands.at(0), funcFreqGet);
+    QCOMPARE(commands.at(1), funcModeGet);
 }
 
 void CachingQueueTest::receivesAndCachesAuthoritativeValues()
 {
     CachingQueue* queue = CachingQueue::getInstance();
-    QSignalSpy delivered(queue, &CachingQueue::sendValues);
+    const auto deliveryCount = std::make_shared<std::atomic_int>(0);
+    QObject receiver;
+    connect(
+        queue, &CachingQueue::sendValues, &receiver, [deliveryCount](const QVector<CacheItem>&)
+        { deliveryCount->fetch_add(1, std::memory_order_release); }, Qt::DirectConnection);
 
     queue->receiveValue(funcRfGain, 123, 0);
 
-    QTRY_COMPARE(delivered.size(), 1);
+    QTRY_COMPARE(deliveryCount->load(std::memory_order_acquire), 1);
     const CacheItem cached = queue->getCache(funcRfGain, 0);
     QCOMPARE(cached.command, funcRfGain);
     QCOMPARE(cached.value.toInt(), 123);
@@ -130,12 +172,16 @@ void CachingQueueTest::resetClearsSessionState()
 void CachingQueueTest::vfoBandReadDoesNotChangeRoutingState()
 {
     CachingQueue* queue = CachingQueue::getInstance();
-    QSignalSpy dispatched(queue, &CachingQueue::haveCommand);
+    const auto dispatched = std::make_shared<CommandCollector>();
+    QObject receiver;
+    connect(
+        queue, &CachingQueue::haveCommand, &receiver,
+        [dispatched](Funcs func, const QVariant&, uchar) { dispatched->append(func); }, Qt::DirectConnection);
     queue->recordLocalRoutingState(funcVFOBandMS, true, 0);
 
     queue->add(kPriorityImmediate, funcVFOBandMS);
 
-    QTRY_COMPARE(dispatched.size(), 1);
+    QTRY_COMPARE(dispatched->size(), 1);
     QCOMPARE(queue->getState().receiver, uchar(1));
 }
 
@@ -198,11 +244,15 @@ void CachingQueueTest::restartsAfterExplicitShutdown()
 {
     CachingQueue::shutdownInstance();
     CachingQueue* queue = CachingQueue::getInstance();
-    QSignalSpy dispatched(queue, &CachingQueue::haveCommand);
+    const auto dispatched = std::make_shared<CommandCollector>();
+    QObject receiver;
+    connect(
+        queue, &CachingQueue::haveCommand, &receiver,
+        [dispatched](Funcs func, const QVariant&, uchar) { dispatched->append(func); }, Qt::DirectConnection);
 
     queue->add(kPriorityImmediate, funcFreqGet);
 
-    QTRY_COMPARE(dispatched.size(), 1);
+    QTRY_COMPARE(dispatched->size(), 1);
 }
 
 void CachingQueueTest::reportsQueueDiagnostics()
@@ -276,7 +326,11 @@ void CachingQueueTest::boundsCommandQueue()
 void CachingQueueTest::recurringWorkSurvivesImmediatePressure()
 {
     CachingQueue* queue = CachingQueue::getInstance();
-    QSignalSpy dispatched(queue, &CachingQueue::haveCommand);
+    const auto dispatched = std::make_shared<CommandCollector>();
+    QObject receiver;
+    connect(
+        queue, &CachingQueue::haveCommand, &receiver,
+        [dispatched](Funcs func, const QVariant&, uchar) { dispatched->append(func); }, Qt::DirectConnection);
 
     {
         std::lock_guard locker(queue->mutex);
@@ -290,16 +344,17 @@ void CachingQueueTest::recurringWorkSurvivesImmediatePressure()
     }
     queue->waiting.notify_one();
 
-    QTRY_VERIFY(dispatched.size() >= 18);
+    QTRY_VERIFY(dispatched->size() >= 18);
+    const QVector<Funcs> commands = dispatched->snapshot();
     int highestIndex = -1;
     int lowestIndex = -1;
-    for (int i = 0; i < dispatched.size(); ++i)
+    for (int i = 0; i < commands.size(); ++i)
     {
-        if (dispatched.at(i).at(0).value<Funcs>() == funcModeGet && highestIndex < 0)
+        if (commands.at(i) == funcModeGet && highestIndex < 0)
         {
             highestIndex = i;
         }
-        if (dispatched.at(i).at(0).value<Funcs>() == funcTransceiverId && lowestIndex < 0)
+        if (commands.at(i) == funcTransceiverId && lowestIndex < 0)
         {
             lowestIndex = i;
         }

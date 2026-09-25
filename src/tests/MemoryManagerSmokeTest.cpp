@@ -2,6 +2,7 @@
 #include "MainWindow.h"
 #include "MainWindowHelpers.h"
 #include "MainTitleBar.h"
+#include "AppBuildConfig.h"
 #include "AppInfo.h"
 #include "AppPaths.h"
 #include "AppSettings.h"

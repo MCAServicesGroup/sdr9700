@@ -1,6 +1,8 @@
-.PHONY: all release debug clean check check-format check-cppcheck run bundle verify-bundle sign dmg release-dmg notarize install
+.PHONY: all workspace prepare-build release debug clean check check-format check-cppcheck run bundle verify-bundle sign dmg release-dmg notarize install
 
-BUILD_DIR := src/build
+WORKSPACE_DIR := _workspace
+PRIVATE_DIR := $(WORKSPACE_DIR)/private
+BUILD_DIR := $(WORKSPACE_DIR)/build
 GENERATOR := Ninja
 BUILD_JOBS := $(shell \
 	if command -v getconf >/dev/null 2>&1; then n=$$(getconf _NPROCESSORS_ONLN); \
@@ -10,15 +12,25 @@ BUILD_JOBS := $(shell \
 
 all: release
 
-release:
-	rm -rf $(BUILD_DIR)
-	cmake -S . -B $(BUILD_DIR) -G $(GENERATOR) -DCMAKE_BUILD_TYPE=Release
-	cmake --build $(BUILD_DIR) -j$(BUILD_JOBS)
+workspace:
+	mkdir -p $(WORKSPACE_DIR) $(PRIVATE_DIR)
+	chmod 0755 $(WORKSPACE_DIR)
+	chmod 0700 $(PRIVATE_DIR)
 
-debug:
+prepare-build:
+	mkdir -p $(WORKSPACE_DIR)
+	chmod 0755 $(WORKSPACE_DIR)
 	rm -rf $(BUILD_DIR)
-	cmake -S . -B $(BUILD_DIR) -G $(GENERATOR) -DCMAKE_BUILD_TYPE=Debug
-	cmake --build $(BUILD_DIR) -j$(BUILD_JOBS)
+	mkdir -p $(BUILD_DIR)
+	chmod 0755 $(BUILD_DIR)
+
+release: prepare-build
+	umask 022; cmake -S . -B $(BUILD_DIR) -G $(GENERATOR) -DCMAKE_BUILD_TYPE=Release
+	umask 022; cmake --build $(BUILD_DIR) -j$(BUILD_JOBS)
+
+debug: prepare-build
+	umask 022; cmake -S . -B $(BUILD_DIR) -G $(GENERATOR) -DCMAKE_BUILD_TYPE=Debug
+	umask 022; cmake --build $(BUILD_DIR) -j$(BUILD_JOBS)
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -27,7 +39,7 @@ check: check-format check-cppcheck
 
 check-format:
 	@clang-format-23 --version | grep -E 'clang-format version 23\.'
-	find src -path src/build -prune -o \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
+	find src \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0 \
 	    | xargs -0 clang-format-23 --dry-run --Werror
 
 check-cppcheck:
@@ -39,7 +51,7 @@ check-cppcheck:
 	    --suppress=normalCheckLevelMaxBranches \
 	    --suppress=checkersReport \
 	    --suppressions-list=.cppcheck_suppressions \
-	    -I src -i src/build src
+	    -I src src
 
 run:
 	@if [ "$$(uname -s)" = "Darwin" ]; then \
@@ -69,7 +81,7 @@ release-dmg: bundle sign
 
 notarize:
 	@if [ -z "$(DMG)" ]; then \
-	    echo "Usage: make notarize DMG=src/build/package/SDR9700-<version>-macOS-apple-silicon.dmg"; \
+	    echo "Usage: make notarize DMG=_workspace/build/package/SDR9700-<version>-macOS-apple-silicon.dmg"; \
 	    exit 1; \
 	fi
 	./resources/packaging/macos/scripts/notarize_macos.sh "$(DMG)"

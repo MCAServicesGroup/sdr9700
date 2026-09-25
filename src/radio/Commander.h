@@ -272,7 +272,7 @@ class Commander : public RadioCommander
     QElapsedTimer m_scopeDiagnosticClocks[2];
     quint8 m_expectedScopeSequences[2]{0, 0};
 
-    // 12 entries cover 10^0–10^11; BCD frequency data is at most 5 bytes (10 nibbles, indices 0–9).
+    // 12 entries cover 10^0–10^11 for the six-byte BCD frequency form.
     static constexpr quint64 kPow10[12] = {1,       10,       100,       1000,       10000,       100000,
                                            1000000, 10000000, 100000000, 1000000000, 10000000000, 100000000000};
     static_assert(std::size(kPow10) == 12);

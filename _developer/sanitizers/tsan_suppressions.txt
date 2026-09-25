@@ -1,0 +1,11 @@
+# Ubuntu's Qt packages use uninstrumented GLib and PulseAudio backends. TSan
+# cannot observe their internal synchronization, so reports whose race stacks
+# remain entirely inside those libraries are not actionable SDR9700 findings.
+race:libglib-2.0.so
+race:libgio-2.0.so
+race:libpulsecommon
+
+# Qt logging is documented as thread-safe, but the distribution Qt binaries are
+# not TSan-instrumented. Keep this suppression scoped to the exact formatter
+# seen in the nightly job instead of suppressing all Qt races.
+race:qFormatLogMessage

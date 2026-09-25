@@ -606,11 +606,11 @@ std::optional<CacheItem> CachingQueue::updateCache(bool reply, QueueItem item)
         {
             if (reply)
             {
-                cv->reply = QDateTime::currentDateTime();
+                cv->reply = QDateTime::currentDateTimeUtc();
             }
             else
             {
-                cv->req = QDateTime::currentDateTime();
+                cv->req = QDateTime::currentDateTimeUtc();
             }
             if (cacheValuesDiffer(item.param, cv.value().value))
             {
@@ -630,11 +630,11 @@ std::optional<CacheItem> CachingQueue::updateCache(bool reply, QueueItem item)
 
     if (reply)
     {
-        c.reply = QDateTime::currentDateTime();
+        c.reply = QDateTime::currentDateTimeUtc();
     }
     else
     {
-        c.req = QDateTime::currentDateTime();
+        c.req = QDateTime::currentDateTimeUtc();
     }
     if (item.param.isValid())
     {
@@ -669,7 +669,7 @@ CacheItem CachingQueue::getCache(Funcs func, uchar receiver)
     CacheItem ret;
     bool requestRefresh = false;
     qint64 lastReplyAgeMs = -1;
-    const QDateTime now = QDateTime::currentDateTime();
+    const QDateTime now = QDateTime::currentDateTimeUtc();
     if (func != funcNone)
     {
         std::lock_guard locker(mutex);

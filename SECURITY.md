@@ -9,6 +9,7 @@ If you discover a security vulnerability in SDR9700, please report it
 vulnerability reporting when it is enabled for the repository.
 
 Please include:
+
 - A description of the vulnerability
 - Steps to reproduce
 - Potential impact

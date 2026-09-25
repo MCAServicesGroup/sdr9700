@@ -40,7 +40,7 @@ gh release create v26.9.1-beta.1 --target main --prerelease \
    `CMakeLists.txt`. Include the prerelease suffix only in the display version.
 2. Run a clean Release build with `make release`.
 3. Run the complete test suite with
-   `ctest --test-dir src/build --output-on-failure`.
+   `ctest --test-dir _workspace/build --output-on-failure`.
 4. Write release notes that summarize user-visible highlights, improvements,
    and fixes since the previous release. End with the full changelog comparison
    link. Generated notes may be edited into the authored notes, but must not be

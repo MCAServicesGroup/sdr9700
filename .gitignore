@@ -60,13 +60,8 @@ compile_commands.json
 *.swp
 .DS_Store
 
-# Local activity files; retain only the workspace guide in Git.
-/workspace/*
-!/workspace/WORKSPACE.md
-
-# Local activity files; retain only the local guide in Git.
-/Local/*
-!/Local/LOCAL.md
+# Ignored local work area. Sensitive material belongs in _workspace/private/.
+/_workspace/
 
 # vcpkg
 vcpkg_installed/

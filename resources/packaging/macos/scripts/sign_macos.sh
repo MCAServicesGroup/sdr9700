@@ -7,7 +7,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
     exit 1
 fi
 
-app_path="${1:-src/build/bin/SDR9700.app}"
+app_path="${1:-_workspace/build/bin/SDR9700.app}"
 sign_identity="${SDR9700_SIGN_IDENTITY:-}"
 entitlements_path="resources/packaging/macos/SDR9700.entitlements"
 

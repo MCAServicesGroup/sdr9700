@@ -7,7 +7,7 @@ name: SDR9700 CodeQL configuration
 
 paths-ignore:
   # Generated build products and extracted analyzer sources.
-  - 'src/build/**'
+  - '_workspace/build/**'
 
   # Test harnesses — not shipped, run locally + in CI.
   - 'src/tests/**'

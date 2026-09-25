@@ -535,9 +535,7 @@ void CommanderCodecTest::staleSMeterTimerDoesNotAffectLaterRead()
     // scheduler starts the replacement before that stale callback fires.
     m_commander.scheduleSMeterRead(1);
     QTRY_COMPARE_WITH_TIMEOUT(m_commander.m_smeterScopedReadGeneration, initialGeneration + 2, 100);
-    QTest::qWait(100);
-
-    QCOMPARE(wireSpy.count(), 5);
+    QTRY_COMPARE_WITH_TIMEOUT(wireSpy.count(), 5, 250);
     QCOMPARE(wireSpy.at(3).at(0).toByteArray(), QByteArray::fromHex("fefea2e107d1"));
     QCOMPARE(wireSpy.at(4).at(0).toByteArray(), QByteArray::fromHex("fefea2e11502"));
     QCOMPARE(m_commander.correlationDiagnostics().subSMeterRequests, quint64(1));
@@ -1144,8 +1142,8 @@ void CommanderCodecTest::unsolicitedUpdateDoesNotConsumePendingReply()
     uchar receiver = 0;
     QVERIFY(m_commander.takePendingReplyReceiver(funcFreqGet, &receiver));
     QCOMPARE(receiver, uchar(1));
-    QVERIFY(!m_commander.queue->getCache(funcFreq, 0).value.isValid());
-    QVERIFY(!m_commander.queue->getCache(funcFreq, 1).value.isValid());
+    QVERIFY(!m_commander.queue->peekCache(funcFreq, 0).value.isValid());
+    QVERIFY(!m_commander.queue->peekCache(funcFreq, 1).value.isValid());
 }
 
 void CommanderCodecTest::acceptsOneMainFrequencyBroadcastAtEachPttTransition()

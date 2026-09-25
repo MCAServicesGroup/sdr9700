@@ -2,8 +2,8 @@
 
 SDR9700's `Release macOS DMG` GitHub Actions workflow builds, tests, audits,
 signs, notarizes, staples, and attaches an Apple Silicon DMG whenever a GitHub
-Release is published. The release tag must match the CMake project version with
-a leading `v`, for example `v26.9.1`.
+Release is published. The release tag must match `SDR9700_DISPLAY_VERSION` with
+a leading `v`, for example `v26.9.1` or `v26.9.1-beta.1`.
 
 Configure these GitHub Actions repository secrets before publishing a release:
 
@@ -39,5 +39,5 @@ To notarize the DMG locally, store a `notarytool` Keychain profile, set
 `SDR9700_NOTARY_PROFILE` to its name, and run:
 
 ```bash
-make notarize DMG=src/build/package/SDR9700-<version>-macOS-apple-silicon.dmg
+make notarize DMG=_workspace/build/package/SDR9700-<version>-macOS-apple-silicon.dmg
 ```

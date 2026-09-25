@@ -435,6 +435,7 @@ if(BUILD_TESTING)
 
     add_executable(VfoModelTest
         tests/VfoModelTest.cpp
+        backend/IRadioBackend.h
         models/VfoModel.cpp
     )
     target_include_directories(VfoModelTest PRIVATE
@@ -477,6 +478,12 @@ if(BUILD_TESTING)
     add_executable(SettingsProcessTest tests/SettingsProcessTest.cpp)
     target_link_libraries(SettingsProcessTest PRIVATE SDR9700_core Qt6::Test)
     add_test(NAME SettingsProcessTest COMMAND SettingsProcessTest)
+    if(SDR9700_THREAD_SANITIZE)
+        # QProcess launches through fork/exec on Linux. GCC ThreadSanitizer
+        # aborts inside its own ForkAfter bookkeeping before the child starts,
+        # so this process-boundary test remains covered by normal and ASan CI.
+        set_tests_properties(SettingsProcessTest PROPERTIES LABELS "tsan_unsupported")
+    endif()
 
     add_executable(CachingQueueTest tests/CachingQueueTest.cpp)
     target_link_libraries(CachingQueueTest PRIVATE SDR9700_core Qt6::Test)
@@ -697,6 +704,20 @@ if(BUILD_TESTING)
     target_link_libraries(AutomationControllerTest PRIVATE SDR9700_app_support Qt6::Test)
     add_test(NAME AutomationControllerTest COMMAND AutomationControllerTest)
     set_tests_properties(AutomationControllerTest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    if(SDR9700_THREAD_SANITIZE)
+        # These integration tests pass under normal and ASan/UBSan builds, but
+        # exercise uninstrumented Qt GUI, multimedia, and event-dispatch thread
+        # pools that produce false TSan reports in distribution Qt binaries.
+        set_tests_properties(
+            DataDecoderDialogTest
+            SpectrumCanvasTest
+            GuiSmokeTest
+            MemoryManagerSmokeTest
+            AutomationControllerTest
+            PROPERTIES LABELS "tsan_unsupported"
+        )
+    endif()
 
     if(SDR9700_BUILD_BENCHMARKS)
         add_executable(PerformanceBenchmark tests/PerformanceBenchmark.cpp)
